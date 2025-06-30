@@ -244,3 +244,26 @@ export const SEMESTER_OPTIONS = [
 	{ value: "2nd", label: "2nd Semester" },
 	{ value: "Summer", label: "Summer" },
 ];
+
+// Department definitions
+export const DEPARTMENTS = [
+	{
+		code: "CBAM",
+		name: "College of Business Administration Management",
+	},
+	{
+		code: "CAST",
+		name: "College of Arts, Science and Technology",
+	},
+	{
+		code: "CTE",
+		name: "College of Teacher Education",
+	},
+];
+
+export const getDepartmentOptions = () => {
+	return DEPARTMENTS.map((department) => ({
+		value: department.code,
+		label: department.name,
+	}));
+};
