@@ -63,11 +63,6 @@ export const COURSES: CourseDefinition[] = [
 		name: "Bachelor of Science in Business Administration - Operations Management",
 		category: "Business",
 	},
-	{
-		code: "BSEMC",
-		name: "Bachelor of Science in Entertainment and Multimedia Computing",
-		category: "Technology",
-	},
 ];
 
 // Section data with comprehensive information
