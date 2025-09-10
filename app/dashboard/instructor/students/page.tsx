@@ -140,10 +140,10 @@ export default function StudentsPage() {
 						Manage your assigned students and their information
 					</p>
 				</div>
-				<Button className="bg-primary-500 hover:bg-primary-600">
+				{/* <Button className="bg-primary-500 hover:bg-primary-600">
 					<UserPlus className="w-4 h-4 mr-2" />
 					Add Student
-				</Button>
+				</Button> */}
 			</div>
 
 			{/* Stats Cards */}

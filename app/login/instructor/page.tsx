@@ -18,6 +18,8 @@ import { ArrowLeft, Eye, EyeOff, Users } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { useLogin } from "@useAuth";
+import { toast } from "sonner";
 
 const instructorLoginSchema = z.object({
 	email: z.string().email("Please enter a valid email address"),
@@ -30,6 +32,7 @@ export default function InstructorLoginPage() {
 	const router = useRouter();
 	const [showPassword, setShowPassword] = useState(false);
 	const [isLoading, setIsLoading] = useState(false);
+	const loginMutation = useLogin();
 
 	const {
 		register,
@@ -41,12 +44,23 @@ export default function InstructorLoginPage() {
 
 	const onSubmit = async (data: InstructorLoginForm) => {
 		setIsLoading(true);
-		// Simulate API call
-		setTimeout(() => {
-			console.log("Instructor login:", data);
-			setIsLoading(false);
+		try {
+			const res: any = await loginMutation.mutateAsync({
+				email: data.email,
+				password: data.password,
+			});
+			const userRole = res?.user?.role;
+			if (userRole !== "instructor") {
+				toast.error("This login is for instructors only.");
+				return;
+			}
+			toast.success("Signed in successfully");
 			router.push("/dashboard/instructor");
-		}, 1500);
+		} catch (error: any) {
+			toast.error(error?.message || "Failed to sign in");
+		} finally {
+			setIsLoading(false);
+		}
 	};
 
 	return (
@@ -153,9 +167,9 @@ export default function InstructorLoginPage() {
 							<Button
 								type="submit"
 								className="w-full bg-accent-500 hover:bg-accent-600 text-white font-medium py-2.5"
-								disabled={isLoading}
+								disabled={isLoading || loginMutation.isPending}
 							>
-								{isLoading ? "Signing in..." : "Sign In"}
+								{isLoading || loginMutation.isPending ? "Signing in..." : "Sign In"}
 							</Button>
 						</form>
 

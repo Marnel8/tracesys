@@ -29,6 +29,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
 	Plus,
 	MessageSquare,
@@ -37,7 +38,30 @@ import {
 	Eye,
 	Calendar,
 	Users,
+	Pin,
 } from "lucide-react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { toast } from "sonner";
+
+// Announcement form schema
+const announcementSchema = z.object({
+	title: z.string().min(1, "Title is required").max(255, "Title must be less than 255 characters"),
+	content: z.string().min(1, "Content is required"),
+	priority: z.enum(["Low", "Medium", "High"], {
+		required_error: "Please select a priority level",
+	}),
+	status: z.enum(["Draft", "Published", "Archived"], {
+		required_error: "Please select a status",
+	}),
+	expiryDate: z.string().optional(),
+	isPinned: z.boolean(),
+	targetSections: z.array(z.string()).min(1, "Please select at least one target section"),
+	targetCourses: z.array(z.string()).min(1, "Please select at least one target course"),
+});
+
+type AnnouncementForm = z.infer<typeof announcementSchema>;
 
 // Mock data for announcements
 const announcements = [
@@ -84,24 +108,51 @@ const announcements = [
 
 export default function AnnouncementsPage() {
 	const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-	const [newAnnouncement, setNewAnnouncement] = useState({
-		title: "",
-		content: "",
-		targetSections: [],
-		targetCourses: [],
-		priority: "Medium",
-	});
+	const [isLoading, setIsLoading] = useState(false);
 
-	const handleCreateAnnouncement = () => {
-		console.log("Creating announcement:", newAnnouncement);
-		setIsCreateDialogOpen(false);
-		setNewAnnouncement({
+	// Available sections and courses
+	const availableSections = ["BSIT 4A", "BSIT 4B", "BSIT 4C", "BSIT 4D"];
+	const availableCourses = ["BSIT"];
+
+	const {
+		register,
+		handleSubmit,
+		control,
+		reset,
+		formState: { errors },
+	} = useForm<AnnouncementForm>({
+		resolver: zodResolver(announcementSchema),
+		defaultValues: {
 			title: "",
 			content: "",
+			priority: "Medium",
+			status: "Draft",
+			isPinned: false,
+			expiryDate: "",
 			targetSections: [],
 			targetCourses: [],
-			priority: "Medium",
-		});
+		},
+	});
+
+	const onSubmit = async (data: AnnouncementForm) => {
+		setIsLoading(true);
+		try {
+			console.log("Creating announcement:", data);
+			// TODO: Replace with actual API call
+			await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+			toast.success("Announcement created successfully!");
+			setIsCreateDialogOpen(false);
+			reset();
+		} catch (error: any) {
+			toast.error(error.message || "Failed to create announcement. Please try again.");
+		} finally {
+			setIsLoading(false);
+		}
+	};
+
+	const handleCancel = () => {
+		setIsCreateDialogOpen(false);
+		reset();
 	};
 
 	const formatDate = (dateString: string) => {
@@ -131,96 +182,245 @@ export default function AnnouncementsPage() {
 							New Announcement
 						</Button>
 					</DialogTrigger>
-					<DialogContent className="sm:max-w-[600px]">
+					<DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
 						<DialogHeader>
 							<DialogTitle>Create New Announcement</DialogTitle>
 							<DialogDescription>
 								Create a new announcement to share with your students.
 							</DialogDescription>
 						</DialogHeader>
-						<div className="grid gap-4 py-4">
-							<div className="grid gap-2">
-								<Label htmlFor="title">Title</Label>
-								<Input
-									id="title"
-									value={newAnnouncement.title}
-									onChange={(e) =>
-										setNewAnnouncement({
-											...newAnnouncement,
-											title: e.target.value,
-										})
-									}
-									placeholder="Enter announcement title"
-								/>
-							</div>
-							<div className="grid gap-2">
-								<Label htmlFor="content">Content</Label>
-								<Textarea
-									id="content"
-									value={newAnnouncement.content}
-									onChange={(e) =>
-										setNewAnnouncement({
-											...newAnnouncement,
-											content: e.target.value,
-										})
-									}
-									placeholder="Enter announcement content"
-									rows={4}
-								/>
-							</div>
-							<div className="grid grid-cols-2 gap-4">
-								<div className="grid gap-2">
-									<Label>Target Sections</Label>
-									<Select>
-										<SelectTrigger>
-											<SelectValue placeholder="Select sections" />
-										</SelectTrigger>
-										<SelectContent>
-											<SelectItem value="BSIT 4A">BSIT 4A</SelectItem>
-											<SelectItem value="BSIT 4B">BSIT 4B</SelectItem>
-											<SelectItem value="BSIT 4C">BSIT 4C</SelectItem>
-											<SelectItem value="BSIT 4D">BSIT 4D</SelectItem>
-											<SelectItem value="all">All Sections</SelectItem>
-										</SelectContent>
-									</Select>
+						<form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+							<div className="grid gap-4 py-4">
+								{/* Basic Information */}
+								<div className="space-y-4">
+									<h3 className="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2">
+										Basic Information
+									</h3>
+									
+									<div className="space-y-2">
+										<Label htmlFor="title" className="text-gray-700 font-medium">
+											Title *
+										</Label>
+										<Input
+											id="title"
+											placeholder="Enter announcement title"
+											className="border-gray-300 focus:border-accent-500 focus:ring-accent-500"
+											{...register("title")}
+										/>
+										{errors.title && (
+											<p className="text-sm text-red-600">
+												{errors.title.message}
+											</p>
+										)}
+									</div>
+
+									<div className="space-y-2">
+										<Label htmlFor="content" className="text-gray-700 font-medium">
+											Content *
+										</Label>
+										<Textarea
+											id="content"
+											placeholder="Enter announcement content"
+											rows={4}
+											className="border-gray-300 focus:border-accent-500 focus:ring-accent-500"
+											{...register("content")}
+										/>
+										{errors.content && (
+											<p className="text-sm text-red-600">
+												{errors.content.message}
+											</p>
+										)}
+									</div>
 								</div>
-								<div className="grid gap-2">
-									<Label>Priority</Label>
-									<Select
-										value={newAnnouncement.priority}
-										onValueChange={(value) =>
-											setNewAnnouncement({
-												...newAnnouncement,
-												priority: value,
-											})
-										}
-									>
-										<SelectTrigger>
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											<SelectItem value="Low">Low</SelectItem>
-											<SelectItem value="Medium">Medium</SelectItem>
-											<SelectItem value="High">High</SelectItem>
-										</SelectContent>
-									</Select>
+
+								{/* Settings */}
+								<div className="space-y-4">
+									<h3 className="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2">
+										Settings
+									</h3>
+
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+										<div className="space-y-2">
+											<Label className="text-gray-700 font-medium">Priority *</Label>
+											<Controller
+												name="priority"
+												control={control}
+												render={({ field }) => (
+													<Select onValueChange={field.onChange} defaultValue={field.value}>
+														<SelectTrigger className="border-gray-300 focus:border-accent-500 focus:ring-accent-500">
+															<SelectValue placeholder="Select priority" />
+														</SelectTrigger>
+														<SelectContent>
+															<SelectItem value="Low">Low</SelectItem>
+															<SelectItem value="Medium">Medium</SelectItem>
+															<SelectItem value="High">High</SelectItem>
+														</SelectContent>
+													</Select>
+												)}
+											/>
+											{errors.priority && (
+												<p className="text-sm text-red-600">
+													{errors.priority.message}
+												</p>
+											)}
+										</div>
+
+										<div className="space-y-2">
+											<Label className="text-gray-700 font-medium">Status *</Label>
+											<Controller
+												name="status"
+												control={control}
+												render={({ field }) => (
+													<Select onValueChange={field.onChange} defaultValue={field.value}>
+														<SelectTrigger className="border-gray-300 focus:border-accent-500 focus:ring-accent-500">
+															<SelectValue placeholder="Select status" />
+														</SelectTrigger>
+														<SelectContent>
+															<SelectItem value="Draft">Draft</SelectItem>
+															<SelectItem value="Published">Published</SelectItem>
+															<SelectItem value="Archived">Archived</SelectItem>
+														</SelectContent>
+													</Select>
+												)}
+											/>
+											{errors.status && (
+												<p className="text-sm text-red-600">
+													{errors.status.message}
+												</p>
+											)}
+										</div>
+									</div>
+
+									<div className="space-y-2">
+										<Label htmlFor="expiryDate" className="text-gray-700 font-medium">
+											Expiry Date
+										</Label>
+										<Input
+											id="expiryDate"
+											type="datetime-local"
+											className="border-gray-300 focus:border-accent-500 focus:ring-accent-500"
+											{...register("expiryDate")}
+										/>
+										{errors.expiryDate && (
+											<p className="text-sm text-red-600">
+												{errors.expiryDate.message}
+											</p>
+										)}
+									</div>
+
+									<div className="flex items-center space-x-2">
+										<Controller
+											name="isPinned"
+											control={control}
+											render={({ field }) => (
+												<Checkbox
+													id="isPinned"
+													checked={field.value}
+													onCheckedChange={field.onChange}
+												/>
+											)}
+										/>
+										<Label htmlFor="isPinned" className="text-gray-700 font-medium flex items-center gap-2">
+											<Pin className="w-4 h-4" />
+											Pin this announcement
+										</Label>
+									</div>
+								</div>
+
+								{/* Target Audience */}
+								<div className="space-y-4">
+									<h3 className="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2">
+										Target Audience
+									</h3>
+
+									<div className="space-y-2">
+										<Label className="text-gray-700 font-medium">Target Sections *</Label>
+										<Controller
+											name="targetSections"
+											control={control}
+											render={({ field }) => (
+												<div className="grid grid-cols-2 gap-2">
+													{availableSections.map((section) => (
+														<div key={section} className="flex items-center space-x-2">
+															<Checkbox
+																id={`section-${section}`}
+																checked={field.value.includes(section)}
+																onCheckedChange={(checked) => {
+																	if (checked) {
+																		field.onChange([...field.value, section]);
+																	} else {
+																		field.onChange(field.value.filter((s) => s !== section));
+																	}
+																}}
+															/>
+															<Label htmlFor={`section-${section}`} className="text-sm">
+																{section}
+															</Label>
+														</div>
+													))}
+												</div>
+											)}
+										/>
+										{errors.targetSections && (
+											<p className="text-sm text-red-600">
+												{errors.targetSections.message}
+											</p>
+										)}
+									</div>
+
+									<div className="space-y-2">
+										<Label className="text-gray-700 font-medium">Target Courses *</Label>
+										<Controller
+											name="targetCourses"
+											control={control}
+											render={({ field }) => (
+												<div className="grid grid-cols-2 gap-2">
+													{availableCourses.map((course) => (
+														<div key={course} className="flex items-center space-x-2">
+															<Checkbox
+																id={`course-${course}`}
+																checked={field.value.includes(course)}
+																onCheckedChange={(checked) => {
+																	if (checked) {
+																		field.onChange([...field.value, course]);
+																	} else {
+																		field.onChange(field.value.filter((c) => c !== course));
+																	}
+																}}
+															/>
+															<Label htmlFor={`course-${course}`} className="text-sm">
+																{course}
+															</Label>
+														</div>
+													))}
+												</div>
+											)}
+										/>
+										{errors.targetCourses && (
+											<p className="text-sm text-red-600">
+												{errors.targetCourses.message}
+											</p>
+										)}
+									</div>
 								</div>
 							</div>
-						</div>
-						<DialogFooter>
-							<Button
-								variant="outline"
-								onClick={() => setIsCreateDialogOpen(false)}
-							>
-								Cancel
-							</Button>
-							<Button
-								onClick={handleCreateAnnouncement}
-								className="bg-primary-500 hover:bg-primary-600"
-							>
-								Create Announcement
-							</Button>
-						</DialogFooter>
+							<DialogFooter>
+								<Button
+									type="button"
+									variant="outline"
+									onClick={handleCancel}
+								>
+									Cancel
+								</Button>
+								<Button
+									type="submit"
+									className="bg-primary-500 hover:bg-primary-600"
+									disabled={isLoading}
+								>
+									{isLoading ? "Creating..." : "Create Announcement"}
+								</Button>
+							</DialogFooter>
+						</form>
 					</DialogContent>
 				</Dialog>
 			</div>

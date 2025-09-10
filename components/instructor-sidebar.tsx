@@ -1,8 +1,10 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
 import { useState, useEffect } from "react";
+import { useAuth, useLogout } from "@/hooks/auth/useAuth";
+import { useToast } from "@/components/ui/use-toast";
 import {
 	Sidebar,
 	SidebarContent,
@@ -40,7 +42,6 @@ import {
 	LogOut,
 	ChevronDown,
 	User,
-	Bell,
 	HelpCircle,
 } from "lucide-react";
 import {
@@ -145,6 +146,10 @@ const menuItems = [
 
 export function InstructorSidebar() {
 	const pathname = usePathname();
+	const router = useRouter();
+	const { toast } = useToast();
+	const { mutate: logout, isPending: isLoggingOut } = useLogout();
+	const { user } = useAuth();
 	const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
 
 	// Function to check if a menu item or its children are active
@@ -371,10 +376,10 @@ export function InstructorSidebar() {
 											</div>
 											<div className="flex-1 text-left min-w-0">
 												<p className="text-sm font-medium text-gray-900 truncate">
-													Prof. Juan Dela Cruz
+													{user ? `${user.firstName}${user.middleName ? ` ${user.middleName}` : ""} ${user.lastName}` : "Loading user..."}
 												</p>
 												<p className="text-xs text-gray-600 truncate">
-													Instructor
+													{user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : ""}
 												</p>
 											</div>
 											<ChevronDown className="ml-auto h-4 w-4 flex-shrink-0" />
@@ -382,22 +387,27 @@ export function InstructorSidebar() {
 									</SidebarMenuButton>
 								</DropdownMenuTrigger>
 								<DropdownMenuContent side="top" className="w-56 mb-2">
-									<DropdownMenuItem className="cursor-pointer">
-										<User className="mr-2 h-4 w-4" />
-										<span>Profile</span>
-									</DropdownMenuItem>
-									<DropdownMenuItem className="cursor-pointer">
-										<Settings className="mr-2 h-4 w-4" />
-										<span>Account Settings</span>
-									</DropdownMenuItem>
-									<DropdownMenuItem className="cursor-pointer">
-										<Bell className="mr-2 h-4 w-4" />
-										<span>Notifications</span>
-									</DropdownMenuItem>
-									<DropdownMenuSeparator />
-									<DropdownMenuItem className="text-red-600 cursor-pointer">
+									<DropdownMenuItem
+										className="text-red-600 cursor-pointer"
+										onClick={() =>
+											logout(undefined, {
+												onSuccess: () => {
+													toast({ title: "Signed out" });
+													router.push("/login/instructor");
+												},
+												onError: (error: any) => {
+													toast({
+														title: "Sign out failed",
+														description: error.message || "Please try again",
+														variant: "destructive",
+													});
+												},
+											})
+										}
+										disabled={isLoggingOut}
+									>
 										<LogOut className="mr-2 h-4 w-4" />
-										<span>Sign Out</span>
+										<span>{isLoggingOut ? "Signing Out..." : "Sign Out"}</span>
 									</DropdownMenuItem>
 								</DropdownMenuContent>
 							</DropdownMenu>

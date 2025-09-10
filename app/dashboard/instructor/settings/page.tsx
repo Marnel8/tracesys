@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
 	Card,
 	CardContent,
@@ -30,18 +30,35 @@ import {
 	HelpCircle,
 	LogOut,
 	Camera,
+	Loader2,
 } from "lucide-react";
+import { useAuth, useEditUser, useLogout, useChangePassword } from "@/hooks/auth/useAuth";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 export default function SettingsPage() {
+	const { user, isLoading: userLoading } = useAuth();
+	const editUserMutation = useEditUser();
+	const changePasswordMutation = useChangePassword();
+	const { mutate: logout, isPending: isLoggingOut } = useLogout();
+	const router = useRouter();
+
 	const [profile, setProfile] = useState({
-		firstName: "Juan",
-		lastName: "Dela Cruz",
-		email: "juan.delacruz@omsc.edu.ph",
-		phone: "+63 912 345 6789",
-		department: "Bachelor of Science in Information Technology",
-		position: "IT Instructor",
-		bio: "Experienced educator with 10+ years in computer science and practicum supervision.",
+		firstName: "",
+		lastName: "",
+		middleName: "",
+		email: "",
+		contactNumber: "",
+		address: "",
+		bio: "",
+		instructorId: "",
+		role: "",
+		gender: "",
+		age: 0,
 	});
+
+	const [avatarFile, setAvatarFile] = useState<File | null>(null);
+	const [avatarPreview, setAvatarPreview] = useState<string>("");
 
 	const [notifications, setNotifications] = useState({
 		emailNotifications: true,
@@ -57,17 +74,145 @@ export default function SettingsPage() {
 		loginAlerts: true,
 	});
 
-	const handleProfileUpdate = () => {
-		console.log("Updating profile:", profile);
+	const [passwordForm, setPasswordForm] = useState({
+		currentPassword: "",
+		newPassword: "",
+		confirmPassword: "",
+	});
+
+	// Update profile state when user data loads
+	useEffect(() => {
+		if (user) {
+			setProfile({
+				firstName: user.firstName || "",
+				lastName: user.lastName || "",
+				middleName: user.middleName || "",
+				email: user.email || "",
+				contactNumber: user.contactNumber || "",
+				address: user.address || "",
+				bio: user.bio || "",
+				instructorId: user.instructorId || "",
+				role: user.role || "",
+				gender: user.gender || "",
+				age: user.age || 0,
+			});
+			if (user.avatar) {
+				setAvatarPreview(user.avatar);
+			}
+		}
+	}, [user]);
+
+	const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0];
+		if (file) {
+			setAvatarFile(file);
+			const reader = new FileReader();
+			reader.onload = (e) => {
+				setAvatarPreview(e.target?.result as string);
+			};
+			reader.readAsDataURL(file);
+		}
+	};
+
+	const handleProfileUpdate = async () => {
+		if (!user?.id) {
+			toast.error("User not found. Please try logging in again.");
+			return;
+		}
+
+		try {
+			const updateData: any = {
+				id: user.id,
+				firstName: profile.firstName,
+				lastName: profile.lastName,
+				middleName: profile.middleName,
+				email: profile.email,
+				contactNumber: profile.contactNumber,
+				address: profile.address,
+				bio: profile.bio,
+				instructorId: profile.instructorId,
+				role: profile.role,
+				gender: profile.gender,
+				age: profile.age,
+			};
+
+			if (avatarFile) {
+				updateData.avatar = avatarFile;
+			}
+
+			await editUserMutation.mutateAsync(updateData);
+			
+			toast.success("Profile updated successfully!");
+		} catch (error: any) {
+			toast.error(error.message || "Failed to update profile. Please try again.");
+		}
 	};
 
 	const handleNotificationUpdate = () => {
 		console.log("Updating notifications:", notifications);
+		toast.info("Notification preferences will be implemented soon.");
 	};
 
 	const handleSecurityUpdate = () => {
 		console.log("Updating security:", security);
+		toast.info("Security settings will be implemented soon.");
 	};
+
+	const handleChangePassword = async () => {
+		if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+			toast.error("Please fill in all password fields");
+			return;
+		}
+
+		if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+			toast.error("New passwords do not match");
+			return;
+		}
+
+		if (passwordForm.newPassword.length < 6) {
+			toast.error("New password must be at least 6 characters long");
+			return;
+		}
+
+		try {
+			await changePasswordMutation.mutateAsync({
+				currentPassword: passwordForm.currentPassword,
+				newPassword: passwordForm.newPassword,
+			});
+			
+			toast.success("Password changed successfully!");
+			setPasswordForm({
+				currentPassword: "",
+				newPassword: "",
+				confirmPassword: "",
+			});
+		} catch (error: any) {
+			toast.error(error.message || "Failed to change password. Please try again.");
+		}
+	};
+
+	const handleSignOut = () => {
+		logout(undefined, {
+			onSuccess: () => {
+				toast.success("Signed out");
+				router.push("/login/instructor");
+			},
+			onError: (error: any) => {
+				toast.error(error.message || "Please try again");
+			},
+		});
+	};
+
+	if (userLoading) {
+		return (
+			<div className="flex items-center justify-center min-h-[400px]">
+				<div className="flex items-center space-x-2">
+					<Loader2 className="w-6 h-6 animate-spin" />
+					<span>Loading user data...</span>
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div className="space-y-6">
@@ -96,13 +241,26 @@ export default function SettingsPage() {
 							<div className="flex items-center gap-6">
 								<Avatar className="w-20 h-20">
 									<AvatarImage
-										src="/placeholder.svg?height=80&width=80"
+										src={avatarPreview || "/placeholder.svg?height=80&width=80"}
 										alt="Profile"
 									/>
-									<AvatarFallback className="text-lg">JD</AvatarFallback>
+									<AvatarFallback className="text-lg">
+										{profile.firstName?.[0]}{profile.lastName?.[0]}
+									</AvatarFallback>
 								</Avatar>
 								<div>
-									<Button variant="outline" className="mb-2">
+									<input
+										type="file"
+										id="avatar-upload"
+										accept="image/*"
+										onChange={handleAvatarChange}
+										className="hidden"
+									/>
+									<Button 
+										variant="outline" 
+										className="mb-2"
+										onClick={() => document.getElementById('avatar-upload')?.click()}
+									>
 										<Camera className="w-4 h-4 mr-2" />
 										Change Photo
 									</Button>
@@ -114,29 +272,43 @@ export default function SettingsPage() {
 
 							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 								<div className="space-y-2">
-									<Label htmlFor="firstName">First Name</Label>
+									<Label htmlFor="firstName">First Name *</Label>
 									<Input
 										id="firstName"
 										value={profile.firstName}
 										onChange={(e) =>
 											setProfile({ ...profile, firstName: e.target.value })
 										}
+										disabled={editUserMutation.isPending}
 									/>
 								</div>
 								<div className="space-y-2">
-									<Label htmlFor="lastName">Last Name</Label>
+									<Label htmlFor="lastName">Last Name *</Label>
 									<Input
 										id="lastName"
 										value={profile.lastName}
 										onChange={(e) =>
 											setProfile({ ...profile, lastName: e.target.value })
 										}
+										disabled={editUserMutation.isPending}
 									/>
 								</div>
 							</div>
 
 							<div className="space-y-2">
-								<Label htmlFor="email">Email Address</Label>
+								<Label htmlFor="middleName">Middle Name</Label>
+								<Input
+									id="middleName"
+									value={profile.middleName}
+									onChange={(e) =>
+										setProfile({ ...profile, middleName: e.target.value })
+									}
+									disabled={editUserMutation.isPending}
+								/>
+							</div>
+
+							<div className="space-y-2">
+								<Label htmlFor="email">Email Address *</Label>
 								<Input
 									id="email"
 									type="email"
@@ -144,41 +316,79 @@ export default function SettingsPage() {
 									onChange={(e) =>
 										setProfile({ ...profile, email: e.target.value })
 									}
+									disabled={editUserMutation.isPending}
 								/>
 							</div>
 
 							<div className="space-y-2">
-								<Label htmlFor="phone">Phone Number</Label>
+								<Label htmlFor="contactNumber">Contact Number *</Label>
 								<Input
-									id="phone"
-									value={profile.phone}
+									id="contactNumber"
+									value={profile.contactNumber}
 									onChange={(e) =>
-										setProfile({ ...profile, phone: e.target.value })
+										setProfile({ ...profile, contactNumber: e.target.value })
 									}
+									disabled={editUserMutation.isPending}
 								/>
 							</div>
 
 							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 								<div className="space-y-2">
-									<Label htmlFor="department">Department</Label>
+									<Label htmlFor="age">Age</Label>
 									<Input
-										id="department"
-										value={profile.department}
+										id="age"
+										type="number"
+										value={profile.age || ""}
 										onChange={(e) =>
-											setProfile({ ...profile, department: e.target.value })
+											setProfile({ ...profile, age: parseInt(e.target.value) || 0 })
 										}
+										disabled={editUserMutation.isPending}
 									/>
 								</div>
 								<div className="space-y-2">
-									<Label htmlFor="position">Position</Label>
-									<Input
-										id="position"
-										value={profile.position}
-										onChange={(e) =>
-											setProfile({ ...profile, position: e.target.value })
+									<Label htmlFor="gender">Gender</Label>
+									<Select
+										value={profile.gender}
+										onValueChange={(value) =>
+											setProfile({ ...profile, gender: value })
 										}
-									/>
+										disabled={editUserMutation.isPending}
+									>
+										<SelectTrigger>
+											<SelectValue placeholder="Select gender" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="male">Male</SelectItem>
+											<SelectItem value="female">Female</SelectItem>
+											<SelectItem value="other">Other</SelectItem>
+										</SelectContent>
+									</Select>
 								</div>
+							</div>
+
+							<div className="space-y-2">
+								<Label htmlFor="instructorId">Instructor ID</Label>
+								<Input
+									id="instructorId"
+									value={profile.instructorId}
+									onChange={(e) =>
+										setProfile({ ...profile, instructorId: e.target.value })
+									}
+									disabled={editUserMutation.isPending}
+								/>
+							</div>
+
+							<div className="space-y-2">
+								<Label htmlFor="address">Address</Label>
+								<Textarea
+									id="address"
+									value={profile.address}
+									onChange={(e) =>
+										setProfile({ ...profile, address: e.target.value })
+									}
+									rows={2}
+									disabled={editUserMutation.isPending}
+								/>
 							</div>
 
 							<div className="space-y-2">
@@ -190,20 +400,100 @@ export default function SettingsPage() {
 										setProfile({ ...profile, bio: e.target.value })
 									}
 									rows={3}
+									disabled={editUserMutation.isPending}
 								/>
 							</div>
 
 							<Button
 								onClick={handleProfileUpdate}
+								disabled={editUserMutation.isPending || userLoading}
 								className="bg-primary-500 hover:bg-primary-600"
 							>
-								Save Changes
+								{editUserMutation.isPending ? (
+									<>
+										<Loader2 className="w-4 h-4 mr-2 animate-spin" />
+										Updating...
+									</>
+								) : (
+									"Save Changes"
+								)}
+							</Button>
+						</CardContent>
+					</Card>
+
+					{/* Change Password */}
+					<Card>
+						<CardHeader>
+							<CardTitle className="flex items-center gap-2">
+								<Shield className="w-5 h-5" />
+								Change Password
+							</CardTitle>
+							<CardDescription>
+								Update your password to keep your account secure
+							</CardDescription>
+						</CardHeader>
+						<CardContent className="space-y-6">
+							<div className="space-y-2">
+								<Label htmlFor="currentPassword">Current Password *</Label>
+								<Input
+									id="currentPassword"
+									type="password"
+									value={passwordForm.currentPassword}
+									onChange={(e) =>
+										setPasswordForm({ ...passwordForm, currentPassword: e.target.value })
+									}
+									disabled={changePasswordMutation.isPending}
+								/>
+							</div>
+
+							<div className="space-y-2">
+								<Label htmlFor="newPassword">New Password *</Label>
+								<Input
+									id="newPassword"
+									type="password"
+									value={passwordForm.newPassword}
+									onChange={(e) =>
+										setPasswordForm({ ...passwordForm, newPassword: e.target.value })
+									}
+									disabled={changePasswordMutation.isPending}
+								/>
+								<p className="text-sm text-gray-600">
+									Password must be at least 6 characters long
+								</p>
+							</div>
+
+							<div className="space-y-2">
+								<Label htmlFor="confirmPassword">Confirm New Password *</Label>
+								<Input
+									id="confirmPassword"
+									type="password"
+									value={passwordForm.confirmPassword}
+									onChange={(e) =>
+										setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })
+									}
+									disabled={changePasswordMutation.isPending}
+								/>
+							</div>
+
+							<Button
+								onClick={handleChangePassword}
+								disabled={changePasswordMutation.isPending}
+								className="bg-primary-500 hover:bg-primary-600"
+							>
+								{changePasswordMutation.isPending ? (
+									<>
+										<Loader2 className="w-4 h-4 mr-2 animate-spin" />
+										Changing Password...
+									</>
+								) : (
+									"Change Password"
+								)}
 							</Button>
 						</CardContent>
 					</Card>
 
 					{/* Notification Settings */}
-					<Card>
+					{/* <Card>
 						<CardHeader>
 							<CardTitle className="flex items-center gap-2">
 								<Bell className="w-5 h-5" />
@@ -319,10 +609,10 @@ export default function SettingsPage() {
 								Save Preferences
 							</Button>
 						</CardContent>
-					</Card>
+					</Card> */}
 
 					{/* Security Settings */}
-					<Card>
+					{/* <Card>
 						<CardHeader>
 							<CardTitle className="flex items-center gap-2">
 								<Shield className="w-5 h-5" />
@@ -402,12 +692,12 @@ export default function SettingsPage() {
 								</Button>
 							</div>
 						</CardContent>
-					</Card>
+					</Card> */}
 				</div>
 
 				{/* Quick Actions Sidebar */}
 				<div className="space-y-6">
-					<Card>
+					{/* <Card>
 						<CardHeader>
 							<CardTitle className="flex items-center gap-2">
 								<Palette className="w-5 h-5" />
@@ -441,9 +731,9 @@ export default function SettingsPage() {
 								</Select>
 							</div>
 						</CardContent>
-					</Card>
+					</Card> */}
 
-					<Card>
+					{/* <Card>
 						<CardHeader>
 							<CardTitle className="flex items-center gap-2">
 								<HelpCircle className="w-5 h-5" />
@@ -464,7 +754,7 @@ export default function SettingsPage() {
 								Privacy Policy
 							</Button>
 						</CardContent>
-					</Card>
+					</Card> */}
 
 					<Card>
 						<CardHeader>
@@ -474,9 +764,20 @@ export default function SettingsPage() {
 							<Button
 								variant="outline"
 								className="w-full justify-start text-red-600 border-red-200 hover:bg-red-50"
+								onClick={handleSignOut}
+								disabled={isLoggingOut}
 							>
-								<LogOut className="w-4 h-4 mr-2" />
-								Sign Out
+								{isLoggingOut ? (
+									<>
+										<Loader2 className="w-4 h-4 mr-2 animate-spin" />
+										Signing Out...
+									</>
+								) : (
+									<>
+										<LogOut className="w-4 h-4 mr-2" />
+										Sign Out
+									</>
+								)}
 							</Button>
 						</CardContent>
 					</Card>
@@ -485,3 +786,4 @@ export default function SettingsPage() {
 		</div>
 	);
 }
+

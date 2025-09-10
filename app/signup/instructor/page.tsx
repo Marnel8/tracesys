@@ -26,16 +26,25 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { getDepartmentOptions } from "@/data/instructor-courses";
+import { useRegister, useActivateUser } from "@useAuth";
+import OtpVerification from "@/components/otp-verification";
+import { toast } from "sonner";
 
 const instructorSignupSchema = z
 	.object({
 		firstName: z.string().min(2, "First name must be at least 2 characters"),
 		lastName: z.string().min(2, "Last name must be at least 2 characters"),
+		middleName: z.string().optional(),
 		email: z.string().email("Please enter a valid email address"),
+		contactNumber: z.string().min(10, "Contact number must be at least 10 digits"),
+		age: z.number().min(18, "Age must be at least 18").max(100, "Age must be less than 100"),
+		gender: z.string().min(1, "Please select your gender"),
 		department: z.string().min(1, "Please select a department"),
-		employeeId: z.string().min(1, "Employee ID is required"),
+		instructorId: z.string().min(1, "Instructor ID is required"),
 		password: z.string().min(8, "Password must be at least 8 characters"),
 		confirmPassword: z.string().min(1, "Please confirm your password"),
+		address: z.string().optional(),
+		bio: z.string().optional(),
 	})
 	.refine((data) => data.password === data.confirmPassword, {
 		message: "Passwords don't match",
@@ -49,10 +58,16 @@ export default function InstructorSignupPage() {
 	const [showPassword, setShowPassword] = useState(false);
 	const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 	const [isLoading, setIsLoading] = useState(false);
+	const [showOtpVerification, setShowOtpVerification] = useState(false);
+	const [activationToken, setActivationToken] = useState("");
+	const [userEmail, setUserEmail] = useState("");
 
 	// Get departments from data
 	const departments = getDepartmentOptions();
-	console.log("Departments from getDepartmentOptions:", departments);
+
+	// Auth hooks
+	const registerMutation = useRegister();
+	const activateUserMutation = useActivateUser();
 
 	const {
 		register,
@@ -65,14 +80,86 @@ export default function InstructorSignupPage() {
 
 	const onSubmit = async (data: InstructorSignupForm) => {
 		setIsLoading(true);
-		// Simulate API call
-		setTimeout(() => {
-			console.log("Instructor signup:", data);
+		try {
+			const registrationData = {
+				firstName: data.firstName,
+				lastName: data.lastName,
+				middleName: data.middleName,
+				email: data.email,
+				password: data.password,
+				age: data.age,
+				role: "instructor", // Automatically set as instructor
+				gender: data.gender,
+				contactNumber: data.contactNumber,
+				address: data.address,
+				bio: data.bio,
+				instructorId: data.instructorId,
+			};
+
+			const result = await registerMutation.mutateAsync(registrationData);
+			
+			// Store activation token and email for OTP verification
+			setActivationToken(result.activationToken);
+			setUserEmail(data.email);
+			setShowOtpVerification(true);
+			
+			toast.success("Registration successful! Please check your email for verification code.");
+		} catch (error: any) {
+			toast.error(error.message || "Registration failed. Please try again.");
+		} finally {
 			setIsLoading(false);
-			// Redirect to login page with success message or directly to dashboard
-			router.push("/login/instructor");
-		}, 2000);
+		}
 	};
+
+	const handleOtpVerification = async (otpData: { activation_token: string; activation_code: string }) => {
+		try {
+			await activateUserMutation.mutateAsync(otpData);
+			toast.success("Account activated successfully! You can now sign in.");
+			router.push("/login/instructor");
+		} catch (error: any) {
+			toast.error(error.message || "Verification failed. Please try again.");
+		}
+	};
+
+	const handleResendCode = async () => {
+		// For now, we'll just show a message since the server doesn't have a resend endpoint
+		toast.info("Please check your email for the verification code.");
+	};
+
+	const handleBackToRegistration = () => {
+		setShowOtpVerification(false);
+		setActivationToken("");
+		setUserEmail("");
+	};
+
+	// Show OTP verification if registration was successful
+	if (showOtpVerification) {
+		return (
+			<div
+				className="min-h-screen flex items-center justify-center p-4 relative"
+				style={{
+					backgroundImage: "url(/images/auth-bg.jpg)",
+					backgroundSize: "cover",
+					backgroundPosition: "center",
+					backgroundRepeat: "no-repeat",
+				}}
+			>
+				{/* Overlay */}
+				<div className="absolute inset-0 bg-primary-500/20 backdrop-blur-sm" />
+
+				<div className="relative z-10 w-full max-w-md">
+					<OtpVerification
+						email={userEmail}
+						activationToken={activationToken}
+						onVerificationSuccess={handleOtpVerification}
+						onBack={handleBackToRegistration}
+						onResendCode={handleResendCode}
+						isLoading={activateUserMutation.isPending}
+					/>
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div
@@ -86,8 +173,7 @@ export default function InstructorSignupPage() {
 		>
 			{/* Overlay */}
 			<div className="absolute inset-0 bg-primary-500/20 backdrop-blur-sm" />
-
-			<div className="relative z-10 w-full max-w-md">
+			<div className="relative z-10 w-full max-w-2xl">
 				<Card className="bg-secondary-50/95 backdrop-blur-md border-primary-200 shadow-2xl animate-fade-in">
 					<CardHeader className="text-center pb-6">
 						<div className="flex justify-center items-center gap-4 mb-4">
@@ -117,194 +203,320 @@ export default function InstructorSignupPage() {
 
 					<CardContent className="space-y-6">
 						<form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-							<div className="grid grid-cols-2 gap-4">
+							{/* Personal Information */}
+							<div className="space-y-4">
+								<h3 className="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2">
+									Personal Information
+								</h3>
+								
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div className="space-y-2">
+										<Label htmlFor="firstName" className="text-gray-700 font-medium">
+											First Name *
+										</Label>
+										<Input
+											id="firstName"
+											placeholder="First name"
+											className="border-gray-300 focus:border-accent-500 focus:ring-accent-500"
+											{...register("firstName")}
+										/>
+										{errors.firstName && (
+											<p className="text-sm text-red-600">
+												{errors.firstName.message}
+											</p>
+										)}
+									</div>
+
+									<div className="space-y-2">
+										<Label htmlFor="lastName" className="text-gray-700 font-medium">
+											Last Name *
+										</Label>
+										<Input
+											id="lastName"
+											placeholder="Last name"
+											className="border-gray-300 focus:border-accent-500 focus:ring-accent-500"
+											{...register("lastName")}
+										/>
+										{errors.lastName && (
+											<p className="text-sm text-red-600">
+												{errors.lastName.message}
+											</p>
+										)}
+									</div>
+								</div>
+
 								<div className="space-y-2">
-									<Label
-										htmlFor="firstName"
-										className="text-gray-700 font-medium"
-									>
-										First Name
+									<Label htmlFor="middleName" className="text-gray-700 font-medium">
+										Middle Name
 									</Label>
 									<Input
-										id="firstName"
-										placeholder="First name"
+										id="middleName"
+										placeholder="Middle name (optional)"
 										className="border-gray-300 focus:border-accent-500 focus:ring-accent-500"
-										{...register("firstName")}
+										{...register("middleName")}
 									/>
-									{errors.firstName && (
+									{errors.middleName && (
 										<p className="text-sm text-red-600">
-											{errors.firstName.message}
+											{errors.middleName.message}
+										</p>
+									)}
+								</div>
+
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div className="space-y-2">
+										<Label htmlFor="age" className="text-gray-700 font-medium">
+											Age *
+										</Label>
+										<Input
+											id="age"
+											type="number"
+											placeholder="Age"
+											className="border-gray-300 focus:border-accent-500 focus:ring-accent-500"
+											{...register("age", { valueAsNumber: true })}
+										/>
+										{errors.age && (
+											<p className="text-sm text-red-600">
+												{errors.age.message}
+											</p>
+										)}
+									</div>
+
+									<div className="space-y-2">
+										<Label htmlFor="gender" className="text-gray-700 font-medium">
+											Gender *
+										</Label>
+										<Controller
+											name="gender"
+											control={control}
+											render={({ field }) => (
+												<Select onValueChange={field.onChange} defaultValue={field.value}>
+													<SelectTrigger className="border-gray-300 focus:border-accent-500 focus:ring-accent-500">
+														<SelectValue placeholder="Select gender" />
+													</SelectTrigger>
+													<SelectContent>
+														<SelectItem value="male">Male</SelectItem>
+														<SelectItem value="female">Female</SelectItem>
+														<SelectItem value="other">Other</SelectItem>
+													</SelectContent>
+												</Select>
+											)}
+										/>
+										{errors.gender && (
+											<p className="text-sm text-red-600">
+												{errors.gender.message}
+											</p>
+										)}
+									</div>
+								</div>
+							</div>
+
+							{/* Contact Information */}
+							<div className="space-y-4">
+								<h3 className="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2">
+									Contact Information
+								</h3>
+
+								<div className="space-y-2">
+									<Label htmlFor="email" className="text-gray-700 font-medium">
+										Email Address *
+									</Label>
+									<Input
+										id="email"
+										type="email"
+										placeholder="instructor@omsc.edu.ph"
+										className="border-gray-300 focus:border-accent-500 focus:ring-accent-500"
+										{...register("email")}
+									/>
+									{errors.email && (
+										<p className="text-sm text-red-600">{errors.email.message}</p>
+									)}
+								</div>
+
+								<div className="space-y-2">
+									<Label htmlFor="contactNumber" className="text-gray-700 font-medium">
+										Contact Number *
+									</Label>
+									<Input
+										id="contactNumber"
+										placeholder="+63 912 345 6789"
+										className="border-gray-300 focus:border-accent-500 focus:ring-accent-500"
+										{...register("contactNumber")}
+									/>
+									{errors.contactNumber && (
+										<p className="text-sm text-red-600">
+											{errors.contactNumber.message}
 										</p>
 									)}
 								</div>
 
 								<div className="space-y-2">
-									<Label
-										htmlFor="lastName"
-										className="text-gray-700 font-medium"
-									>
-										Last Name
+									<Label htmlFor="address" className="text-gray-700 font-medium">
+										Address
 									</Label>
 									<Input
-										id="lastName"
-										placeholder="Last name"
+										id="address"
+										placeholder="Your address (optional)"
 										className="border-gray-300 focus:border-accent-500 focus:ring-accent-500"
-										{...register("lastName")}
+										{...register("address")}
 									/>
-									{errors.lastName && (
+									{errors.address && (
 										<p className="text-sm text-red-600">
-											{errors.lastName.message}
+											{errors.address.message}
 										</p>
 									)}
 								</div>
 							</div>
 
-							<div className="space-y-2">
-								<Label htmlFor="email" className="text-gray-700 font-medium">
-									Email Address
-								</Label>
-								<Input
-									id="email"
-									type="email"
-									placeholder="instructor@omsc.edu.ph"
-									className="border-gray-300 focus:border-accent-500 focus:ring-accent-500"
-									{...register("email")}
-								/>
-								{errors.email && (
-									<p className="text-sm text-red-600">{errors.email.message}</p>
-								)}
+							{/* Professional Information */}
+							<div className="space-y-4">
+								<h3 className="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2">
+									Professional Information
+								</h3>
+
+								<div className="space-y-2">
+									<Label htmlFor="instructorId" className="text-gray-700 font-medium">
+										Instructor ID *
+									</Label>
+									<Input
+										id="instructorId"
+										placeholder="Enter your instructor ID"
+										className="border-gray-300 focus:border-accent-500 focus:ring-accent-500"
+										{...register("instructorId")}
+									/>
+									{errors.instructorId && (
+										<p className="text-sm text-red-600">
+											{errors.instructorId.message}
+										</p>
+									)}
+								</div>
+
+								<div className="space-y-2">
+									<Label htmlFor="department" className="text-gray-700 font-medium">
+										Department *
+									</Label>
+									<Controller
+										name="department"
+										control={control}
+										render={({ field }) => (
+											<Select onValueChange={field.onChange} defaultValue={field.value}>
+												<SelectTrigger className="border-gray-300 focus:border-accent-500 focus:ring-accent-500">
+													<SelectValue placeholder="Select your department" />
+												</SelectTrigger>
+												<SelectContent>
+													{departments.map((dept) => (
+														<SelectItem key={dept.value} value={dept.value}>
+															{dept.label}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+										)}
+									/>
+									{errors.department && (
+										<p className="text-sm text-red-600">
+											{errors.department.message}
+										</p>
+									)}
+								</div>
+
+								<div className="space-y-2">
+									<Label htmlFor="bio" className="text-gray-700 font-medium">
+										Bio
+									</Label>
+									<textarea
+										id="bio"
+										placeholder="Tell us about yourself (optional)"
+										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500"
+										rows={3}
+										{...register("bio")}
+									/>
+									{errors.bio && (
+										<p className="text-sm text-red-600">
+											{errors.bio.message}
+										</p>
+									)}
+								</div>
 							</div>
 
-							<div className="space-y-2">
-								<Label
-									htmlFor="employeeId"
-									className="text-gray-700 font-medium"
-								>
-									Employee ID
-								</Label>
-								<Input
-									id="employeeId"
-									placeholder="Enter your employee ID"
-									className="border-gray-300 focus:border-accent-500 focus:ring-accent-500"
-									{...register("employeeId")}
-								/>
-								{errors.employeeId && (
-									<p className="text-sm text-red-600">
-										{errors.employeeId.message}
-									</p>
-								)}
-							</div>
+							{/* Security */}
+							<div className="space-y-4">
+								<h3 className="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2">
+									Security
+								</h3>
 
-							<div className="space-y-2">
-								<Label
-									htmlFor="department"
-									className="text-gray-700 font-medium"
-								>
-									Department
-								</Label>
-								<Controller
-									name="department"
-									control={control}
-									render={({ field }) => (
-										<Select
-											onValueChange={field.onChange}
-											defaultValue={field.value}
+								<div className="space-y-2">
+									<Label htmlFor="password" className="text-gray-700 font-medium">
+										Password *
+									</Label>
+									<div className="relative">
+										<Input
+											id="password"
+											type={showPassword ? "text" : "password"}
+											placeholder="Create a strong password"
+											className="border-gray-300 focus:border-accent-500 focus:ring-accent-500 pr-10"
+											{...register("password")}
+										/>
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+											onClick={() => setShowPassword(!showPassword)}
 										>
-											<SelectTrigger className="border-gray-300 focus:border-accent-500 focus:ring-accent-500">
-												<SelectValue placeholder="Select your department" />
-											</SelectTrigger>
-											<SelectContent>
-												{departments.map((dept) => (
-													<SelectItem key={dept.value} value={dept.value}>
-														{dept.label}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
+											{showPassword ? (
+												<EyeOff className="h-4 w-4 text-gray-400" />
+											) : (
+												<Eye className="h-4 w-4 text-gray-400" />
+											)}
+										</Button>
+									</div>
+									{errors.password && (
+										<p className="text-sm text-red-600">
+											{errors.password.message}
+										</p>
 									)}
-								/>
-								{errors.department && (
-									<p className="text-sm text-red-600">
-										{errors.department.message}
-									</p>
-								)}
-							</div>
-
-							<div className="space-y-2">
-								<Label htmlFor="password" className="text-gray-700 font-medium">
-									Password
-								</Label>
-								<div className="relative">
-									<Input
-										id="password"
-										type={showPassword ? "text" : "password"}
-										placeholder="Create a strong password"
-										className="border-gray-300 focus:border-accent-500 focus:ring-accent-500 pr-10"
-										{...register("password")}
-									/>
-									<Button
-										type="button"
-										variant="ghost"
-										size="sm"
-										className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-										onClick={() => setShowPassword(!showPassword)}
-									>
-										{showPassword ? (
-											<EyeOff className="h-4 w-4 text-gray-400" />
-										) : (
-											<Eye className="h-4 w-4 text-gray-400" />
-										)}
-									</Button>
 								</div>
-								{errors.password && (
-									<p className="text-sm text-red-600">
-										{errors.password.message}
-									</p>
-								)}
-							</div>
 
-							<div className="space-y-2">
-								<Label
-									htmlFor="confirmPassword"
-									className="text-gray-700 font-medium"
-								>
-									Confirm Password
-								</Label>
-								<div className="relative">
-									<Input
-										id="confirmPassword"
-										type={showConfirmPassword ? "text" : "password"}
-										placeholder="Confirm your password"
-										className="border-gray-300 focus:border-accent-500 focus:ring-accent-500 pr-10"
-										{...register("confirmPassword")}
-									/>
-									<Button
-										type="button"
-										variant="ghost"
-										size="sm"
-										className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-										onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-									>
-										{showConfirmPassword ? (
-											<EyeOff className="h-4 w-4 text-gray-400" />
-										) : (
-											<Eye className="h-4 w-4 text-gray-400" />
-										)}
-									</Button>
+								<div className="space-y-2">
+									<Label htmlFor="confirmPassword" className="text-gray-700 font-medium">
+										Confirm Password *
+									</Label>
+									<div className="relative">
+										<Input
+											id="confirmPassword"
+											type={showConfirmPassword ? "text" : "password"}
+											placeholder="Confirm your password"
+											className="border-gray-300 focus:border-accent-500 focus:ring-accent-500 pr-10"
+											{...register("confirmPassword")}
+										/>
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+											onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+										>
+											{showConfirmPassword ? (
+												<EyeOff className="h-4 w-4 text-gray-400" />
+											) : (
+												<Eye className="h-4 w-4 text-gray-400" />
+											)}
+										</Button>
+									</div>
+									{errors.confirmPassword && (
+										<p className="text-sm text-red-600">
+											{errors.confirmPassword.message}
+										</p>
+									)}
 								</div>
-								{errors.confirmPassword && (
-									<p className="text-sm text-red-600">
-										{errors.confirmPassword.message}
-									</p>
-								)}
 							</div>
 
 							<Button
 								type="submit"
 								className="w-full bg-accent-500 hover:bg-accent-600 text-white font-medium py-2.5"
-								disabled={isLoading}
+								disabled={isLoading || registerMutation.isPending}
 							>
-								{isLoading ? "Creating Account..." : "Create Account"}
+								{isLoading || registerMutation.isPending ? "Creating Account..." : "Create Account"}
 							</Button>
 						</form>
 
