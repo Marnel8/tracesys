@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,28 +30,101 @@ import {
 	Filter,
 } from "lucide-react";
 import Link from "next/link";
+import { useAuth, useEditUser } from "@/hooks/auth/useAuth";
+import { useToast } from "@/hooks/use-toast";
+import { useAttendanceStats, useStudentAttendance } from "@/hooks/student/useStudentAttendance";
+import { useStudentReports } from "@/hooks/student/useStudentReports";
+import { useRequirementStats } from "@/hooks/student/useStudentRequirements";
 
 export default function ProfilePage() {
-	const [isEditing, setIsEditing] = useState(false);
-	const [profileData, setProfileData] = useState({
-		firstName: "Maria",
-		lastName: "Santos",
-		email: "maria.santos@student.edu",
-		phone: "+63 912 345 6789",
-		address: "123 Main Street, Quezon City, Philippines",
-		studentId: "2021-12345",
-		course: "Bachelor of Science in Information Technology",
-		year: "4th Year",
-		section: "IT-4A",
-		supervisor: "Dr. Juan Dela Cruz",
-		company: "Tech Solutions Inc.",
-		position: "Software Development Intern",
-		startDate: "2024-01-08",
-		endDate: "2024-04-30",
-		bio: "Passionate IT student specializing in web development and software engineering. Eager to learn and contribute to innovative projects during my practicum.",
-	});
+    const [isEditing, setIsEditing] = useState(false);
+    const { user, isLoading: isUserLoading, error, refetch } = useAuth();
+    const editUserMutation = useEditUser();
+    const { toast } = useToast();
 
-	const achievements = [
+    const [profileData, setProfileData] = useState({
+        firstName: "",
+        lastName: "",
+        email: "",
+        phone: "",
+        address: "",
+        studentId: "",
+        course: "",
+        year: "",
+        section: "",
+        supervisor: "",
+        company: "",
+        position: "",
+        startDate: "",
+        endDate: "",
+        bio: "",
+    });
+
+    // Hooks must be declared before any early return
+    const [searchTerm, setSearchTerm] = useState("");
+    const [selectedMonth, setSelectedMonth] = useState("");
+
+    // Student key used by student-facing APIs (uses academic studentId string)
+    const studentKey = user?.studentId || "";
+
+    // Derive date range from selectedMonth (YYYY-MM)
+    const monthStart = selectedMonth ? `${selectedMonth}-01` : undefined;
+    const monthEnd = selectedMonth ? `${selectedMonth}-31` : undefined;
+
+    // Queries for tabs (enabled only when studentKey exists)
+    const { data: attendanceListData } = useStudentAttendance(studentKey, {
+        page: 1,
+        limit: 1000,
+        startDate: monthStart,
+        endDate: monthEnd,
+    });
+    const { data: attendanceStatsData } = useAttendanceStats(studentKey);
+    const { data: reportsData } = useStudentReports(studentKey);
+    const { data: requirementStatsData } = useRequirementStats(studentKey);
+
+    useEffect(() => {
+        if (user) {
+            setProfileData((prev) => ({
+                ...prev,
+                firstName: user.firstName || "",
+                lastName: user.lastName || "",
+                email: user.email || "",
+                phone: user.phone || "",
+                address: user.address || "",
+                studentId: user.studentId || "",
+                bio: user.bio || "",
+            }));
+        }
+    }, [user]);
+
+    if (isUserLoading) {
+        return (
+            <div className="px-4 md:px-8 lg:px-16">
+                <div className="mb-6">
+                    <div className="h-8 w-40 bg-gray-200 rounded animate-pulse mb-2" />
+                    <div className="h-4 w-72 bg-gray-200 rounded animate-pulse" />
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="h-64 bg-gray-100 rounded animate-pulse" />
+                    <div className="h-64 bg-gray-100 rounded animate-pulse lg:col-span-2" />
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="px-4 md:px-8 lg:px-16">
+                <Card>
+                    <CardContent className="p-6">
+                        <p className="text-red-600">Failed to load profile.</p>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
+    const achievements = [
 		{
 			title: "Perfect Attendance",
 			description: "100% attendance for 2 weeks",
@@ -72,117 +145,59 @@ export default function ProfilePage() {
 		},
 	];
 
-	const practicum_stats = {
-		hoursCompleted: 240,
-		totalHours: 400,
-		reportsSubmitted: 8,
-		requirementsDone: 5,
-		totalRequirements: 7,
-		attendanceRate: 95,
-	};
+    const practicum_stats = {
+        hoursCompleted: attendanceStatsData?.data?.completedHours ?? 0,
+        totalHours: attendanceStatsData?.data?.totalHours ?? 0,
+        reportsSubmitted: reportsData?.data?.total ?? 0,
+        requirementsDone: requirementStatsData?.data?.approved ?? 0,
+        totalRequirements: requirementStatsData?.data?.total ?? 0,
+        attendanceRate: attendanceStatsData?.data?.attendancePercentage ?? 0,
+    };
 
-	// DTR data - sample data for demonstration
-	const dtrRecords = [
-		{
-			date: "2024-01-15",
-			day: "Monday",
-			timeIn: "08:00 AM",
-			timeOut: "05:00 PM",
-			hours: 8,
-			status: "present",
-			remarks: "Regular day",
-		},
-		{
-			date: "2024-01-16",
-			day: "Tuesday",
-			timeIn: "08:15 AM",
-			timeOut: "05:30 PM",
-			hours: 8.25,
-			status: "present",
-			remarks: "Overtime",
-		},
-		{
-			date: "2024-01-17",
-			day: "Wednesday",
-			timeIn: "08:00 AM",
-			timeOut: "05:00 PM",
-			hours: 8,
-			status: "present",
-			remarks: "Regular day",
-		},
-		{
-			date: "2024-01-18",
-			day: "Thursday",
-			timeIn: "08:00 AM",
-			timeOut: "05:00 PM",
-			hours: 8,
-			status: "present",
-			remarks: "Regular day",
-		},
-		{
-			date: "2024-01-19",
-			day: "Friday",
-			timeIn: "08:00 AM",
-			timeOut: "05:00 PM",
-			hours: 8,
-			status: "present",
-			remarks: "Regular day",
-		},
-		{
-			date: "2024-01-22",
-			day: "Monday",
-			timeIn: "08:00 AM",
-			timeOut: "05:00 PM",
-			hours: 8,
-			status: "present",
-			remarks: "Regular day",
-		},
-		{
-			date: "2024-01-23",
-			day: "Tuesday",
-			timeIn: "08:00 AM",
-			timeOut: "05:00 PM",
-			hours: 8,
-			status: "present",
-			remarks: "Regular day",
-		},
-		{
-			date: "2024-01-24",
-			day: "Wednesday",
-			timeIn: "08:00 AM",
-			timeOut: "05:00 PM",
-			hours: 8,
-			status: "present",
-			remarks: "Regular day",
-		},
-		{
-			date: "2024-01-25",
-			day: "Thursday",
-			timeIn: "08:00 AM",
-			timeOut: "05:00 PM",
-			hours: 8,
-			status: "present",
-			remarks: "Regular day",
-		},
-		{
-			date: "2024-01-26",
-			day: "Friday",
-			timeIn: "08:00 AM",
-			timeOut: "05:00 PM",
-			hours: 8,
-			status: "present",
-			remarks: "Regular day",
-		},
-	];
+    // DTR data - from attendance API
+    const dtrRecords = (attendanceListData?.data || []).map((a: any) => {
+        let day = "";
+        try {
+            day = new Date(a.date).toLocaleDateString(undefined, { weekday: "long" });
+        } catch {}
+        let hours = 0;
+        if (a.timeIn && a.timeOut) {
+            try {
+                const start = new Date(`1970-01-01T${a.timeIn}`);
+                const end = new Date(`1970-01-01T${a.timeOut}`);
+                hours = Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60 * 60));
+            } catch {}
+        }
+        return {
+            date: a.date,
+            day,
+            timeIn: a.timeIn || "",
+            timeOut: a.timeOut || "",
+            hours,
+            status: a.status || "present",
+            remarks: a.notes || "",
+        };
+    });
 
-	const [searchTerm, setSearchTerm] = useState("");
-	const [selectedMonth, setSelectedMonth] = useState("");
 
-	const handleSave = () => {
-		// TODO: Save profile changes
-		console.log("Saving profile:", profileData);
-		setIsEditing(false);
-	};
+    const handleSave = async () => {
+        if (!user?.id) return;
+        try {
+            await editUserMutation.mutateAsync({
+                id: user.id,
+                firstName: profileData.firstName,
+                lastName: profileData.lastName,
+                email: profileData.email,
+                phone: profileData.phone,
+                address: profileData.address,
+                bio: profileData.bio,
+            });
+            toast({ title: "Profile updated" });
+            setIsEditing(false);
+        } catch (e: any) {
+            toast({ title: "Update failed", description: e.message || "Please try again.", variant: "destructive" });
+        }
+    };
 
 	const handleInputChange = (field: string, value: string) => {
 		setProfileData((prev) => ({

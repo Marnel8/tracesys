@@ -4,6 +4,7 @@ import "./globals.css";
 import { Poppins } from "next/font/google";
 import Provider from "@/lib/provider";
 import { Toaster } from "sonner";
+import { Toaster as ShadcnToaster } from "@/components/ui/toaster";
 
 const poppins = Poppins({
 	weight: ["400", "500", "600", "700"],
@@ -28,6 +29,7 @@ export default function RootLayout({
 				<Provider>
 					{children}
 					<Toaster position="top-right" richColors />
+					<ShadcnToaster />
 				</Provider>
 			</body>
 		</html>

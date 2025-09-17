@@ -5,16 +5,18 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
+import { useLogout } from "@/hooks/auth/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 export function StudentNavbar() {
 	const router = useRouter();
+    const logoutMutation = useLogout();
+    const { toast } = useToast();
 
 	async function handleSignOut() {
 		try {
-			await fetch("http://localhost:5001/api/v1/user/logout", {
-				method: "GET",
-				credentials: "include",
-			});
+            await logoutMutation.mutateAsync();
+            toast({ title: "Signed out" });
 		} catch (error) {
 			// ignore – still redirect
 		} finally {
@@ -36,13 +38,14 @@ export function StudentNavbar() {
 					<span className="font-semibold text-gray-900">TracèSys</span>
 				</Link>
 				<div className="flex items-center gap-3">
-					<Button
+                    <Button
 						variant="outline"
 						className="text-red-600 border-red-200 hover:bg-red-50"
-						onClick={handleSignOut}
+                        onClick={handleSignOut}
+                        disabled={logoutMutation.isPending}
 					>
-						<LogOut className="w-4 h-4 mr-2" />
-						Sign Out
+                        <LogOut className="w-4 h-4 mr-2" />
+                        {logoutMutation.isPending ? "Signing out..." : "Sign Out"}
 					</Button>
 				</div>
 			</div>

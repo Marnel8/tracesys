@@ -18,9 +18,11 @@ import { ArrowLeft, Eye, EyeOff, GraduationCap } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { useLogin } from "@/hooks/auth/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 const studentLoginSchema = z.object({
-	studentId: z.string().min(1, "Student ID is required"),
+	email: z.string().email("Please enter a valid email address"),
 	password: z.string().min(1, "Password is required"),
 });
 
@@ -29,7 +31,8 @@ type StudentLoginForm = z.infer<typeof studentLoginSchema>;
 export default function StudentLoginPage() {
 	const router = useRouter();
 	const [showPassword, setShowPassword] = useState(false);
-	const [isLoading, setIsLoading] = useState(false);
+	const { toast } = useToast();
+	const loginMutation = useLogin();
 
 	const {
 		register,
@@ -40,13 +43,20 @@ export default function StudentLoginPage() {
 	});
 
 	const onSubmit = async (data: StudentLoginForm) => {
-		setIsLoading(true);
-		// Simulate API call
-		setTimeout(() => {
-			console.log("Student login:", data);
-			setIsLoading(false);
+		try {
+			await loginMutation.mutateAsync(data);
+			toast({
+				title: "Login Successful",
+				description: "Welcome back! Redirecting to your dashboard...",
+			});
 			router.push("/dashboard/student");
-		}, 1500);
+		} catch (error: any) {
+			toast({
+				title: "Login Failed",
+				description: error.message || "An error occurred during login. Please try again.",
+				variant: "destructive",
+			});
+		}
 	};
 
 	return (
@@ -94,21 +104,21 @@ export default function StudentLoginPage() {
 						<form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
 							<div className="space-y-2">
 								<Label
-									htmlFor="studentId"
+									htmlFor="email"
 									className="text-gray-700 font-medium"
 								>
-									Student ID
+									Email Address
 								</Label>
 								<Input
-									id="studentId"
-									type="text"
-									placeholder="Enter your student ID"
+									id="email"
+									type="email"
+									placeholder="Enter your email address"
 									className="border-gray-300 focus:border-primary-500 focus:ring-primary-500"
-									{...register("studentId")}
+									{...register("email")}
 								/>
-								{errors.studentId && (
+								{errors.email && (
 									<p className="text-sm text-red-600">
-										{errors.studentId.message}
+										{errors.email.message}
 									</p>
 								)}
 							</div>
@@ -158,9 +168,9 @@ export default function StudentLoginPage() {
 							<Button
 								type="submit"
 								className="w-full bg-primary-600 hover:bg-primary-500 text-white font-medium py-2.5"
-								disabled={isLoading}
+								disabled={loginMutation.isPending}
 							>
-								{isLoading ? "Signing in..." : "Sign In"}
+								{loginMutation.isPending ? "Signing in..." : "Sign In"}
 							</Button>
 						</form>
 
