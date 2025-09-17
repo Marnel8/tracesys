@@ -48,6 +48,12 @@ import {
 } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getCourseOptions } from "@/data/instructor-courses";
+import { useRegisterStudent } from "@/hooks/student";
+import { useAgencies } from "@/hooks/agency";
+import { useDepartments } from "@/hooks/department";
+import { useCourses } from "@/hooks/course";
+import { useSections } from "@/hooks/section";
+import { toast } from "sonner";
 
 const studentSchema = z.object({
 	// Personal Information
@@ -56,22 +62,25 @@ const studentSchema = z.object({
 	middleName: z.string().optional(),
 	email: z.string().email("Please enter a valid email address"),
 	phone: z.string().min(10, "Phone number must be at least 10 digits"),
+	age: z.number().min(16, "Age must be at least 16").max(100, "Age must be less than 100"),
+	gender: z.string().min(1, "Please select a gender"),
 
 	// Academic Information
 	studentId: z.string().min(8, "Student ID must be at least 8 characters"),
+	department: z.string().min(1, "Please select a college"),
 	course: z.string().min(1, "Please select a course"),
 	section: z.string().min(1, "Please select a section"),
 	year: z.string().min(1, "Please select a year"),
 	semester: z.string().min(1, "Please select a semester"),
 
 	// Practicum Information
-	agency: z.string().min(2, "Agency name is required"),
-	agencyAddress: z.string().min(5, "Agency address is required"),
-	supervisor: z.string().min(2, "Supervisor name is required"),
-	supervisorEmail: z.string().email("Please enter a valid supervisor email"),
-	supervisorPhone: z.string().min(10, "Supervisor phone is required"),
+	agencyId: z.string().min(1, "Please select an agency"),
+	supervisorId: z.string().min(1, "Please select a supervisor"),
+	position: z.string().min(2, "Position is required"),
 	startDate: z.string().min(1, "Start date is required"),
 	endDate: z.string().min(1, "End date is required"),
+	totalHours: z.number().min(1, "Total hours must be at least 1").default(400),
+	workSetup: z.enum(["On-site", "Hybrid", "Work From Home"]).default("On-site"),
 
 	// Account Settings
 	sendCredentials: z.boolean().default(true),
@@ -92,16 +101,40 @@ type CreatedStudent = StudentFormData & {
 
 export default function AddStudentPage() {
 	const router = useRouter();
-	const [isLoading, setIsLoading] = useState(false);
 	const [showPassword, setShowPassword] = useState(false);
+	const [selectedAgencyId, setSelectedAgencyId] = useState<string>("");
+	const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
+	const [selectedCourseId, setSelectedCourseId] = useState<string>("");
+	
+	// Fetch agencies for selection
+	const { data: agenciesData } = useAgencies({ status: "active" });
+	
+	// Fetch departments, courses, and sections
+	const { data: departmentsData } = useDepartments({ status: "active" });
+	const { data: coursesData } = useCourses({ 
+		status: "active", 
+		departmentId: selectedDepartmentId || undefined 
+	});
+	const { data: sectionsData } = useSections({ 
+		status: "active", 
+		courseId: selectedCourseId || undefined 
+	});
+	
+	// Get selected agency and its supervisors
+	const selectedAgency = agenciesData?.agencies.find(agency => agency.id === selectedAgencyId);
+	const availableSupervisors = selectedAgency?.supervisors || [];
 	const [generatedPassword, setGeneratedPassword] = useState("");
 	const [isSuccessDialogOpen, setIsSuccessDialogOpen] = useState(false);
-	const [createdStudent, setCreatedStudent] = useState<CreatedStudent | null>(
-		null
-	);
+	const [createdStudent, setCreatedStudent] = useState<any>(null);
 	const [copiedField, setCopiedField] = useState("");
 	const [avatarFile, setAvatarFile] = useState<File | null>(null);
 	const [avatarPreview, setAvatarPreview] = useState<string>("");
+	const [submittedPassword, setSubmittedPassword] = useState("");
+	const [submittedEmail, setSubmittedEmail] = useState("");
+	const [submittedSendCredentials, setSubmittedSendCredentials] = useState(true);
+
+	// Use the student registration hook
+	const registerStudent = useRegisterStudent();
 
 	const {
 		register,
@@ -119,18 +152,21 @@ export default function AddStudentPage() {
 			middleName: "",
 			email: "",
 			phone: "",
+			age: 18,
+			gender: "",
 			studentId: "",
+			department: "",
 			course: "",
 			section: "",
 			year: "",
 			semester: "",
-			agency: "",
-			agencyAddress: "",
-			supervisor: "",
-			supervisorEmail: "",
-			supervisorPhone: "",
+			agencyId: "",
+			supervisorId: "",
+			position: "",
 			startDate: "",
 			endDate: "",
+			totalHours: 400,
+			workSetup: "On-site",
 			customPassword: "",
 		},
 	});
@@ -191,31 +227,64 @@ export default function AddStudentPage() {
 	};
 
 	const onSubmit = async (data: StudentFormData) => {
-		setIsLoading(true);
+		const password = data.generatePassword
+			? generatedPassword
+			: data.customPassword || "";
 
-		// Simulate API call with avatar upload
-		setTimeout(() => {
-			const newStudent: CreatedStudent = {
-				...data,
-				id: Math.random().toString(36).substr(2, 9),
-				password: data.generatePassword
-					? generatedPassword
-					: data.customPassword || "",
-				avatar: avatarPreview || null,
-				avatarFileName: avatarFile?.name || null,
-				createdAt: new Date().toISOString(),
-			};
+		// Map new practicum fields to old API format
+		const studentData = {
+			...data,
+			password,
+			avatar: avatarFile || undefined,
+			// Map new fields to old API format
+			agency: selectedAgency?.name || "",
+			agencyAddress: selectedAgency?.address || "",
+			supervisor: availableSupervisors.find(s => s.id === data.supervisorId)?.name || "",
+			supervisorEmail: availableSupervisors.find(s => s.id === data.supervisorId)?.email || "",
+			supervisorPhone: availableSupervisors.find(s => s.id === data.supervisorId)?.phone || "",
+		};
 
-			setCreatedStudent(newStudent);
-			setIsSuccessDialogOpen(true);
-			setIsLoading(false);
+		// Store submitted values for success modal
+		setSubmittedPassword(password);
+		setSubmittedEmail(data.email);
+		setSubmittedSendCredentials(!!data.sendCredentials);
 
-			console.log("Created student with avatar:", newStudent);
-		}, 2000);
+		registerStudent.mutate(studentData, {
+			onSuccess: (response) => {
+				setCreatedStudent(response.data);
+				setIsSuccessDialogOpen(true);
+				toast.success("Student created successfully!");
+			},
+			onError: (error) => {
+				toast.error(error.message || "Failed to create student");
+			},
+		});
+	};
+
+	const handleAgencyChange = (agencyId: string) => {
+		setSelectedAgencyId(agencyId);
+		setValue("agencyId", agencyId);
+		setValue("supervisorId", ""); // Reset supervisor when agency changes
+	};
+
+	const handleDepartmentChange = (departmentId: string) => {
+		setSelectedDepartmentId(departmentId);
+		setValue("department", departmentId);
+		setValue("course", ""); // Reset course when department changes
+		setValue("section", ""); // Reset section when department changes
+		setSelectedCourseId("");
+		setSelectedCourseId("");
+	};
+
+	const handleCourseChange = (courseId: string) => {
+		setSelectedCourseId(courseId);
+		setValue("course", courseId);
+		setValue("section", ""); // Reset section when course changes
 	};
 
 	const watchGeneratePassword = watch("generatePassword");
 	const watchSendCredentials = watch("sendCredentials");
+	const isLoading = registerStudent.isPending;
 
 	return (
 		<div className="space-y-6">
@@ -378,6 +447,42 @@ export default function AddStudentPage() {
 										)}
 									</div>
 								</div>
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div className="space-y-2">
+										<Label htmlFor="age">Age *</Label>
+										<Input
+											id="age"
+											type="number"
+											{...register("age", { valueAsNumber: true })}
+											placeholder="18"
+											min="16"
+											max="100"
+										/>
+										{errors.age && (
+											<p className="text-sm text-red-600">
+												{errors.age.message}
+											</p>
+										)}
+									</div>
+									<div className="space-y-2">
+										<Label htmlFor="gender">Gender *</Label>
+										<Select onValueChange={(value) => setValue("gender", value)}>
+											<SelectTrigger>
+												<SelectValue placeholder="Select gender" />
+											</SelectTrigger>
+											<SelectContent>
+												<SelectItem value="male">Male</SelectItem>
+												<SelectItem value="female">Female</SelectItem>
+												<SelectItem value="other">Other</SelectItem>
+											</SelectContent>
+										</Select>
+										{errors.gender && (
+											<p className="text-sm text-red-600">
+												{errors.gender.message}
+											</p>
+										)}
+									</div>
+								</div>
 							</CardContent>
 						</Card>
 
@@ -407,17 +512,44 @@ export default function AddStudentPage() {
 										)}
 									</div>
 									<div className="space-y-2">
+										<Label htmlFor="department">College *</Label>
+										<Select
+											onValueChange={handleDepartmentChange}
+											value={selectedDepartmentId}
+										>
+											<SelectTrigger>
+												<SelectValue placeholder="Select college" />
+											</SelectTrigger>
+											<SelectContent>
+												{departmentsData?.departments.map((department) => (
+													<SelectItem key={department.id} value={department.id}>
+														{department.name} ({department.code})
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
+										{errors.department && (
+											<p className="text-sm text-red-600">
+												{errors.department.message}
+											</p>
+										)}
+									</div>
+								</div>
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div className="space-y-2">
 										<Label htmlFor="course">Course *</Label>
 										<Select
-											onValueChange={(value) => setValue("course", value)}
+											onValueChange={handleCourseChange}
+											value={selectedCourseId}
+											disabled={!selectedDepartmentId}
 										>
 											<SelectTrigger>
 												<SelectValue placeholder="Select course" />
 											</SelectTrigger>
 											<SelectContent>
-												{getCourseOptions().map((course) => (
-													<SelectItem key={course.value} value={course.value}>
-														{course.label}
+												{coursesData?.courses.map((course) => (
+													<SelectItem key={course.id} value={course.id}>
+														{course.name} ({course.code})
 													</SelectItem>
 												))}
 											</SelectContent>
@@ -425,6 +557,11 @@ export default function AddStudentPage() {
 										{errors.course && (
 											<p className="text-sm text-red-600">
 												{errors.course.message}
+											</p>
+										)}
+										{!selectedDepartmentId && (
+											<p className="text-sm text-amber-600">
+												Please select a department first
 											</p>
 										)}
 									</div>
@@ -435,19 +572,27 @@ export default function AddStudentPage() {
 										<Label htmlFor="section">Section *</Label>
 										<Select
 											onValueChange={(value) => setValue("section", value)}
+											disabled={!selectedCourseId}
 										>
 											<SelectTrigger>
 												<SelectValue placeholder="Select section" />
 											</SelectTrigger>
 											<SelectContent>
-												<SelectItem value="4A">4A</SelectItem>
-												<SelectItem value="4B">4B</SelectItem>
-												<SelectItem value="4C">4C</SelectItem>
+												{sectionsData?.sections.map((section) => (
+													<SelectItem key={section.id} value={section.id}>
+														{section.name} ({section.code})
+													</SelectItem>
+												))}
 											</SelectContent>
 										</Select>
 										{errors.section && (
 											<p className="text-sm text-red-600">
 												{errors.section.message}
+											</p>
+										)}
+										{!selectedCourseId && (
+											<p className="text-sm text-amber-600">
+												Please select a course first
 											</p>
 										)}
 									</div>
@@ -458,6 +603,9 @@ export default function AddStudentPage() {
 												<SelectValue placeholder="Select year" />
 											</SelectTrigger>
 											<SelectContent>
+												<SelectItem value="1st">1st Year</SelectItem>
+												<SelectItem value="2nd">2nd Year</SelectItem>
+												<SelectItem value="3rd">3rd Year</SelectItem>
 												<SelectItem value="4th">4th Year</SelectItem>
 											</SelectContent>
 										</Select>
@@ -496,80 +644,82 @@ export default function AddStudentPage() {
 							<CardHeader>
 								<CardTitle>Practicum Information</CardTitle>
 								<CardDescription>
-									Details about the student's practicum placement
+									Select agency and supervisor for the student's practicum placement
 								</CardDescription>
 							</CardHeader>
 							<CardContent className="space-y-4">
 								<div className="space-y-2">
-									<Label htmlFor="agency">Agency/Company Name *</Label>
-									<Input
-										id="agency"
-										{...register("agency")}
-										placeholder="Enter agency or company name"
-									/>
-									{errors.agency && (
+									<Label htmlFor="agencyId">Agency/Company *</Label>
+									<Select onValueChange={handleAgencyChange} value={selectedAgencyId}>
+										<SelectTrigger>
+											<SelectValue placeholder="Select an agency" />
+										</SelectTrigger>
+										<SelectContent>
+											{agenciesData?.agencies.map((agency) => (
+												<SelectItem key={agency.id} value={agency.id}>
+													{agency.name} ({agency.branchType})
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+									{errors.agencyId && (
 										<p className="text-sm text-red-600">
-											{errors.agency.message}
+											{errors.agencyId.message}
+										</p>
+									)}
+								</div>
+
+								{selectedAgency && (
+									<div className="p-4 bg-gray-50 rounded-lg">
+										<h4 className="font-medium text-gray-900 mb-2">Selected Agency Details</h4>
+										<div className="space-y-1 text-sm text-gray-600">
+											<p><strong>Name:</strong> {selectedAgency.name}</p>
+											<p><strong>Address:</strong> {selectedAgency.address}</p>
+											<p><strong>Contact:</strong> {selectedAgency.contactPerson} ({selectedAgency.contactRole})</p>
+											<p><strong>Phone:</strong> {selectedAgency.contactPhone}</p>
+											<p><strong>Email:</strong> {selectedAgency.contactEmail}</p>
+										</div>
+									</div>
+								)}
+
+								<div className="space-y-2">
+									<Label htmlFor="supervisorId">Supervisor *</Label>
+									<Select onValueChange={(value) => setValue("supervisorId", value)}>
+										<SelectTrigger>
+											<SelectValue placeholder="Select a supervisor" />
+										</SelectTrigger>
+										<SelectContent>
+											{availableSupervisors.map((supervisor) => (
+												<SelectItem key={supervisor.id} value={supervisor.id}>
+													{supervisor.name} - {supervisor.position}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+									{errors.supervisorId && (
+										<p className="text-sm text-red-600">
+											{errors.supervisorId.message}
+										</p>
+									)}
+									{selectedAgencyId && availableSupervisors.length === 0 && (
+										<p className="text-sm text-amber-600">
+											No supervisors available for this agency. Please add supervisors to this agency first.
 										</p>
 									)}
 								</div>
 
 								<div className="space-y-2">
-									<Label htmlFor="agencyAddress">Agency Address *</Label>
-									<Textarea
-										id="agencyAddress"
-										{...register("agencyAddress")}
-										placeholder="Enter complete agency address"
-										rows={3}
+									<Label htmlFor="position">Position/Job Title *</Label>
+									<Input
+										id="position"
+										{...register("position")}
+										placeholder="Enter position or job title"
 									/>
-									{errors.agencyAddress && (
+									{errors.position && (
 										<p className="text-sm text-red-600">
-											{errors.agencyAddress.message}
+											{errors.position.message}
 										</p>
 									)}
-								</div>
-
-								<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-									<div className="space-y-2">
-										<Label htmlFor="supervisor">Supervisor Name *</Label>
-										<Input
-											id="supervisor"
-											{...register("supervisor")}
-											placeholder="Enter supervisor name"
-										/>
-										{errors.supervisor && (
-											<p className="text-sm text-red-600">
-												{errors.supervisor.message}
-											</p>
-										)}
-									</div>
-									<div className="space-y-2">
-										<Label htmlFor="supervisorEmail">Supervisor Email *</Label>
-										<Input
-											id="supervisorEmail"
-											type="email"
-											{...register("supervisorEmail")}
-											placeholder="supervisor@agency.com"
-										/>
-										{errors.supervisorEmail && (
-											<p className="text-sm text-red-600">
-												{errors.supervisorEmail.message}
-											</p>
-										)}
-									</div>
-									<div className="space-y-2">
-										<Label htmlFor="supervisorPhone">Supervisor Phone *</Label>
-										<Input
-											id="supervisorPhone"
-											{...register("supervisorPhone")}
-											placeholder="+63 912 345 6789"
-										/>
-										{errors.supervisorPhone && (
-											<p className="text-sm text-red-600">
-												{errors.supervisorPhone.message}
-											</p>
-										)}
-									</div>
 								</div>
 
 								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -592,6 +742,41 @@ export default function AddStudentPage() {
 										{errors.endDate && (
 											<p className="text-sm text-red-600">
 												{errors.endDate.message}
+											</p>
+										)}
+									</div>
+								</div>
+
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div className="space-y-2">
+										<Label htmlFor="totalHours">Total Hours *</Label>
+										<Input
+											id="totalHours"
+											type="number"
+											{...register("totalHours", { valueAsNumber: true })}
+											placeholder="400"
+										/>
+										{errors.totalHours && (
+											<p className="text-sm text-red-600">
+												{errors.totalHours.message}
+											</p>
+										)}
+									</div>
+									<div className="space-y-2">
+										<Label htmlFor="workSetup">Work Setup *</Label>
+										<Select onValueChange={(value) => setValue("workSetup", value as any)}>
+											<SelectTrigger>
+												<SelectValue placeholder="Select work setup" />
+											</SelectTrigger>
+											<SelectContent>
+												<SelectItem value="On-site">On-site</SelectItem>
+												<SelectItem value="Hybrid">Hybrid</SelectItem>
+												<SelectItem value="Work From Home">Work From Home</SelectItem>
+											</SelectContent>
+										</Select>
+										{errors.workSetup && (
+											<p className="text-sm text-red-600">
+												{errors.workSetup.message}
 											</p>
 										)}
 									</div>
@@ -698,12 +883,12 @@ export default function AddStudentPage() {
 									</Label>
 								</div>
 
-								{watchSendCredentials && (
-									<div className="p-3 bg-blue-50 rounded-lg">
-										<p className="text-sm text-blue-800">
+								{submittedSendCredentials && (
+									<div className="p-3 bg-green-50 rounded-lg">
+										<p className="text-sm text-green-800">
 											<Mail className="w-4 h-4 inline mr-1" />
-											Login credentials will be automatically sent to the
-											student's email address.
+											Login credentials have been sent to the student's email
+											address.
 										</p>
 									</div>
 								)}
@@ -813,13 +998,13 @@ export default function AddStudentPage() {
 									<span className="text-sm font-medium">Student ID:</span>
 									<div className="flex items-center gap-2">
 										<code className="text-sm bg-white px-2 py-1 rounded">
-											{createdStudent.studentId}
+											{createdStudent.user?.studentId}
 										</code>
 										<Button
 											variant="ghost"
 											size="sm"
 											onClick={() =>
-												copyToClipboard(createdStudent.studentId, "studentId")
+												copyToClipboard(createdStudent.user?.studentId, "studentId")
 											}
 										>
 											{copiedField === "studentId" ? (
@@ -835,7 +1020,7 @@ export default function AddStudentPage() {
 									<span className="text-sm font-medium">Password:</span>
 									<div className="flex items-center gap-2">
 										<code className="text-sm bg-white px-2 py-1 rounded font-mono">
-											{showPassword ? createdStudent.password : "••••••••••••"}
+											{showPassword ? submittedPassword : "••••••••••••"}
 										</code>
 										<Button
 											variant="ghost"
@@ -851,9 +1036,7 @@ export default function AddStudentPage() {
 										<Button
 											variant="ghost"
 											size="sm"
-											onClick={() =>
-												copyToClipboard(createdStudent.password, "password")
-											}
+											onClick={() => copyToClipboard(submittedPassword, "password")}
 										>
 											{copiedField === "password" ? (
 												<Check className="w-4 h-4 text-green-600" />
@@ -866,11 +1049,11 @@ export default function AddStudentPage() {
 
 								<div className="flex justify-between items-center">
 									<span className="text-sm font-medium">Email:</span>
-									<span className="text-sm">{createdStudent.email}</span>
+									<span className="text-sm">{createdStudent.user?.email || submittedEmail}</span>
 								</div>
 							</div>
 
-							{createdStudent.sendCredentials && (
+							{submittedSendCredentials && (
 								<div className="p-3 bg-green-50 rounded-lg">
 									<p className="text-sm text-green-800">
 										<Mail className="w-4 h-4 inline mr-1" />

@@ -5,7 +5,7 @@ export interface registerParams {
 	firstName: string;
 	lastName: string;
 	middleName?: string;
-	contactNumber: string;
+	phone: string;
 	email: string;
 	password: string;
 	age?: number;
@@ -23,7 +23,7 @@ const register = async (userData: registerParams) => {
 
 	formData.append("firstName", userData.firstName);
 	formData.append("lastName", userData.lastName);
-	formData.append("contactNumber", userData.contactNumber);
+	formData.append("phone", userData.phone);
 	formData.append("email", userData.email);
 	formData.append("password", userData.password);
 	if (userData.age) {
@@ -171,7 +171,7 @@ interface User {
 	middleName?: string;
 	email: string;
 	age?: number;
-	contactNumber: string;
+	phone: string;
 	role: string;
 	gender: string;
 	avatar?: string;
@@ -284,7 +284,7 @@ interface EditUserParams {
 	lastName?: string;
 	middleName?: string;
 	email?: string;
-	contactNumber?: string;
+	phone?: string;
 	age?: number;
 	gender?: string;
 	address?: string;
@@ -312,8 +312,8 @@ const editUser = async (userData: EditUserParams) => {
 	if (userData.email) {
 		formData.append("email", userData.email);
 	}
-	if (userData.contactNumber) {
-		formData.append("contactNumber", userData.contactNumber);
+	if (userData.phone) {
+		formData.append("phone", userData.phone);
 	}
 	if (userData.age !== undefined) {
 		formData.append("age", userData.age.toString());

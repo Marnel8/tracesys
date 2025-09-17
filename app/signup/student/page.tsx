@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -21,26 +21,34 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Eye, EyeOff, Users } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, GraduationCap } from "lucide-react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useRegister, useActivateUser } from "@useAuth";
 import { useDepartments } from "@/hooks/department";
+import { useCourses } from "@/hooks/course";
+import { useSections } from "@/hooks/section";
 import OtpVerification from "@/components/otp-verification";
 import { toast } from "sonner";
 
-const instructorSignupSchema = z
+const studentSignupSchema = z
 	.object({
 		firstName: z.string().min(2, "First name must be at least 2 characters"),
 		lastName: z.string().min(2, "Last name must be at least 2 characters"),
 		middleName: z.string().optional(),
 		email: z.string().email("Please enter a valid email address"),
 		phone: z.string().min(10, "Contact number must be at least 10 digits"),
-		age: z.number().min(18, "Age must be at least 18").max(100, "Age must be less than 100"),
+		age: z.number().min(16, "Age must be at least 16").max(100, "Age must be less than 100"),
 		gender: z.string().min(1, "Please select your gender"),
 		department: z.string().min(1, "Please select a department"),
-		instructorId: z.string().min(1, "Instructor ID is required"),
+		course: z.string().min(1, "Please select a course"),
+		section: z.string().min(1, "Please select a section"),
+		studentId: z.string().min(8, "Student ID must be at least 8 characters"),
+		year: z.string().min(1, "Please select your year level"),
+		semester: z.string().min(1, "Please select your semester"),
+		program: z.string().optional(),
+		specialization: z.string().optional(),
 		password: z.string().min(8, "Password must be at least 8 characters"),
 		confirmPassword: z.string().min(1, "Please confirm your password"),
 		address: z.string().optional(),
@@ -51,9 +59,9 @@ const instructorSignupSchema = z
 		path: ["confirmPassword"],
 	});
 
-type InstructorSignupForm = z.infer<typeof instructorSignupSchema>;
+type StudentSignupForm = z.infer<typeof studentSignupSchema>;
 
-export default function InstructorSignupPage() {
+export default function StudentSignupPage() {
 	const router = useRouter();
 	const [showPassword, setShowPassword] = useState(false);
 	const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -61,10 +69,26 @@ export default function InstructorSignupPage() {
 	const [showOtpVerification, setShowOtpVerification] = useState(false);
 	const [activationToken, setActivationToken] = useState("");
 	const [userEmail, setUserEmail] = useState("");
+	const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
+	const [selectedCourseId, setSelectedCourseId] = useState<string>("");
 
 	// Get departments from API
 	const { data: departmentsData, isLoading: departmentsLoading } = useDepartments({ status: "active" });
 	const departments = departmentsData?.departments || [];
+
+	// Get courses based on selected department
+	const { data: coursesData, isLoading: coursesLoading } = useCourses({ 
+		status: "active", 
+		departmentId: selectedDepartmentId || undefined 
+	});
+	const courses = coursesData?.courses || [];
+
+	// Get sections based on selected course
+	const { data: sectionsData, isLoading: sectionsLoading } = useSections({ 
+		status: "active", 
+		courseId: selectedCourseId || undefined 
+	});
+	const sections = sectionsData?.sections || [];
 
 	// Auth hooks
 	const registerMutation = useRegister();
@@ -74,12 +98,34 @@ export default function InstructorSignupPage() {
 		register,
 		handleSubmit,
 		control,
+		watch,
+		setValue,
 		formState: { errors },
-	} = useForm<InstructorSignupForm>({
-		resolver: zodResolver(instructorSignupSchema),
+	} = useForm<StudentSignupForm>({
+		resolver: zodResolver(studentSignupSchema),
 	});
 
-	const onSubmit = async (data: InstructorSignupForm) => {
+	// Watch department and course changes
+	const watchedDepartment = watch("department");
+	const watchedCourse = watch("course");
+
+	// Update selected IDs when form values change
+	React.useEffect(() => {
+		if (watchedDepartment !== selectedDepartmentId) {
+			setSelectedDepartmentId(watchedDepartment);
+			setValue("course", ""); // Reset course when department changes
+			setValue("section", ""); // Reset section when department changes
+		}
+	}, [watchedDepartment, selectedDepartmentId, setValue]);
+
+	React.useEffect(() => {
+		if (watchedCourse !== selectedCourseId) {
+			setSelectedCourseId(watchedCourse);
+			setValue("section", ""); // Reset section when course changes
+		}
+	}, [watchedCourse, selectedCourseId, setValue]);
+
+	const onSubmit = async (data: StudentSignupForm) => {
 		setIsLoading(true);
 		try {
 			const registrationData = {
@@ -89,13 +135,16 @@ export default function InstructorSignupPage() {
 				email: data.email,
 				password: data.password,
 				age: data.age,
-				role: "instructor", // Automatically set as instructor
+				role: "student", // Automatically set as student
 				gender: data.gender,
 				phone: data.phone,
 				address: data.address,
 				bio: data.bio,
-				instructorId: data.instructorId,
+				studentId: data.studentId,
 				departmentId: data.department, // Include department ID
+				yearLevel: data.year,
+				program: data.program,
+				specialization: data.specialization,
 			};
 
 			const result = await registerMutation.mutateAsync(registrationData);
@@ -117,7 +166,7 @@ export default function InstructorSignupPage() {
 		try {
 			await activateUserMutation.mutateAsync(otpData);
 			toast.success("Account activated successfully! You can now sign in.");
-			router.push("/login/instructor");
+			router.push("/login/student");
 		} catch (error: any) {
 			toast.error(error.message || "Verification failed. Please try again.");
 		}
@@ -138,7 +187,6 @@ export default function InstructorSignupPage() {
 	if (showOtpVerification) {
 		return (
 			<div
-			
 				className="min-h-screen flex items-center justify-center p-4 relative"
 				style={{
 					backgroundImage: "url(/images/auth-bg.jpg)",
@@ -176,7 +224,7 @@ export default function InstructorSignupPage() {
 		>
 			{/* Overlay */}
 			<div className="absolute inset-0 bg-primary-500/20 backdrop-blur-sm" />
-			<div className="relative z-10 w-full max-w-2xl">
+			<div className="relative z-10 w-full max-w-4xl">
 				<Card className="bg-secondary-50/95 backdrop-blur-md border-primary-200 shadow-2xl animate-fade-in">
 					<CardHeader className="text-center pb-6">
 						<div className="flex justify-center items-center gap-4 mb-4">
@@ -196,11 +244,11 @@ export default function InstructorSignupPage() {
 							/>
 						</div>
 						<CardTitle className="text-xl font-bold text-gray-800 flex items-center justify-center gap-2">
-							<Users className="w-5 h-5 text-accent-600" />
-							Create Instructor Account
+							<GraduationCap className="w-5 h-5 text-accent-600" />
+							Create Student Account
 						</CardTitle>
 						<CardDescription className="text-gray-600">
-							Join TracèSys to manage students and sections
+							Join TracèSys to track your practicum journey
 						</CardDescription>
 					</CardHeader>
 
@@ -326,7 +374,7 @@ export default function InstructorSignupPage() {
 									<Input
 										id="email"
 										type="email"
-										placeholder="instructor@omsc.edu.ph"
+										placeholder="student@omsc.edu.ph"
 										className="border-gray-300 focus:border-accent-500 focus:ring-accent-500"
 										{...register("email")}
 									/>
@@ -370,66 +418,240 @@ export default function InstructorSignupPage() {
 								</div>
 							</div>
 
-							{/* Professional Information */}
+							{/* Academic Information */}
 							<div className="space-y-4">
 								<h3 className="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2">
-									Professional Information
+									Academic Information
 								</h3>
 
 								<div className="space-y-2">
-									<Label htmlFor="instructorId" className="text-gray-700 font-medium">
-										Instructor ID *
+									<Label htmlFor="studentId" className="text-gray-700 font-medium">
+										Student ID *
 									</Label>
 									<Input
-										id="instructorId"
-										placeholder="Enter your instructor ID"
+										id="studentId"
+										placeholder="Enter your student ID"
 										className="border-gray-300 focus:border-accent-500 focus:ring-accent-500"
-										{...register("instructorId")}
+										{...register("studentId")}
 									/>
-									{errors.instructorId && (
+									{errors.studentId && (
 										<p className="text-sm text-red-600">
-											{errors.instructorId.message}
+											{errors.studentId.message}
 										</p>
 									)}
 								</div>
 
-								<div className="space-y-2">
-									<Label htmlFor="department" className="text-gray-700 font-medium">
-										Department *
-									</Label>
-									<Controller
-										name="department"
-										control={control}
-										render={({ field }) => (
-											<Select onValueChange={field.onChange} defaultValue={field.value}>
-												<SelectTrigger className="border-gray-300 focus:border-accent-500 focus:ring-accent-500">
-													<SelectValue placeholder="Select your department" />
-												</SelectTrigger>
-												<SelectContent>
-													{departmentsLoading ? (
-														<SelectItem value="loading" disabled>
-															Loading departments...
-														</SelectItem>
-													) : departments.length > 0 ? (
-														departments.map((dept) => (
-															<SelectItem key={dept.id} value={dept.id}>
-																{dept.name}
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div className="space-y-2">
+										<Label htmlFor="department" className="text-gray-700 font-medium">
+											Department *
+										</Label>
+										<Controller
+											name="department"
+											control={control}
+											render={({ field }) => (
+												<Select onValueChange={field.onChange} defaultValue={field.value}>
+													<SelectTrigger className="border-gray-300 focus:border-accent-500 focus:ring-accent-500">
+														<SelectValue placeholder="Select your department" />
+													</SelectTrigger>
+													<SelectContent>
+														{departmentsLoading ? (
+															<SelectItem value="loading" disabled>
+																Loading departments...
 															</SelectItem>
-														))
-													) : (
-														<SelectItem value="no-departments" disabled>
-															No departments available
-														</SelectItem>
-													)}
-												</SelectContent>
-											</Select>
+														) : departments.length > 0 ? (
+															departments.map((dept) => (
+																<SelectItem key={dept.id} value={dept.id}>
+																	{dept.name}
+																</SelectItem>
+															))
+														) : (
+															<SelectItem value="no-departments" disabled>
+																No departments available
+															</SelectItem>
+														)}
+													</SelectContent>
+												</Select>
+											)}
+										/>
+										{errors.department && (
+											<p className="text-sm text-red-600">
+												{errors.department.message}
+											</p>
 										)}
-									/>
-									{errors.department && (
-										<p className="text-sm text-red-600">
-											{errors.department.message}
-										</p>
-									)}
+									</div>
+
+									<div className="space-y-2">
+										<Label htmlFor="course" className="text-gray-700 font-medium">
+											Course *
+										</Label>
+										<Controller
+											name="course"
+											control={control}
+											render={({ field }) => (
+												<Select onValueChange={field.onChange} defaultValue={field.value}>
+													<SelectTrigger className="border-gray-300 focus:border-accent-500 focus:ring-accent-500">
+														<SelectValue placeholder="Select your course" />
+													</SelectTrigger>
+													<SelectContent>
+														{coursesLoading ? (
+															<SelectItem value="loading" disabled>
+																Loading courses...
+															</SelectItem>
+														) : courses.length > 0 ? (
+															courses.map((course) => (
+																<SelectItem key={course.id} value={course.id}>
+																	{course.name}
+																</SelectItem>
+															))
+														) : (
+															<SelectItem value="no-courses" disabled>
+																{selectedDepartmentId ? "No courses available" : "Select a department first"}
+															</SelectItem>
+														)}
+													</SelectContent>
+												</Select>
+											)}
+										/>
+										{errors.course && (
+											<p className="text-sm text-red-600">
+												{errors.course.message}
+											</p>
+										)}
+									</div>
+								</div>
+
+								<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+									<div className="space-y-2">
+										<Label htmlFor="section" className="text-gray-700 font-medium">
+											Section *
+										</Label>
+										<Controller
+											name="section"
+											control={control}
+											render={({ field }) => (
+												<Select onValueChange={field.onChange} defaultValue={field.value}>
+													<SelectTrigger className="border-gray-300 focus:border-accent-500 focus:ring-accent-500">
+														<SelectValue placeholder="Select your section" />
+													</SelectTrigger>
+													<SelectContent>
+														{sectionsLoading ? (
+															<SelectItem value="loading" disabled>
+																Loading sections...
+															</SelectItem>
+														) : sections.length > 0 ? (
+															sections.map((section) => (
+																<SelectItem key={section.id} value={section.id}>
+																	{section.name}
+																</SelectItem>
+															))
+														) : (
+															<SelectItem value="no-sections" disabled>
+																{selectedCourseId ? "No sections available" : "Select a course first"}
+															</SelectItem>
+														)}
+													</SelectContent>
+												</Select>
+											)}
+										/>
+										{errors.section && (
+											<p className="text-sm text-red-600">
+												{errors.section.message}
+											</p>
+										)}
+									</div>
+
+									<div className="space-y-2">
+										<Label htmlFor="year" className="text-gray-700 font-medium">
+											Year Level *
+										</Label>
+										<Controller
+											name="year"
+											control={control}
+											render={({ field }) => (
+												<Select onValueChange={field.onChange} defaultValue={field.value}>
+													<SelectTrigger className="border-gray-300 focus:border-accent-500 focus:ring-accent-500">
+														<SelectValue placeholder="Select year level" />
+													</SelectTrigger>
+													<SelectContent>
+														<SelectItem value="1st Year">1st Year</SelectItem>
+														<SelectItem value="2nd Year">2nd Year</SelectItem>
+														<SelectItem value="3rd Year">3rd Year</SelectItem>
+														<SelectItem value="4th Year">4th Year</SelectItem>
+														<SelectItem value="5th Year">5th Year</SelectItem>
+													</SelectContent>
+												</Select>
+											)}
+										/>
+										{errors.year && (
+											<p className="text-sm text-red-600">
+												{errors.year.message}
+											</p>
+										)}
+									</div>
+
+									<div className="space-y-2">
+										<Label htmlFor="semester" className="text-gray-700 font-medium">
+											Semester *
+										</Label>
+										<Controller
+											name="semester"
+											control={control}
+											render={({ field }) => (
+												<Select onValueChange={field.onChange} defaultValue={field.value}>
+													<SelectTrigger className="border-gray-300 focus:border-accent-500 focus:ring-accent-500">
+														<SelectValue placeholder="Select semester" />
+													</SelectTrigger>
+													<SelectContent>
+														<SelectItem value="1st Semester">1st Semester</SelectItem>
+														<SelectItem value="2nd Semester">2nd Semester</SelectItem>
+														<SelectItem value="Summer">Summer</SelectItem>
+													</SelectContent>
+												</Select>
+											)}
+										/>
+										{errors.semester && (
+											<p className="text-sm text-red-600">
+												{errors.semester.message}
+											</p>
+										)}
+									</div>
+								</div>
+
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div className="space-y-2">
+										<Label htmlFor="program" className="text-gray-700 font-medium">
+											Program
+										</Label>
+										<Input
+											id="program"
+											placeholder="e.g., Bachelor of Science in Computer Science"
+											className="border-gray-300 focus:border-accent-500 focus:ring-accent-500"
+											{...register("program")}
+										/>
+										{errors.program && (
+											<p className="text-sm text-red-600">
+												{errors.program.message}
+											</p>
+										)}
+									</div>
+
+									<div className="space-y-2">
+										<Label htmlFor="specialization" className="text-gray-700 font-medium">
+											Specialization
+										</Label>
+										<Input
+											id="specialization"
+											placeholder="e.g., Software Development"
+											className="border-gray-300 focus:border-accent-500 focus:ring-accent-500"
+											{...register("specialization")}
+										/>
+										{errors.specialization && (
+											<p className="text-sm text-red-600">
+												{errors.specialization.message}
+											</p>
+										)}
+									</div>
 								</div>
 
 								<div className="space-y-2">
@@ -537,7 +759,7 @@ export default function InstructorSignupPage() {
 							<p className="text-sm text-gray-600">
 								Already have an account?{" "}
 								<Link
-									href="/login/instructor"
+									href="/login/student"
 									className="text-accent-600 hover:text-accent-700 hover:underline"
 								>
 									Sign in here

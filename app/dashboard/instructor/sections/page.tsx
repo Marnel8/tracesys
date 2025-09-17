@@ -17,59 +17,211 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { Progress } from "@/components/ui/progress"
-import { Plus, Users, GraduationCap, Clock, FileText, Edit, Eye, MoreHorizontal } from "lucide-react"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import {
-  SECTIONS,
-  getCourseOptions,
-  YEAR_OPTIONS,
-  SEMESTER_OPTIONS,
-  getTotalStudentsAcrossSections,
-  getAverageAttendanceAcrossSections,
-  getAverageCompletionAcrossSections,
-} from "@/data/instructor-courses"
-
-// Use centralized data
-const sections = SECTIONS
+import { Plus, GraduationCap, Edit, Eye, MoreHorizontal, Loader2, BookOpen, Users, AlertCircle, Trash2, ToggleLeft, ToggleRight } from "lucide-react"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
+import { useSections, useCreateSection, useUpdateSection, useDeleteSection, useToggleSectionStatus } from "@/hooks/section"
+import { useCourses } from "@/hooks/course"
+import { YEAR_OPTIONS, SEMESTER_OPTIONS, ACADEMIC_YEAR_OPTIONS } from "@/data/departments"
+import { SectionFormData } from "@/data/departments"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 
 export default function SectionsPage() {
+  const router = useRouter()
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [newSection, setNewSection] = useState({
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [sectionToDelete, setSectionToDelete] = useState<any>(null)
+  const [editingSection, setEditingSection] = useState<any>(null)
+  const [newSection, setNewSection] = useState<SectionFormData>({
     name: "",
-    course: "",
+    code: "",
+    courseId: "",
     year: "",
     semester: "",
-    schedule: "",
-    room: "",
+    academicYear: "",
+    maxStudents: 50,
+    isActive: true,
+  })
+  const [editSection, setEditSection] = useState<SectionFormData>({
+    name: "",
+    code: "",
+    courseId: "",
+    year: "",
+    semester: "",
+    academicYear: "",
+    maxStudents: 50,
+    isActive: true,
   })
 
-  const handleCreateSection = () => {
-    console.log("Creating section:", newSection)
-    setIsCreateDialogOpen(false)
-    setNewSection({
-      name: "",
-      course: "",
-      year: "",
-      semester: "",
-      schedule: "",
-      room: "",
-    })
+  // Fetch sections and courses data
+  const { data: sectionsData, isLoading: sectionsLoading, error: sectionsError } = useSections()
+  const { data: coursesData, isLoading: coursesLoading } = useCourses()
+  const createSectionMutation = useCreateSection()
+  const updateSectionMutation = useUpdateSection()
+  const deleteSectionMutation = useDeleteSection()
+  const toggleStatusMutation = useToggleSectionStatus()
+
+  const sections = sectionsData?.sections || []
+  const courses = coursesData?.courses || []
+
+  const handleCreateSection = async () => {
+    if (!newSection.name.trim() || !newSection.code.trim() || !newSection.courseId || !newSection.year || !newSection.semester) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    try {
+      await createSectionMutation.mutateAsync({
+        name: newSection.name.trim(),
+        code: newSection.code.trim(),
+        courseId: newSection.courseId,
+        year: newSection.year,
+        semester: newSection.semester,
+        academicYear: newSection.academicYear,
+        maxStudents: newSection.maxStudents || 50,
+        isActive: true,
+      });
+      setIsCreateDialogOpen(false);
+      setNewSection({
+        name: "",
+        code: "",
+        courseId: "",
+        year: "",
+        semester: "",
+        academicYear: "",
+        maxStudents: 50,
+        isActive: true,
+      });
+    } catch (error) {
+      // Error is handled by the mutation hook
+    }
   }
 
-  const getPerformanceColor = (value: number, type: string) => {
-    if (type === "attendance" || type === "completion") {
-      if (value >= 90) return "text-green-600"
-      if (value >= 80) return "text-yellow-600"
-      return "text-red-600"
-    }
-    if (type === "grade") {
-      if (value >= 4.0) return "text-green-600"
-      if (value >= 3.5) return "text-yellow-600"
-      return "text-red-600"
-    }
-    return "text-gray-600"
+  const getCourseOptions = () => {
+    return courses.map((course) => ({
+      value: course.id,
+      label: course.name,
+    }))
   }
+
+  const handleViewSection = (sectionId: string) => {
+    router.push(`/dashboard/instructor/sections/${sectionId}`)
+  }
+
+  const handleEditSection = (section: any) => {
+    setEditingSection(section)
+    setEditSection({
+      name: section.name,
+      code: section.code,
+      courseId: section.courseId,
+      year: section.year,
+      semester: section.semester,
+      academicYear: section.academicYear,
+      maxStudents: section.maxStudents,
+      isActive: section.isActive,
+    })
+    setIsEditDialogOpen(true)
+  }
+
+  const handleUpdateSection = async () => {
+    if (!editSection.name.trim() || !editSection.code.trim() || !editSection.courseId || !editSection.year || !editSection.semester) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    try {
+      await updateSectionMutation.mutateAsync({
+        id: editingSection.id,
+        data: {
+          name: editSection.name.trim(),
+          code: editSection.code.trim(),
+          courseId: editSection.courseId,
+          year: editSection.year,
+          semester: editSection.semester,
+          academicYear: editSection.academicYear,
+          maxStudents: editSection.maxStudents || 50,
+          isActive: editSection.isActive,
+        }
+      });
+      setIsEditDialogOpen(false);
+      setEditingSection(null);
+      setEditSection({
+        name: "",
+        code: "",
+        courseId: "",
+        year: "",
+        semester: "",
+        academicYear: "",
+        maxStudents: 50,
+        isActive: true,
+      });
+    } catch (error) {
+      // Error is handled by the mutation hook
+    }
+  }
+
+  const handleDelete = (section: any) => {
+    setSectionToDelete(section);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (sectionToDelete) {
+      deleteSectionMutation.mutate(sectionToDelete.id, {
+        onSuccess: () => {
+          setDeleteDialogOpen(false);
+          setSectionToDelete(null);
+        },
+      });
+    }
+  };
+
+  const handleToggleStatus = (section: any) => {
+    toggleStatusMutation.mutate({
+      id: section.id,
+      isActive: !section.isActive,
+    });
+  };
+
+  // Empty state component
+  const EmptyState = () => (
+    <div className="text-center py-12">
+      <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+        <BookOpen className="w-12 h-12 text-gray-400" />
+      </div>
+      <h3 className="text-lg font-semibold text-gray-900 mb-2">No sections yet</h3>
+      <p className="text-gray-500 mb-6 max-w-md mx-auto">
+        Get started by creating your first section. Sections help you organize students and track their progress.
+      </p>
+      <Button 
+        onClick={() => setIsCreateDialogOpen(true)}
+        className="bg-primary-500 hover:bg-primary-600"
+      >
+        <Plus className="w-4 h-4 mr-2" />
+        Create Your First Section
+      </Button>
+    </div>
+  )
+
+  // Error state component
+  const ErrorState = () => (
+    <div className="text-center py-12">
+      <div className="mx-auto w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mb-4">
+        <AlertCircle className="w-12 h-12 text-red-500" />
+      </div>
+      <h3 className="text-lg font-semibold text-gray-900 mb-2">Unable to load sections</h3>
+      <p className="text-gray-500 mb-6 max-w-md mx-auto">
+        There was an error loading your sections. Please check your connection and try again.
+      </p>
+      <Button 
+        onClick={() => window.location.reload()}
+        variant="outline"
+      >
+        Try Again
+      </Button>
+    </div>
+  )
 
   return (
     <div className="space-y-6">
@@ -103,19 +255,62 @@ export default function SectionsPage() {
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="code">Section Code</Label>
+                  <Input
+                    id="code"
+                    value={newSection.code}
+                    onChange={(e) => setNewSection({ ...newSection, code: e.target.value })}
+                    placeholder="e.g., BSIT-4A"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
                   <Label htmlFor="course">Course</Label>
-                  <Select onValueChange={(value) => setNewSection({ ...newSection, course: value })}>
+                  <Select 
+                    onValueChange={(value) => setNewSection({ ...newSection, courseId: value })}
+                    disabled={coursesLoading}
+                  >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select course" />
+                      <SelectValue placeholder={coursesLoading ? "Loading courses..." : "Select course"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {getCourseOptions().map((course) => (
-                        <SelectItem key={course.value} value={course.value}>
-                          {course.label}
-                        </SelectItem>
-                      ))}
+                      {coursesLoading ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                          <span className="text-sm text-gray-500">Loading courses...</span>
+                        </div>
+                      ) : getCourseOptions().length === 0 ? (
+                        <div className="flex items-center justify-center py-4">
+                          <div className="text-center">
+                            <BookOpen className="w-6 h-6 text-gray-400 mx-auto mb-2" />
+                            <span className="text-sm text-gray-500">No courses available</span>
+                          </div>
+                        </div>
+                      ) : (
+                        getCourseOptions().map((course) => (
+                          <SelectItem key={course.value} value={course.value}>
+                            {course.label}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
+                  {!coursesLoading && getCourseOptions().length === 0 && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      No courses available. Please create a course first before adding sections.
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="maxStudents">Max Students</Label>
+                  <Input
+                    id="maxStudents"
+                    type="number"
+                    value={newSection.maxStudents}
+                    onChange={(e) => setNewSection({ ...newSection, maxStudents: parseInt(e.target.value) || 50 })}
+                    placeholder="50"
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -149,25 +344,20 @@ export default function SectionsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="schedule">Schedule</Label>
-                  <Input
-                    id="schedule"
-                    value={newSection.schedule}
-                    onChange={(e) => setNewSection({ ...newSection, schedule: e.target.value })}
-                    placeholder="e.g., MWF 8:00-11:00 AM"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="room">Room</Label>
-                  <Input
-                    id="room"
-                    value={newSection.room}
-                    onChange={(e) => setNewSection({ ...newSection, room: e.target.value })}
-                    placeholder="e.g., IT Lab 1"
-                  />
+                  <Label htmlFor="academicYear">Academic Year</Label>
+                  <Select onValueChange={(value) => setNewSection({ ...newSection, academicYear: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select academic year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ACADEMIC_YEAR_OPTIONS.map((year) => (
+                        <SelectItem key={year.value} value={year.value}>
+                          {year.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>
@@ -175,278 +365,408 @@ export default function SectionsPage() {
               <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleCreateSection} className="bg-primary-500 hover:bg-primary-600">
-                Create Section
+              <Button 
+                onClick={handleCreateSection} 
+                className="bg-primary-500 hover:bg-primary-600"
+                disabled={createSectionMutation.isPending || coursesLoading || getCourseOptions().length === 0}
+              >
+                {createSectionMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {coursesLoading ? "Loading..." : getCourseOptions().length === 0 ? "No Courses Available" : "Create Section"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
+      {/* Edit Section Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Section</DialogTitle>
+            <DialogDescription>Update section information.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Section Name</Label>
+                <Input
+                  id="edit-name"
+                  value={editSection.name}
+                  onChange={(e) => setEditSection({ ...editSection, name: e.target.value })}
+                  placeholder="e.g., BSIT 4A"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-code">Section Code</Label>
+                <Input
+                  id="edit-code"
+                  value={editSection.code}
+                  onChange={(e) => setEditSection({ ...editSection, code: e.target.value })}
+                  placeholder="e.g., BSIT-4A"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-course">Course</Label>
+                <Select 
+                  onValueChange={(value) => setEditSection({ ...editSection, courseId: value })}
+                  value={editSection.courseId}
+                  disabled={coursesLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={coursesLoading ? "Loading courses..." : "Select course"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {coursesLoading ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                        <span className="text-sm text-gray-500">Loading courses...</span>
+                      </div>
+                    ) : getCourseOptions().length === 0 ? (
+                      <div className="flex items-center justify-center py-4">
+                        <div className="text-center">
+                          <BookOpen className="w-6 h-6 text-gray-400 mx-auto mb-2" />
+                          <span className="text-sm text-gray-500">No courses available</span>
+                        </div>
+                      </div>
+                    ) : (
+                      getCourseOptions().map((course) => (
+                        <SelectItem key={course.value} value={course.value}>
+                          {course.label}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-maxStudents">Max Students</Label>
+                <Input
+                  id="edit-maxStudents"
+                  type="number"
+                  value={editSection.maxStudents}
+                  onChange={(e) => setEditSection({ ...editSection, maxStudents: parseInt(e.target.value) || 50 })}
+                  placeholder="50"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-year">Year Level</Label>
+                <Select onValueChange={(value) => setEditSection({ ...editSection, year: value })} value={editSection.year}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {YEAR_OPTIONS.map((year) => (
+                      <SelectItem key={year.value} value={year.value}>
+                        {year.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-semester">Semester</Label>
+                <Select onValueChange={(value) => setEditSection({ ...editSection, semester: value })} value={editSection.semester}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select semester" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SEMESTER_OPTIONS.map((semester) => (
+                      <SelectItem key={semester.value} value={semester.value}>
+                        {semester.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-academicYear">Academic Year</Label>
+                <Select onValueChange={(value) => setEditSection({ ...editSection, academicYear: value })} value={editSection.academicYear}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select academic year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ACADEMIC_YEAR_OPTIONS.map((year) => (
+                      <SelectItem key={year.value} value={year.value}>
+                        {year.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleUpdateSection} 
+              className="bg-primary-500 hover:bg-primary-600"
+              disabled={updateSectionMutation.isPending || coursesLoading || getCourseOptions().length === 0}
+            >
+              {updateSectionMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {updateSectionMutation.isPending ? "Updating..." : "Update Section"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Section</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{sectionToDelete?.name}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={deleteSectionMutation.isPending}
+            >
+              {deleteSectionMutation.isPending ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Overview Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
         <Card className="bg-secondary-50 border-primary-200">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Total Sections</p>
-                <p className="text-2xl font-bold text-gray-900">{sections.length}</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {sectionsLoading ? (
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  ) : sectionsError ? (
+                    "Error"
+                  ) : (
+                    sections.length
+                  )}
+                </p>
               </div>
               <GraduationCap className="w-8 h-8 text-primary-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-secondary-50 border-blue-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Students</p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {sections.reduce((sum, section) => sum + section.totalStudents, 0)}
-                </p>
-              </div>
-              <Users className="w-8 h-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-secondary-50 border-green-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Avg. Attendance</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {Math.round(sections.reduce((sum, section) => sum + section.avgAttendance, 0) / sections.length)}%
-                </p>
-              </div>
-              <Clock className="w-8 h-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-secondary-50 border-purple-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Avg. Completion</p>
-                <p className="text-2xl font-bold text-purple-600">
-                  {Math.round(sections.reduce((sum, section) => sum + section.completionRate, 0) / sections.length)}%
-                </p>
-              </div>
-              <FileText className="w-8 h-8 text-purple-600" />
             </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Sections Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {sections.map((section) => (
-          <Card key={section.id} className="hover:shadow-lg transition-shadow">
-            <CardHeader className="pb-3">
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle className="text-lg">{section.name}</CardTitle>
-                  <CardDescription className="text-sm">{section.course}</CardDescription>
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm">
-                      <MoreHorizontal className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem>
-                      <Eye className="mr-2 h-4 w-4" />
-                      View Details
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Edit className="mr-2 h-4 w-4" />
-                      Edit Section
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Users className="mr-2 h-4 w-4" />
-                      Manage Students
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-              <div className="flex gap-2 mt-2">
-                <Badge variant="outline">{section.year}</Badge>
-                <Badge variant="outline">{section.semester}</Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Student Info */}
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Students</span>
-                <div className="text-right">
-                  <div className="text-sm font-medium">
-                    {section.activeStudents}/{section.totalStudents}
+      {sectionsLoading ? (
+        <div className="flex justify-center items-center py-12">
+          <div className="text-center">
+            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
+            <p className="text-gray-500">Loading sections...</p>
+          </div>
+        </div>
+      ) : sectionsError ? (
+        <ErrorState />
+      ) : sections.length === 0 ? (
+        <EmptyState />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          {sections.map((section) => (
+            <Card key={section.id} className="hover:shadow-lg transition-shadow">
+              <CardHeader className="pb-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle className="text-lg">{section.name}</CardTitle>
+                    <CardDescription className="text-sm">{section.course?.name || "No course assigned"}</CardDescription>
                   </div>
-                  <div className="text-xs text-gray-500">Active</div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm">
+                        <MoreHorizontal className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleViewSection(section.id)}>
+                        <Eye className="mr-2 h-4 w-4" />
+                        View Details
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleEditSection(section)}>
+                        <Edit className="mr-2 h-4 w-4" />
+                        Edit Section
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => handleToggleStatus(section)}>
+                        {section.isActive ? (
+                          <>
+                            <ToggleLeft className="mr-2 h-4 w-4" />
+                            Deactivate
+                          </>
+                        ) : (
+                          <>
+                            <ToggleRight className="mr-2 h-4 w-4" />
+                            Activate
+                          </>
+                        )}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleDelete(section)} className="text-red-600">
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-              </div>
-
-              {/* Performance Metrics */}
-              <div className="space-y-3">
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm text-gray-600">Attendance</span>
-                    <span className={`text-sm font-medium ${getPerformanceColor(section.avgAttendance, "attendance")}`}>
-                      {section.avgAttendance}%
-                    </span>
-                  </div>
-                  <Progress value={section.avgAttendance} className="h-2" />
+                <div className="flex gap-2 mt-2">
+                  <Badge variant="outline">{section.year}</Badge>
+                  <Badge variant="outline">{section.semester}</Badge>
+                  <Badge variant="outline">{section.academicYear}</Badge>
+                  <Badge variant={section.isActive ? "default" : "secondary"}>
+                    {section.isActive ? "Active" : "Inactive"}
+                  </Badge>
                 </div>
-
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm text-gray-600">Completion Rate</span>
-                    <span
-                      className={`text-sm font-medium ${getPerformanceColor(section.completionRate, "completion")}`}
-                    >
-                      {section.completionRate}%
-                    </span>
-                  </div>
-                  <Progress value={section.completionRate} className="h-2" />
-                </div>
-
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm text-gray-600">Average Grade</span>
-                    <span className={`text-sm font-medium ${getPerformanceColor(section.avgGrade, "grade")}`}>
-                      {section.avgGrade}/5.0
-                    </span>
-                  </div>
-                  <Progress value={(section.avgGrade / 5) * 100} className="h-2" />
-                </div>
-              </div>
-
-              {/* Practicum Progress */}
-              <div className="pt-3 border-t">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium text-gray-700">Practicum Progress</span>
-                  <span className="text-sm text-gray-600">
-                    {section.practicum.completedHours}/{section.practicum.totalHours} hrs
-                  </span>
-                </div>
-                <Progress
-                  value={(section.practicum.completedHours / section.practicum.totalHours) * 100}
-                  className="h-2"
-                />
-              </div>
-
-              {/* Schedule Info */}
-              <div className="pt-3 border-t text-sm text-gray-600">
-                <div className="flex justify-between">
-                  <span>Schedule:</span>
-                  <span>{section.schedule}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Room:</span>
-                  <span>{section.room}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </CardHeader>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Detailed Table View */}
       <Card>
         <CardHeader>
           <CardTitle>Section Details</CardTitle>
-          <CardDescription>Comprehensive view of all section information</CardDescription>
+          <CardDescription>Overview of all sections</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Section</TableHead>
-                  <TableHead>Students</TableHead>
-                  <TableHead>Attendance</TableHead>
-                  <TableHead>Grade</TableHead>
-                  <TableHead>Completion</TableHead>
-                  <TableHead>Schedule</TableHead>
-                  <TableHead>Progress</TableHead>
+                  <TableHead>Section Name</TableHead>
+                  <TableHead>Section Code</TableHead>
+                  <TableHead>Course</TableHead>
+                  <TableHead>Year Level</TableHead>
+                  <TableHead>Semester</TableHead>
+                  <TableHead>Academic Year</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sections.map((section) => (
-                  <TableRow key={section.id}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{section.name}</div>
-                        <div className="text-sm text-gray-600">{section.course}</div>
+                {sectionsLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-12">
+                      <div className="flex flex-col items-center">
+                        <Loader2 className="w-6 h-6 animate-spin mb-2" />
+                        <p className="text-gray-500">Loading sections...</p>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-center">
-                        <div className="font-medium">{section.totalStudents}</div>
-                        <div className="text-xs text-gray-500">{section.activeStudents} active</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className={`font-medium ${getPerformanceColor(section.avgAttendance, "attendance")}`}>
-                        {section.avgAttendance}%
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className={`font-medium ${getPerformanceColor(section.avgGrade, "grade")}`}>
-                        {section.avgGrade}/5.0
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className={`font-medium ${getPerformanceColor(section.completionRate, "completion")}`}>
-                        {section.completionRate}%
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <div>{section.schedule}</div>
-                        <div className="text-gray-500">{section.room}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="w-24">
-                        <Progress
-                          value={(section.practicum.completedHours / section.practicum.totalHours) * 100}
-                          className="h-2"
-                        />
-                        <div className="text-xs text-gray-500 mt-1">
-                          {Math.round((section.practicum.completedHours / section.practicum.totalHours) * 100)}%
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreHorizontal className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
-                            <Eye className="mr-2 h-4 w-4" />
-                            View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Users className="mr-2 h-4 w-4" />
-                            Manage Students
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Edit className="mr-2 h-4 w-4" />
-                            Edit Section
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : sectionsError ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-12">
+                      <div className="flex flex-col items-center">
+                        <AlertCircle className="w-8 h-8 text-red-500 mb-2" />
+                        <p className="text-red-600 mb-2">Error loading sections</p>
+                        <Button 
+                          onClick={() => window.location.reload()}
+                          variant="outline"
+                          size="sm"
+                        >
+                          Try Again
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : sections.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-12">
+                      <div className="flex flex-col items-center">
+                        <BookOpen className="w-8 h-8 text-gray-400 mb-2" />
+                        <p className="text-gray-500 mb-2">No sections found</p>
+                        <Button 
+                          onClick={() => setIsCreateDialogOpen(true)}
+                          size="sm"
+                          className="bg-primary-500 hover:bg-primary-600"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Create First Section
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  sections.map((section) => (
+                    <TableRow key={section.id}>
+                      <TableCell>
+                        <div className="font-medium">{section.name}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm text-gray-600">{section.code}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm text-gray-600">{section.course?.name || "No course assigned"}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{section.year}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{section.semester}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{section.academicYear}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={section.isActive ? "default" : "secondary"}>
+                          {section.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleViewSection(section.id)}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEditSection(section)}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit Section
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => handleToggleStatus(section)}>
+                              {section.isActive ? (
+                                <>
+                                  <ToggleLeft className="mr-2 h-4 w-4" />
+                                  Deactivate
+                                </>
+                              ) : (
+                                <>
+                                  <ToggleRight className="mr-2 h-4 w-4" />
+                                  Activate
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDelete(section)} className="text-red-600">
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

@@ -48,7 +48,7 @@ export default function SettingsPage() {
 		lastName: "",
 		middleName: "",
 		email: "",
-		contactNumber: "",
+		phone: "",
 		address: "",
 		bio: "",
 		instructorId: "",
@@ -88,7 +88,7 @@ export default function SettingsPage() {
 				lastName: user.lastName || "",
 				middleName: user.middleName || "",
 				email: user.email || "",
-				contactNumber: user.contactNumber || "",
+				phone: user.phone || "",
 				address: user.address || "",
 				bio: user.bio || "",
 				instructorId: user.instructorId || "",
@@ -127,7 +127,7 @@ export default function SettingsPage() {
 				lastName: profile.lastName,
 				middleName: profile.middleName,
 				email: profile.email,
-				contactNumber: profile.contactNumber,
+				phone: profile.phone,
 				address: profile.address,
 				bio: profile.bio,
 				instructorId: profile.instructorId,
@@ -321,12 +321,12 @@ export default function SettingsPage() {
 							</div>
 
 							<div className="space-y-2">
-								<Label htmlFor="contactNumber">Contact Number *</Label>
+								<Label htmlFor="phone">Phone Number *</Label>
 								<Input
-									id="contactNumber"
-									value={profile.contactNumber}
+									id="phone"
+									value={profile.phone}
 									onChange={(e) =>
-										setProfile({ ...profile, contactNumber: e.target.value })
+										setProfile({ ...profile, phone: e.target.value })
 									}
 									disabled={editUserMutation.isPending}
 								/>

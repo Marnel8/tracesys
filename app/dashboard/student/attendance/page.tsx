@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Clock } from "lucide-react";
-import * as faceapi from "face-api.js";
+let faceApiModule: typeof import("face-api.js") | null = null;
 import AttendanceHeader from "@/components/student/attendance/AttendanceHeader";
 import LocationBanner from "@/components/student/attendance/LocationBanner";
 import ClockStatus from "@/components/student/attendance/ClockStatus";
@@ -231,8 +231,16 @@ export default function AttendancePage() {
 		try {
 			setIsLoadingFaceModels(true);
 			setIsFaceModelLoaded(false); // Ensure we start with false
+			if (!faceApiModule) {
+				if (typeof window === "undefined") return; // guard for SSR
+				faceApiModule = (await import("face-api.js")).default
+					? (await import("face-api.js")).default
+					: await import("face-api.js");
+			}
 			const modelsUrl = "/models";
-			await Promise.all([faceapi.nets.tinyFaceDetector.loadFromUri(modelsUrl)]);
+			await Promise.all([
+				faceApiModule.nets.tinyFaceDetector.loadFromUri(modelsUrl),
+			]);
 
 			// Add a small delay to ensure the model is fully ready
 			await new Promise((resolve) => setTimeout(resolve, 100));
@@ -269,7 +277,8 @@ export default function AttendancePage() {
 		}
 
 		stopFaceDetection();
-		const options = new faceapi.TinyFaceDetectorOptions({
+		if (!faceApiModule) return;
+		const options = new faceApiModule.TinyFaceDetectorOptions({
 			inputSize: 320,
 			scoreThreshold: 0.3,
 		});
@@ -279,7 +288,7 @@ export default function AttendancePage() {
 				const video = videoRef.current;
 				if (!video) return;
 				if (video.readyState >= 2) {
-					const result = await faceapi.detectSingleFace(video, options);
+					const result = await faceApiModule!.detectSingleFace(video, options);
 					if (result) {
 						const box = result.box;
 						const container = containerRef.current;

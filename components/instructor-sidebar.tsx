@@ -43,6 +43,10 @@ import {
 	ChevronDown,
 	User,
 	HelpCircle,
+	Building2,
+	GraduationCap,
+	BookOpen,
+	Layers,
 } from "lucide-react";
 import {
 	Collapsible,
@@ -69,10 +73,7 @@ const menuItems = [
 				title: "Add Student",
 				url: "/dashboard/instructor/students/add",
 			},
-			{
-				title: "Sections",
-				url: "/dashboard/instructor/sections",
-			},
+		
 		],
 	},
 	{
@@ -133,6 +134,42 @@ const menuItems = [
 		],
 	},
 	{
+		title: "Agency Management",
+		icon: Building2,
+		items: [
+			{
+				title: "All Agencies",
+				url: "/dashboard/instructor/agencies",
+			},
+			{
+				title: "Add Agency",
+				url: "/dashboard/instructor/agencies/add",
+			},
+			{
+				title: "Manage Supervisors",
+				url: "/dashboard/instructor/agencies/supervisors",
+			},
+		],
+	},
+	{
+		title: "Academic Management",
+		icon: GraduationCap,
+		items: [
+			{
+				title: "Departments",
+				url: "/dashboard/instructor/departments",
+			},
+			{
+				title: "Courses",
+				url: "/dashboard/instructor/courses",
+			},
+			{
+				title: "Sections",
+				url: "/dashboard/instructor/sections",
+			},
+		],
+	},
+	{
 		title: "Announcements",
 		icon: MessageSquare,
 		url: "/dashboard/instructor/announcements",
@@ -156,14 +193,68 @@ export function InstructorSidebar() {
 	const isMenuItemActive = (item: any): boolean => {
 		if (item.url && pathname === item.url) return true;
 		if (item.items) {
-			return item.items.some((subItem: any) => pathname === subItem.url);
+			// Check if any child item is active
+			const hasActiveChildItem = item.items.some((subItem: any) => pathname === subItem.url);
+			// Special case for Academic Management - check if we're on course, department, or section pages
+			if (item.title === "Academic Management" && 
+				(isCourseEditPage() || isCourseDetailPage() || 
+				 isDepartmentEditPage() || isDepartmentDetailPage() || 
+				 isSectionEditPage() || isSectionDetailPage())) {
+				return true;
+			}
+			// Special case for Agency Management - check if we're on supervisor management pages
+			if (item.title === "Agency Management" && isSupervisorManagementPage()) {
+				return true;
+			}
+			return hasActiveChildItem;
 		}
 		return false;
 	};
 
+	// Function to check if we're on a course edit page
+	const isCourseEditPage = (): boolean => {
+		return pathname.includes('/courses/') && pathname.includes('/edit');
+	};
+
+	// Function to check if we're on a course detail page
+	const isCourseDetailPage = (): boolean => {
+		return pathname.match(/^\/dashboard\/instructor\/courses\/[^\/]+$/) !== null;
+	};
+
+	// Function to check if we're on a department detail page
+	const isDepartmentDetailPage = (): boolean => {
+		return pathname.match(/^\/dashboard\/instructor\/departments\/[^\/]+$/) !== null;
+	};
+
+	// Function to check if we're on a section detail page
+	const isSectionDetailPage = (): boolean => {
+		return pathname.match(/^\/dashboard\/instructor\/sections\/[^\/]+$/) !== null;
+	};
+
+	// Function to check if we're on a department edit page
+	const isDepartmentEditPage = (): boolean => {
+		return pathname.includes('/departments/') && pathname.includes('/edit');
+	};
+
+	// Function to check if we're on a section edit page
+	const isSectionEditPage = (): boolean => {
+		return pathname.includes('/sections/') && pathname.includes('/edit');
+	};
+
+	// Function to check if we're on supervisor management pages
+	const isSupervisorManagementPage = (): boolean => {
+		return pathname.includes('/agencies/supervisors');
+	};
+
 	// Function to check if any child item is active
 	const hasActiveChild = (items: any[]): boolean => {
-		return items.some((item) => pathname === item.url);
+		return items.some((item) => 
+			pathname === item.url || 
+			(item.title === "Courses" && (isCourseEditPage() || isCourseDetailPage())) ||
+			(item.title === "Departments" && (isDepartmentEditPage() || isDepartmentDetailPage())) ||
+			(item.title === "Sections" && (isSectionEditPage() || isSectionDetailPage())) ||
+			(item.title === "Manage Supervisors" && isSupervisorManagementPage())
+		);
 	};
 
 	// Auto-expand sections that contain the current page
@@ -248,33 +339,43 @@ export function InstructorSidebar() {
 													<SidebarMenuSub className="ml-4 border-l border-primary-200 px-2.5 py-0.5">
 														{item.items.map((subItem) => (
 															<SidebarMenuSubItem key={subItem.title}>
-																<SidebarMenuSubButton
-																	asChild
-																	isActive={pathname === subItem.url}
-																	className="w-full"
-																>
-																	<Link
-																		href={subItem.url}
-																		className="flex items-center justify-between w-full min-w-0"
-																	>
-																		<span className="flex items-center gap-2 min-w-0 flex-1">
-																			<span className="truncate">
-																				{subItem.title}
-																			</span>
-																			{pathname === subItem.url && (
-																				<div className="w-1.5 h-1.5 bg-primary-600 rounded-full ml-1 flex-shrink-0" />
-																			)}
-																		</span>
-																		{subItem.badge && (
-																			<Badge
-																				variant="secondary"
-																				className="bg-primary-100 text-primary-700 text-xs ml-2 flex-shrink-0"
-																			>
-																				{subItem.badge}
-																			</Badge>
-																		)}
-																	</Link>
-																</SidebarMenuSubButton>
+											<SidebarMenuSubButton
+												asChild
+												isActive={
+													pathname === subItem.url || 
+													(subItem.title === "Courses" && (isCourseEditPage() || isCourseDetailPage())) ||
+													(subItem.title === "Departments" && (isDepartmentEditPage() || isDepartmentDetailPage())) ||
+													(subItem.title === "Sections" && (isSectionEditPage() || isSectionDetailPage())) ||
+													(subItem.title === "Manage Supervisors" && isSupervisorManagementPage())
+												}
+												className="w-full"
+											>
+												<Link
+													href={subItem.url}
+													className="flex items-center justify-between w-full min-w-0"
+												>
+													<span className="flex items-center gap-2 min-w-0 flex-1">
+														<span className="truncate">
+															{subItem.title}
+														</span>
+														{(pathname === subItem.url || 
+															(subItem.title === "Courses" && (isCourseEditPage() || isCourseDetailPage())) ||
+															(subItem.title === "Departments" && (isDepartmentEditPage() || isDepartmentDetailPage())) ||
+															(subItem.title === "Sections" && (isSectionEditPage() || isSectionDetailPage())) ||
+															(subItem.title === "Manage Supervisors" && isSupervisorManagementPage())) && (
+															<div className="w-1.5 h-1.5 bg-primary-600 rounded-full ml-1 flex-shrink-0" />
+														)}
+													</span>
+													{subItem.badge && (
+														<Badge
+															variant="secondary"
+															className="bg-primary-100 text-primary-700 text-xs ml-2 flex-shrink-0"
+														>
+															{subItem.badge}
+														</Badge>
+													)}
+												</Link>
+											</SidebarMenuSubButton>
 															</SidebarMenuSubItem>
 														))}
 													</SidebarMenuSub>
