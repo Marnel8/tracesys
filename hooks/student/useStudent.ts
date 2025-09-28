@@ -21,6 +21,17 @@ export interface Student {
 	practicums?: Practicum[];
 	enrollments?: Enrollment[];
 	requirements?: Requirement[];
+	// Optional enriched/computed fields returned by teacher-students API
+	computed?: {
+		courseName?: string;
+		courseCode?: string;
+		sectionName?: string;
+		academicYear?: string;
+		agencyName?: string;
+		attendance?: number;
+		requirements?: number;
+		reports?: number;
+	};
 }
 
 export interface Practicum {
@@ -107,20 +118,23 @@ export interface StudentRegistrationParams {
 
 	// Academic Information
 	studentId: string;
+	// IMPORTANT: backend expects department CODE (e.g., "CAST")
 	department: string;
+	// IMPORTANT: backend expects course CODE (e.g., "BSIT")
 	course: string;
+	// IMPORTANT: backend expects section NAME (e.g., "4A")
 	section: string;
 	year: string;
 	semester: string;
 
-	// Practicum Information
-	agency: string;
-	agencyAddress: string;
-	supervisor: string;
-	supervisorEmail: string;
-	supervisorPhone: string;
-	startDate: string;
-	endDate: string;
+	// Practicum Information (Optional)
+	agency?: string;
+	agencyAddress?: string;
+	supervisor?: string;
+	supervisorEmail?: string;
+	supervisorPhone?: string;
+	startDate?: string;
+	endDate?: string;
 
 	// Account Settings
 	password: string;
@@ -140,6 +154,24 @@ export interface UpdateStudentParams {
 	studentId?: string;
 	address?: string;
 	bio?: string;
+	
+	// Academic Information
+	departmentId?: string;
+	courseId?: string;
+	sectionId?: string;
+	yearLevel?: string;
+	program?: string;
+	year?: string;
+	semester?: string;
+	
+	// Practicum Information
+	agencyId?: string;
+	supervisorId?: string;
+	position?: string;
+	startDate?: string;
+	endDate?: string;
+	totalHours?: number;
+	workSetup?: "On-site" | "Hybrid" | "Work From Home";
 }
 
 // API functions
@@ -170,14 +202,14 @@ const registerStudent = async (studentData: StudentRegistrationParams) => {
 	formData.append("year", studentData.year);
 	formData.append("semester", studentData.semester);
 
-	// Practicum Information
-	formData.append("agency", studentData.agency);
-	formData.append("agencyAddress", studentData.agencyAddress);
-	formData.append("supervisor", studentData.supervisor);
-	formData.append("supervisorEmail", studentData.supervisorEmail);
-	formData.append("supervisorPhone", studentData.supervisorPhone);
-	formData.append("startDate", studentData.startDate);
-	formData.append("endDate", studentData.endDate);
+	// Practicum Information (only if provided)
+	if (studentData.agency) formData.append("agency", studentData.agency);
+	if (studentData.agencyAddress) formData.append("agencyAddress", studentData.agencyAddress);
+	if (studentData.supervisor) formData.append("supervisor", studentData.supervisor);
+	if (studentData.supervisorEmail) formData.append("supervisorEmail", studentData.supervisorEmail);
+	if (studentData.supervisorPhone) formData.append("supervisorPhone", studentData.supervisorPhone);
+	if (studentData.startDate) formData.append("startDate", studentData.startDate);
+	if (studentData.endDate) formData.append("endDate", studentData.endDate);
 
 	// Account Settings
 	if (studentData.sendCredentials !== undefined) {
@@ -274,7 +306,7 @@ const updateStudent = async (studentData: UpdateStudentParams) => {
 
 	formData.append("id", studentData.id);
 
-	// Add only provided fields
+	// Personal Information
 	if (studentData.firstName) formData.append("firstName", studentData.firstName);
 	if (studentData.lastName) formData.append("lastName", studentData.lastName);
 	if (studentData.middleName !== undefined) formData.append("middleName", studentData.middleName);
@@ -286,6 +318,24 @@ const updateStudent = async (studentData: UpdateStudentParams) => {
 	if (studentData.address !== undefined) formData.append("address", studentData.address);
 	if (studentData.bio !== undefined) formData.append("bio", studentData.bio);
 	if (studentData.avatar) formData.append("avatar", studentData.avatar);
+
+	// Academic Information
+	if (studentData.departmentId) formData.append("departmentId", studentData.departmentId);
+	if (studentData.courseId) formData.append("courseId", studentData.courseId);
+	if (studentData.sectionId) formData.append("sectionId", studentData.sectionId);
+	if (studentData.yearLevel) formData.append("yearLevel", studentData.yearLevel);
+	if (studentData.program) formData.append("program", studentData.program);
+	if (studentData.year) formData.append("year", studentData.year);
+	if (studentData.semester) formData.append("semester", studentData.semester);
+
+	// Practicum Information
+	if (studentData.agencyId) formData.append("agencyId", studentData.agencyId);
+	if (studentData.supervisorId) formData.append("supervisorId", studentData.supervisorId);
+	if (studentData.position) formData.append("position", studentData.position);
+	if (studentData.startDate) formData.append("startDate", studentData.startDate);
+	if (studentData.endDate) formData.append("endDate", studentData.endDate);
+	if (studentData.totalHours !== undefined) formData.append("totalHours", studentData.totalHours.toString());
+	if (studentData.workSetup) formData.append("workSetup", studentData.workSetup);
 
 	try {
 		const res = await api.put(`/student/${studentData.id}`, formData, {
@@ -308,9 +358,12 @@ const updateStudent = async (studentData: UpdateStudentParams) => {
 
 const deleteStudent = async (id: string) => {
 	try {
+		console.log("Attempting to delete student with ID:", id);
 		const res = await api.delete(`/student/${id}`);
+		console.log("Delete response:", res.data);
 		return res.data;
 	} catch (error: any) {
+		console.error("Delete student error:", error);
 		if (error.response) {
 			throw new Error(error.response.data.message || "Failed to delete student");
 		} else if (error.request) {
@@ -376,9 +429,9 @@ export const useUpdateStudent = () => {
 	return useMutation({
 		mutationFn: updateStudent,
 		onSuccess: (data) => {
-			// Update the specific student in cache
-			queryClient.setQueryData(["student", data.data.id], data);
-			// Invalidate students list to refresh
+			// Refetch the specific student to ensure related entities are included
+			queryClient.invalidateQueries({ queryKey: ["student", data.data.id] });
+			// Invalidate students lists to refresh
 			queryClient.invalidateQueries({ queryKey: ["students"] });
 			queryClient.invalidateQueries({ queryKey: ["students-by-teacher"] });
 		},

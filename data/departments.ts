@@ -222,16 +222,16 @@ export const MOCK_SECTIONS: Section[] = [
 ];
 
 export const YEAR_OPTIONS = [
-	{ value: "1st", label: "1st Year" },
-	{ value: "2nd", label: "2nd Year" },
-	{ value: "3rd", label: "3rd Year" },
+	// { value: "1st", label: "1st Year" },
+	// { value: "2nd", label: "2nd Year" },
+	// { value: "3rd", label: "3rd Year" },
 	{ value: "4th", label: "4th Year" },
 ];
 
 export const SEMESTER_OPTIONS = [
-	{ value: "1st", label: "1st Semester" },
+	// { value: "1st", label: "1st Semester" },
 	{ value: "2nd", label: "2nd Semester" },
-	{ value: "Summer", label: "Summer" },
+	// { value: "Summer", label: "Summer" },
 ];
 
 export const ACADEMIC_YEAR_OPTIONS = [

@@ -148,6 +148,144 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Requirements Section */}
+      <section className="py-20 bg-gradient-to-br from-primary-50 to-secondary-50">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">
+              OJT Requirements
+            </h2>
+            <p className="text-lg text-gray-600 max-w-3xl mx-auto">
+              Complete checklist of documents needed for your On-The-Job Training (Practicum) program. 
+              Track your progress and ensure all requirements are submitted on time.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+            {[
+              {
+                number: 1,
+                title: "Registration Form",
+                description: "Registration form that the trainee is currently enrolled",
+                category: "Academic"
+              },
+              {
+                number: 2,
+                title: "Proof of Payment",
+                description: "OJT Fee payment confirmation",
+                category: "Financial"
+              },
+              {
+                number: 3,
+                title: "Validated ID",
+                description: "Validated ID for the Current Semester",
+                category: "Academic"
+              },
+              {
+                number: 4,
+                title: "Evaluation of Grades",
+                description: "Evaluation of Grades from the Registrar / Computation of Grades: GWA",
+                category: "Academic"
+              },
+              {
+                number: 5,
+                title: "Certificate of Good Moral",
+                description: "Certificate of good moral",
+                category: "Character"
+              },
+              {
+                number: 6,
+                title: "Medical Certificate",
+                description: "Medical Certificate that the trainee is physically fit for deployment (CBC with Blood typing, Urinalysis, Chest X-Ray, Fecalysis)",
+                category: "Health"
+              },
+              {
+                number: 7,
+                title: "Community Tax Certificate",
+                description: "Community Tax Certificate (Cedula)",
+                category: "Legal"
+              },
+              {
+                number: 8,
+                title: "Barangay Clearance",
+                description: "Barangay Clearance",
+                category: "Legal"
+              },
+              {
+                number: 9,
+                title: "Police Clearance",
+                description: "Police Clearance",
+                category: "Legal"
+              },
+              {
+                number: 10,
+                title: "Certificate of Attendance",
+                description: "Certificate of attendance at the Pre-Internship Orientation",
+                category: "Program"
+              },
+              {
+                number: 11,
+                title: "Application Letter & Resume",
+                description: "Letter of application and resume",
+                category: "Application"
+              },
+              {
+                number: 12,
+                title: "Parent's Consent",
+                description: "Parent's Consent",
+                category: "Legal"
+              },
+              {
+                number: 13,
+                title: "Memorandum of Agreement",
+                description: "Duly notarized memorandum of agreement with the cooperating agency",
+                category: "Legal"
+              }
+            ].map((requirement) => (
+              <Card key={requirement.number} className="group bg-white/90 backdrop-blur-sm border-2 border-primary-100 shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 hover:border-primary-300">
+                <CardContent className="p-5 h-full flex flex-col">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-600 text-white rounded-xl flex items-center justify-center text-sm font-bold shadow-lg">
+                      {requirement.number}
+                    </div>
+                    <span className="text-xs font-medium px-2 py-1 bg-primary-100 text-primary-700 rounded-full">
+                      {requirement.category}
+                    </span>
+                  </div>
+                  
+                  <div className="flex-1">
+                    <h3 className="text-base font-bold text-gray-800 mb-2 group-hover:text-primary-700 transition-colors">
+                      {requirement.title}
+                    </h3>
+                    <p className="text-gray-600 text-sm leading-relaxed">
+                      {requirement.description}
+                    </p>
+                  </div>
+                  
+                  <div className="mt-4 pt-3 border-t border-gray-100">
+                    <div className="flex items-center text-xs text-gray-500">
+                      <div className="w-2 h-2 bg-yellow-400 rounded-full mr-2"></div>
+                      Required Document
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* <div className="text-center mt-12">
+            <Button
+              onClick={() => router.push("/select-role")}
+              size="lg"
+              className="bg-primary-500 hover:bg-primary-600 text-white font-medium px-8 py-3 text-lg shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105"
+            >
+              Start Tracking Requirements
+              <ChevronRight className="w-5 h-5 ml-2" />
+            </Button>
+          </div> */}
+        </div>
+      </section>
+
       {/* User Types Section */}
       <section className="py-20 bg-white">
         <div className="max-w-4xl mx-auto px-4">

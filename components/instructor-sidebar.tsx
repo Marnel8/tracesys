@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useState, useEffect } from "react";
 import { useAuth, useLogout } from "@/hooks/auth/useAuth";
 import { useToast } from "@/components/ui/use-toast";
+import { useSidebarBadges } from "@/hooks/useSidebarBadges";
 import {
 	Sidebar,
 	SidebarContent,
@@ -54,132 +55,7 @@ import {
 	CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 
-const menuItems = [
-	{
-		title: "Dashboard",
-		icon: LayoutDashboard,
-		url: "/dashboard/instructor",
-	},
-	{
-		title: "Student Management",
-		icon: Users,
-		items: [
-			{
-				title: "All Students",
-				url: "/dashboard/instructor/students",
-				badge: "42",
-			},
-			{
-				title: "Add Student",
-				url: "/dashboard/instructor/students/add",
-			},
-		
-		],
-	},
-	{
-		title: "Attendance",
-		icon: Clock,
-		items: [
-			{
-				title: "Review Attendance",
-				url: "/dashboard/instructor/attendance",
-				badge: "12",
-			},
-			{
-				title: "Attendance History",
-				url: "/dashboard/instructor/attendance/history",
-			},
-			{
-				title: "Reports",
-				url: "/dashboard/instructor/attendance/reports",
-			},
-		],
-	},
-	{
-		title: "Requirements",
-		icon: FileText,
-		items: [
-			{
-				title: "Pending Review",
-				url: "/dashboard/instructor/requirements",
-				badge: "8",
-			},
-			{
-				title: "All Submissions",
-				url: "/dashboard/instructor/requirements/all",
-			},
-			{
-				title: "Manage Templates",
-				url: "/dashboard/instructor/requirements/templates",
-			},
-		],
-	},
-	{
-		title: "Reports",
-		icon: ClipboardList,
-		items: [
-			{
-				title: "Weekly Reports",
-				url: "/dashboard/instructor/reports/weekly",
-				badge: "5",
-			},
-			{
-				title: "Narrative Reports",
-				url: "/dashboard/instructor/reports/narrative",
-			},
-			{
-				title: "Report Templates",
-				url: "/dashboard/instructor/reports/templates",
-			},
-		],
-	},
-	{
-		title: "Agency Management",
-		icon: Building2,
-		items: [
-			{
-				title: "All Agencies",
-				url: "/dashboard/instructor/agencies",
-			},
-			{
-				title: "Add Agency",
-				url: "/dashboard/instructor/agencies/add",
-			},
-			{
-				title: "Manage Supervisors",
-				url: "/dashboard/instructor/agencies/supervisors",
-			},
-		],
-	},
-	{
-		title: "Academic Management",
-		icon: GraduationCap,
-		items: [
-			{
-				title: "Departments",
-				url: "/dashboard/instructor/departments",
-			},
-			{
-				title: "Courses",
-				url: "/dashboard/instructor/courses",
-			},
-			{
-				title: "Sections",
-				url: "/dashboard/instructor/sections",
-			},
-		],
-	},
-	{
-		title: "Announcements",
-		icon: MessageSquare,
-		url: "/dashboard/instructor/announcements",
-	},
-	{
-		title: "Analytics",
-		icon: BarChart3,
-		url: "/dashboard/instructor/analytics",
-	},
-];
+// This will be moved inside the component to use dynamic data
 
 export function InstructorSidebar() {
 	const pathname = usePathname();
@@ -188,6 +64,134 @@ export function InstructorSidebar() {
 	const { mutate: logout, isPending: isLoggingOut } = useLogout();
 	const { user } = useAuth();
 	const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+	const badges = useSidebarBadges();
+
+	// Create menu items with dynamic badge counts
+	const menuItems = [
+		{
+			title: "Dashboard",
+			icon: LayoutDashboard,
+			url: "/dashboard/instructor",
+		},
+		{
+			title: "Student Management",
+			icon: Users,
+			items: [
+				{
+					title: "All Students",
+					url: "/dashboard/instructor/students",
+					// badge: badges.totalStudents.toString(),
+				},
+				{
+					title: "Add Student",
+					url: "/dashboard/instructor/students/add",
+				},
+			],
+		},
+		{
+			title: "Attendance",
+			icon: Clock,
+			items: [
+				{
+					title: "Review Attendance",
+					url: "/dashboard/instructor/attendance",
+					// badge: badges.pendingAttendance.toString(),
+				},
+				{
+					title: "Attendance History",
+					url: "/dashboard/instructor/attendance/history",
+				},
+				{
+					title: "Reports",
+					url: "/dashboard/instructor/attendance/reports",
+				},
+			],
+		},
+		{
+			title: "Requirements",
+			icon: FileText,
+			items: [
+				{
+					title: "Pending Review",
+					url: "/dashboard/instructor/requirements",
+					// badge: badges.pendingRequirements.toString(),
+				},
+				{
+					title: "All Submissions",
+					url: "/dashboard/instructor/requirements/all",
+				},
+				{
+					title: "Manage Templates",
+					url: "/dashboard/instructor/requirements/templates",
+				},
+			],
+		},
+		{
+			title: "Reports",
+			icon: ClipboardList,
+			items: [
+				{
+					title: "Weekly Reports",
+					url: "/dashboard/instructor/reports/weekly",
+					// badge: badges.pendingWeeklyReports.toString(),
+				},
+				{
+					title: "Narrative Reports",
+					url: "/dashboard/instructor/reports/narrative",
+				},
+				{
+					title: "Report Templates",
+					url: "/dashboard/instructor/reports/templates",
+				},
+			],
+		},
+		{
+			title: "Agency Management",
+			icon: Building2,
+			items: [
+				{
+					title: "All Agencies",
+					url: "/dashboard/instructor/agencies",
+				},
+				{
+					title: "Add Agency",
+					url: "/dashboard/instructor/agencies/add",
+				},
+				{
+					title: "Manage Supervisors",
+					url: "/dashboard/instructor/agencies/supervisors",
+				},
+			],
+		},
+		{
+			title: "Academic Management",
+			icon: GraduationCap,
+			items: [
+				{
+					title: "Departments",
+					url: "/dashboard/instructor/departments",
+				},
+				{
+					title: "Courses",
+					url: "/dashboard/instructor/courses",
+				},
+				{
+					title: "Sections",
+					url: "/dashboard/instructor/sections",
+				},
+			],
+		},
+		{
+			title: "Announcements",
+			icon: MessageSquare,
+			url: "/dashboard/instructor/announcements",
+		},
+		// {
+		// 	title: "Analytics",
+		// 	icon: BarChart3,
+		// 	url: "/dashboard/instructor/analytics",
+		// },
+	];
 
 	// Function to check if a menu item or its children are active
 	const isMenuItemActive = (item: any): boolean => {
@@ -366,14 +370,14 @@ export function InstructorSidebar() {
 															<div className="w-1.5 h-1.5 bg-primary-600 rounded-full ml-1 flex-shrink-0" />
 														)}
 													</span>
-													{subItem.badge && (
+													{/* {subItem.badge && (
 														<Badge
 															variant="secondary"
 															className="bg-primary-100 text-primary-700 text-xs ml-2 flex-shrink-0"
 														>
 															{subItem.badge}
 														</Badge>
-													)}
+													)} */}
 												</Link>
 											</SidebarMenuSubButton>
 															</SidebarMenuSubItem>
