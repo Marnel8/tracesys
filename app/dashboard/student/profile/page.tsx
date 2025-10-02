@@ -28,19 +28,25 @@ import {
 	Download,
 	Search,
 	Filter,
+    Loader2,
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth, useEditUser } from "@/hooks/auth/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useAttendanceStats, useStudentAttendance } from "@/hooks/student/useStudentAttendance";
+import { useAttendance } from "@/hooks/attendance";
 import { useStudentReports } from "@/hooks/student/useStudentReports";
 import { useRequirementStats } from "@/hooks/student/useStudentRequirements";
+import { useStudent } from "@/hooks/student/useStudent";
 
 export default function ProfilePage() {
     const [isEditing, setIsEditing] = useState(false);
     const { user, isLoading: isUserLoading, error, refetch } = useAuth();
     const editUserMutation = useEditUser();
     const { toast } = useToast();
+
+	const [avatarFile, setAvatarFile] = useState<File | null>(null);
+	const [avatarPreview, setAvatarPreview] = useState<string>("");
 
     const [profileData, setProfileData] = useState({
         firstName: "",
@@ -62,25 +68,131 @@ export default function ProfilePage() {
 
     // Hooks must be declared before any early return
     const [searchTerm, setSearchTerm] = useState("");
-    const [selectedMonth, setSelectedMonth] = useState("");
+    const [dateRange, setDateRange] = useState<{
+        startDate: string;
+        endDate: string;
+    }>({
+        startDate: "",
+        endDate: ""
+    });
+    const [presetRange, setPresetRange] = useState<string>("all");
 
-    // Student key used by student-facing APIs (uses academic studentId string)
-    const studentKey = user?.studentId || "";
+    // Student key used by student-facing APIs (uses user ID for attendance API)
+    const studentKey = user?.id || "";
 
-    // Derive date range from selectedMonth (YYYY-MM)
-    const monthStart = selectedMonth ? `${selectedMonth}-01` : undefined;
-    const monthEnd = selectedMonth ? `${selectedMonth}-31` : undefined;
+    // Handle preset date ranges
+    const handlePresetRange = (preset: string) => {
+        const today = new Date();
+        let startDate = "";
+        let endDate = today.toISOString().split('T')[0];
+
+        switch (preset) {
+            case "last7days":
+                const last7Days = new Date(today);
+                last7Days.setDate(today.getDate() - 6);
+                startDate = last7Days.toISOString().split('T')[0];
+                break;
+            case "last30days":
+                const last30Days = new Date(today);
+                last30Days.setDate(today.getDate() - 29);
+                startDate = last30Days.toISOString().split('T')[0];
+                break;
+            case "thisMonth":
+                const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+                startDate = thisMonthStart.toISOString().split('T')[0];
+                break;
+            case "lastMonth":
+                const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+                startDate = lastMonthStart.toISOString().split('T')[0];
+                endDate = lastMonthEnd.toISOString().split('T')[0];
+                break;
+            case "custom":
+                // Keep current date range values, just set the preset
+                setPresetRange(preset);
+                return;
+            default:
+                // "all" - no date filtering
+                startDate = "";
+                endDate = "";
+        }
+
+        setDateRange({ startDate, endDate });
+        setPresetRange(preset);
+    };
+
+    // Get the effective date range for API calls
+    const getEffectiveDateRange = () => {
+        if (presetRange === "all" || (!dateRange.startDate && !dateRange.endDate)) {
+            return { startDate: undefined, endDate: undefined };
+        }
+        return {
+            startDate: dateRange.startDate || undefined,
+            endDate: dateRange.endDate || undefined
+        };
+    };
+
+    const { startDate: monthStart, endDate: monthEnd } = getEffectiveDateRange();
 
     // Queries for tabs (enabled only when studentKey exists)
-    const { data: attendanceListData } = useStudentAttendance(studentKey, {
+    const { data: attendanceListData } = useAttendance({
+        studentId: studentKey,
         page: 1,
-        limit: 1000,
+        limit: 10000, // Increased limit to fetch all records
         startDate: monthStart,
         endDate: monthEnd,
     });
     const { data: attendanceStatsData } = useAttendanceStats(studentKey);
     const { data: reportsData } = useStudentReports(studentKey);
     const { data: requirementStatsData } = useRequirementStats(studentKey);
+
+	// Fetch detailed student record for academic and practicum details
+	const { data: studentFullData } = useStudent(user?.id || "");
+	const studentRecord: any = studentFullData?.data;
+	const currentEnrollment = studentRecord?.enrollments?.[0];
+	const section = currentEnrollment?.section;
+	const course = section?.course;
+	const practicum = studentRecord?.practicums?.[0];
+	const agency = practicum?.agency;
+	const supervisor = practicum?.supervisor;
+
+	const computedStudentId = studentRecord?.studentId || profileData.studentId;
+	const computedCourse = course?.name || course?.code || profileData.course;
+	const computedYear = section?.year || profileData.year;
+	const computedSection = section?.name || profileData.section;
+	const computedCompany = agency?.name || profileData.company;
+	const computedPosition = practicum?.position || profileData.position;
+	const computedSupervisor = supervisor?.name || profileData.supervisor;
+	const formatDate = (d?: any) => {
+		try {
+			if (!d) return "";
+			const date = new Date(d);
+			if (Number.isNaN(date.getTime())) return String(d);
+			return date.toISOString().slice(0, 10);
+		} catch {
+			return "";
+		}
+	};
+	const computedStartDate = formatDate(practicum?.startDate) || profileData.startDate;
+	const computedEndDate = formatDate(practicum?.endDate) || profileData.endDate;
+	
+	// Format dates for display in a more readable format
+	const formatDisplayDate = (dateStr: string) => {
+		if (!dateStr) return '';
+		try {
+			const date = new Date(dateStr);
+			return date.toLocaleDateString('en-US', { 
+				year: 'numeric', 
+				month: 'long', 
+				day: 'numeric' 
+			});
+		} catch {
+			return dateStr;
+		}
+	};
+	
+	const displayStartDate = formatDisplayDate(computedStartDate);
+	const displayEndDate = formatDisplayDate(computedEndDate);
 
     useEffect(() => {
         if (user) {
@@ -94,6 +206,9 @@ export default function ProfilePage() {
                 studentId: user.studentId || "",
                 bio: user.bio || "",
             }));
+			if ((user as any).avatar) {
+				setAvatarPreview((user as any).avatar as string);
+			}
         }
     }, [user]);
 
@@ -124,73 +239,99 @@ export default function ProfilePage() {
         );
     }
 
-    const achievements = [
-		{
-			title: "Perfect Attendance",
-			description: "100% attendance for 2 weeks",
-			date: "2024-01-15",
-			type: "attendance",
-		},
-		{
-			title: "Outstanding Report",
-			description: "Excellent weekly report #7",
-			date: "2024-01-10",
-			type: "academic",
-		},
-		{
-			title: "Quick Learner",
-			description: "Completed training ahead of schedule",
-			date: "2024-01-08",
-			type: "training",
-		},
-	];
+    
 
     const practicum_stats = {
-        hoursCompleted: attendanceStatsData?.data?.completedHours ?? 0,
-        totalHours: attendanceStatsData?.data?.totalHours ?? 0,
+        hoursCompleted: practicum?.completedHours ?? 0,
+        totalHours: practicum?.totalHours ?? 0,
         reportsSubmitted: reportsData?.data?.total ?? 0,
         requirementsDone: requirementStatsData?.data?.approved ?? 0,
         totalRequirements: requirementStatsData?.data?.total ?? 0,
         attendanceRate: attendanceStatsData?.data?.attendancePercentage ?? 0,
     };
 
-    // DTR data - from attendance API
-    const dtrRecords = (attendanceListData?.data || []).map((a: any) => {
+	// DTR data - from attendance API
+	type DtrRecord = {
+		date: string;
+		day: string;
+		timeIn: string;
+		timeOut: string;
+		hours: number;
+		status: string;
+		remarks: string;
+	};
+
+	// Debug: Log the attendance data structure
+	console.log("Attendance data:", attendanceListData);
+	
+	const dtrRecords: DtrRecord[] = (attendanceListData?.attendance || []).map((a: any) => {
         let day = "";
         try {
             day = new Date(a.date).toLocaleDateString(undefined, { weekday: "long" });
         } catch {}
+        
+        // Calculate hours from timeIn and timeOut
         let hours = 0;
         if (a.timeIn && a.timeOut) {
             try {
-                const start = new Date(`1970-01-01T${a.timeIn}`);
-                const end = new Date(`1970-01-01T${a.timeOut}`);
+                const start = new Date(a.timeIn);
+                const end = new Date(a.timeOut);
                 hours = Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60 * 60));
             } catch {}
+        } else if (a.hours) {
+            // Use pre-calculated hours if available
+            hours = a.hours;
         }
-        return {
+        
+        // Format time strings for display with AM/PM
+        const formatTime = (timeStr: string) => {
+            if (!timeStr) return "";
+            try {
+                const date = new Date(timeStr);
+                return date.toLocaleTimeString('en-US', { 
+                    hour12: true, 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+            } catch {
+                return timeStr;
+            }
+        };
+        
+		return {
             date: a.date,
-            day,
-            timeIn: a.timeIn || "",
-            timeOut: a.timeOut || "",
-            hours,
+            day: a.day || day,
+            timeIn: formatTime(a.timeIn),
+            timeOut: formatTime(a.timeOut),
+            hours: Number(hours.toFixed(2)),
             status: a.status || "present",
-            remarks: a.notes || "",
+            remarks: a.timeInRemarks || a.timeOutRemarks || "",
         };
     });
 
+    // Calculate completed hours from attendance records and update practicum_stats
+    const calculatedCompletedHours = dtrRecords.reduce((sum: number, record: DtrRecord) => sum + record.hours, 0);
+    practicum_stats.hoursCompleted = calculatedCompletedHours;
+    
+    // Debug logging
+    console.log("DTR Records:", dtrRecords);
+    console.log("Calculated completed hours:", calculatedCompletedHours);
+    console.log("Practicum total hours:", practicum?.totalHours);
+    console.log("Requirements stats data:", requirementStatsData);
+    console.log("Reports data:", reportsData);
 
-    const handleSave = async () => {
+	const handleSave = async () => {
         if (!user?.id) return;
         try {
-            await editUserMutation.mutateAsync({
+			await editUserMutation.mutateAsync({
                 id: user.id,
                 firstName: profileData.firstName,
                 lastName: profileData.lastName,
                 email: profileData.email,
                 phone: profileData.phone,
                 address: profileData.address,
-                bio: profileData.bio,
+				bio: profileData.bio,
+				...(avatarFile ? { avatar: avatarFile } : {}),
             });
             toast({ title: "Profile updated" });
             setIsEditing(false);
@@ -199,6 +340,17 @@ export default function ProfilePage() {
         }
     };
 
+	const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0];
+		if (!file) return;
+		setAvatarFile(file);
+		const reader = new FileReader();
+		reader.onload = (ev) => {
+			setAvatarPreview(ev.target?.result as string);
+		};
+		reader.readAsDataURL(file);
+	};
+
 	const handleInputChange = (field: string, value: string) => {
 		setProfileData((prev) => ({
 			...prev,
@@ -206,45 +358,166 @@ export default function ProfilePage() {
 		}));
 	};
 
-	const handlePrintDTR = () => {
+	const handleDownloadPDF = () => {
+		// Use the same data preparation as print function
+		const studentName = `${profileData.firstName} ${profileData.lastName}`;
+		const studentId = computedStudentId || profileData.studentId;
+		const course = computedCourse || profileData.course;
+		const company = computedCompany || profileData.company;
+		const position = computedPosition || profileData.position;
+		const supervisor = computedSupervisor || profileData.supervisor;
+		const startDate = computedStartDate || profileData.startDate;
+		const endDate = computedEndDate || profileData.endDate;
+		
+		// Calculate total hours with 2 decimal places
+		const totalHours = dtrRecords.reduce((sum: number, record: DtrRecord) => sum + record.hours, 0);
+		
+		// Calculate late days count
+		const lateDaysCount = dtrRecords.filter((record: DtrRecord) => 
+			record.status === 'late' || 
+			record.remarks?.toLowerCase().includes('late')
+		).length;
+		
+		// Get current date for PDF
+		const printDate = new Date().toLocaleDateString('en-US', { 
+			year: 'numeric', 
+			month: 'long', 
+			day: 'numeric' 
+		});
+		
+		// Format practicum period dates for better readability
+		const formatPeriodDate = (dateStr: string) => {
+			if (!dateStr) return 'N/A';
+			try {
+				const date = new Date(dateStr);
+				return date.toLocaleDateString('en-US', { 
+					year: 'numeric', 
+					month: 'long', 
+					day: 'numeric' 
+				});
+			} catch {
+				return dateStr;
+			}
+		};
+		
+		const formattedStartDate = formatPeriodDate(startDate);
+		const formattedEndDate = formatPeriodDate(endDate);
+
+		// Create a new window with the DTR content
 		const printWindow = window.open("", "_blank");
 		if (printWindow) {
 			printWindow.document.write(`
 				<!DOCTYPE html>
 				<html>
 				<head>
-					<title>Daily Time Record - ${profileData.firstName} ${
-				profileData.lastName
-			}</title>
+					<title>Daily Time Record - ${studentName}</title>
 					<style>
-						body { font-family: Arial, sans-serif; margin: 20px; }
-						.header { text-align: center; margin-bottom: 30px; }
-						.student-info { margin-bottom: 20px; }
-						table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-						th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-						th { background-color: #f2f2f2; }
-						.total { font-weight: bold; margin-top: 20px; }
-						@media print { body { margin: 0; } }
+						body { 
+							font-family: Arial, sans-serif; 
+							margin: 20px; 
+							line-height: 1.4;
+						}
+						.header { 
+							text-align: center; 
+							margin-bottom: 30px; 
+							border-bottom: 2px solid #333;
+							padding-bottom: 20px;
+						}
+						.header h1 { 
+							margin: 0 0 10px 0; 
+							font-size: 24px; 
+							color: #333;
+						}
+						.header h2 { 
+							margin: 0; 
+							font-size: 18px; 
+							color: #666;
+						}
+						.student-info { 
+							margin-bottom: 25px; 
+							background-color: #f9f9f9; 
+							padding: 15px; 
+							border-radius: 5px;
+						}
+						.student-info p { 
+							margin: 5px 0; 
+							font-size: 14px;
+						}
+						table { 
+							width: 100%; 
+							border-collapse: collapse; 
+							margin-bottom: 25px; 
+							font-size: 12px;
+						}
+						th, td { 
+							border: 1px solid #333; 
+							padding: 8px; 
+							text-align: left; 
+						}
+						th { 
+							background-color: #f2f2f2; 
+							font-weight: bold;
+							text-align: center;
+						}
+						td { 
+							text-align: center;
+						}
+						.total { 
+							font-weight: bold; 
+							margin-top: 20px; 
+							text-align: right;
+							font-size: 16px;
+						}
+						.signature-section { 
+							margin-top: 50px; 
+							display: flex; 
+							justify-content: space-between;
+						}
+						.signature-box { 
+							width: 45%; 
+							text-align: center;
+						}
+						.signature-line { 
+							border-bottom: 1px solid #333; 
+							margin: 20px 0 5px 0; 
+							height: 30px;
+						}
+						.printed-name { 
+							font-weight: bold; 
+							margin: 5px 0; 
+							font-size: 14px;
+						}
+						.print-date { 
+							text-align: right; 
+							margin-bottom: 20px; 
+							font-size: 12px; 
+							color: #666;
+						}
+						@media print { 
+							body { margin: 0; }
+							.header { page-break-after: avoid; }
+							table { page-break-inside: avoid; }
+						}
 					</style>
 				</head>
 				<body>
+					<div class="print-date">Printed on: ${printDate}</div>
+					
 					<div class="header">
-						<h1>Daily Time Record</h1>
-						<h2>${profileData.company}</h2>
+						<h1>DAILY TIME RECORD</h1>
+						<h2>${company || 'Company Name'}</h2>
 					</div>
 					
 					<div class="student-info">
-						<p><strong>Student Name:</strong> ${profileData.firstName} ${
-				profileData.lastName
-			}</p>
-						<p><strong>Student ID:</strong> ${profileData.studentId}</p>
-						<p><strong>Course:</strong> ${profileData.course}</p>
-						<p><strong>Company:</strong> ${profileData.company}</p>
-						<p><strong>Position:</strong> ${profileData.position}</p>
-						<p><strong>Supervisor:</strong> ${profileData.supervisor}</p>
-						<p><strong>Period:</strong> ${profileData.startDate} to ${
-				profileData.endDate
-			}</p>
+						<p><strong>Student Name:</strong> ${studentName}</p>
+						<p><strong>Student ID:</strong> ${studentId || 'N/A'}</p>
+						<p><strong>Course:</strong> ${course || 'N/A'}</p>
+						<p><strong>Year Level:</strong> ${computedYear || 'N/A'}</p>
+						<p><strong>Section:</strong> ${computedSection || 'N/A'}</p>
+						<p><strong>Company:</strong> ${company || 'N/A'}</p>
+						<p><strong>Position:</strong> ${position || 'N/A'}</p>
+						<p><strong>Supervisor:</strong> ${supervisor || 'N/A'}</p>
+						<p><strong>Practicum Period:</strong> ${formattedStartDate} to ${formattedEndDate}</p>
 					</div>
 					
 					<table>
@@ -259,38 +532,272 @@ export default function ProfilePage() {
 							</tr>
 						</thead>
 						<tbody>
-							${dtrRecords
+							${dtrRecords.length > 0 ? dtrRecords
 								.map(
-									(record) => `
+									(record: DtrRecord) => `
 								<tr>
 									<td>${record.date}</td>
 									<td>${record.day}</td>
-									<td>${record.timeIn}</td>
-									<td>${record.timeOut}</td>
-									<td>${record.hours}</td>
-									<td>${record.remarks}</td>
+									<td>${record.timeIn || 'N/A'}</td>
+									<td>${record.timeOut || 'N/A'}</td>
+									<td>${record.hours.toFixed(2)}</td>
+									<td>${record.remarks || 'N/A'}</td>
 								</tr>
 							`
 								)
-								.join("")}
+								.join("") : `
+								<tr>
+									<td colspan="6" style="text-align: center; font-style: italic; color: #666;">
+										No attendance records found
+									</td>
+								</tr>
+							`}
 						</tbody>
 					</table>
 					
 					<div class="total">
-						<p><strong>Total Hours:</strong> ${dtrRecords.reduce(
-							(sum, record) => sum + record.hours,
-							0
-						)} hours</p>
+						<p><strong>Total Hours Worked: ${totalHours.toFixed(2)} hours</strong></p>
+						<p><strong>Late Days: ${lateDaysCount}</strong></p>
 					</div>
 					
-					<div style="margin-top: 50px;">
-						<p>Student Signature: _________________</p>
-						<p>Date: _________________</p>
+					<div class="signature-section">
+						<div class="signature-box">
+							<div class="signature-line"></div>
+							<p><strong>Student Signature over Printed Name</strong></p>
+							<p>Date: _________________</p>
+						</div>
+						
+						<div class="signature-box">
+							<div class="signature-line"></div>
+							<p><strong>Supervisor Signature over Printed Name</strong></p>
+							<p>Date: _________________</p>
+						</div>
+					</div>
+				</body>
+				</html>
+			`);
+			printWindow.document.close();
+			
+			// Wait for content to load, then trigger print dialog
+			setTimeout(() => {
+				printWindow.print();
+			}, 500);
+		}
+	};
+
+	const handlePrintDTR = () => {
+		const printWindow = window.open("", "_blank");
+		if (printWindow) {
+			// Use computed values for accurate information
+			const studentName = `${profileData.firstName} ${profileData.lastName}`;
+			const studentId = computedStudentId || profileData.studentId;
+			const course = computedCourse || profileData.course;
+			const company = computedCompany || profileData.company;
+			const position = computedPosition || profileData.position;
+			const supervisor = computedSupervisor || profileData.supervisor;
+			const startDate = computedStartDate || profileData.startDate;
+			const endDate = computedEndDate || profileData.endDate;
+			
+			// Calculate total hours with 2 decimal places
+			const totalHours = dtrRecords.reduce((sum: number, record: DtrRecord) => sum + record.hours, 0);
+			
+			// Calculate late days count
+			const lateDaysCount = dtrRecords.filter((record: DtrRecord) => 
+				record.status === 'late' || 
+				record.remarks?.toLowerCase().includes('late')
+			).length;
+			
+			// Get current date for print
+			const printDate = new Date().toLocaleDateString('en-US', { 
+				year: 'numeric', 
+				month: 'long', 
+				day: 'numeric' 
+			});
+			
+			// Format practicum period dates for better readability
+			const formatPeriodDate = (dateStr: string) => {
+				if (!dateStr) return 'N/A';
+				try {
+					const date = new Date(dateStr);
+					return date.toLocaleDateString('en-US', { 
+						year: 'numeric', 
+						month: 'long', 
+						day: 'numeric' 
+					});
+				} catch {
+					return dateStr;
+				}
+			};
+			
+			const formattedStartDate = formatPeriodDate(startDate);
+			const formattedEndDate = formatPeriodDate(endDate);
+			
+			printWindow.document.write(`
+				<!DOCTYPE html>
+				<html>
+				<head>
+					<title>Daily Time Record - ${studentName}</title>
+					<style>
+						body { 
+							font-family: Arial, sans-serif; 
+							margin: 20px; 
+							line-height: 1.4;
+						}
+						.header { 
+							text-align: center; 
+							margin-bottom: 30px; 
+							border-bottom: 2px solid #333;
+							padding-bottom: 20px;
+						}
+						.header h1 { 
+							margin: 0 0 10px 0; 
+							font-size: 24px; 
+							color: #333;
+						}
+						.header h2 { 
+							margin: 0; 
+							font-size: 18px; 
+							color: #666;
+						}
+						.student-info { 
+							margin-bottom: 25px; 
+							background-color: #f9f9f9; 
+							padding: 15px; 
+							border-radius: 5px;
+						}
+						.student-info p { 
+							margin: 5px 0; 
+							font-size: 14px;
+						}
+						table { 
+							width: 100%; 
+							border-collapse: collapse; 
+							margin-bottom: 25px; 
+							font-size: 12px;
+						}
+						th, td { 
+							border: 1px solid #333; 
+							padding: 8px; 
+							text-align: left; 
+						}
+						th { 
+							background-color: #f2f2f2; 
+							font-weight: bold;
+							text-align: center;
+						}
+						td { 
+							text-align: center;
+						}
+						.total { 
+							font-weight: bold; 
+							margin-top: 20px; 
+							text-align: right;
+							font-size: 16px;
+						}
+						.signature-section { 
+							margin-top: 50px; 
+							display: flex; 
+							justify-content: space-between;
+						}
+						.signature-box { 
+							width: 45%; 
+							text-align: center;
+						}
+						.signature-line { 
+							border-bottom: 1px solid #333; 
+							margin: 20px 0 5px 0; 
+							height: 30px;
+						}
+						.printed-name { 
+							font-weight: bold; 
+							margin: 5px 0; 
+							font-size: 14px;
+						}
+						.print-date { 
+							text-align: right; 
+							margin-bottom: 20px; 
+							font-size: 12px; 
+							color: #666;
+						}
+						@media print { 
+							body { margin: 0; }
+							.header { page-break-after: avoid; }
+							table { page-break-inside: avoid; }
+						}
+					</style>
+				</head>
+				<body>
+					<div class="print-date">Printed on: ${printDate}</div>
+					
+					<div class="header">
+						<h1>DAILY TIME RECORD</h1>
+						<h2>${company || 'Company Name'}</h2>
 					</div>
 					
-					<div style="margin-top: 30px;">
-						<p>Supervisor Signature: _________________</p>
-						<p>Date: _________________</p>
+					<div class="student-info">
+						<p><strong>Student Name:</strong> ${studentName}</p>
+						<p><strong>Student ID:</strong> ${studentId || 'N/A'}</p>
+						<p><strong>Course:</strong> ${course || 'N/A'}</p>
+						<p><strong>Year Level:</strong> ${computedYear || 'N/A'}</p>
+						<p><strong>Section:</strong> ${computedSection || 'N/A'}</p>
+						<p><strong>Company:</strong> ${company || 'N/A'}</p>
+						<p><strong>Position:</strong> ${position || 'N/A'}</p>
+						<p><strong>Supervisor:</strong> ${supervisor || 'N/A'}</p>
+						<p><strong>Practicum Period:</strong> ${formattedStartDate} to ${formattedEndDate}</p>
+					</div>
+					
+					<table>
+						<thead>
+							<tr>
+								<th>Date</th>
+								<th>Day</th>
+								<th>Time In</th>
+								<th>Time Out</th>
+								<th>Hours</th>
+								<th>Remarks</th>
+							</tr>
+						</thead>
+						<tbody>
+							${dtrRecords.length > 0 ? dtrRecords
+								.map(
+									(record: DtrRecord) => `
+								<tr>
+									<td>${record.date}</td>
+									<td>${record.day}</td>
+									<td>${record.timeIn || 'N/A'}</td>
+									<td>${record.timeOut || 'N/A'}</td>
+									<td>${record.hours.toFixed(2)}</td>
+									<td>${record.remarks || 'N/A'}</td>
+								</tr>
+							`
+								)
+								.join("") : `
+								<tr>
+									<td colspan="6" style="text-align: center; font-style: italic; color: #666;">
+										No attendance records found
+									</td>
+								</tr>
+							`}
+						</tbody>
+					</table>
+					
+					<div class="total">
+						<p><strong>Total Hours Worked: ${totalHours.toFixed(2)} hours</strong></p>
+						<p><strong>Late Days: ${lateDaysCount}</strong></p>
+					</div>
+					
+					<div class="signature-section">
+						<div class="signature-box">
+							<div class="signature-line"></div>
+							<p><strong>Student Signature over Printed Name</strong></p>
+							<p>Date: _________________</p>
+						</div>
+						
+						<div class="signature-box">
+							<div class="signature-line"></div>
+							<p><strong>Supervisor Signature over Printed Name</strong></p>
+							<p>Date: _________________</p>
+						</div>
 					</div>
 				</body>
 				</html>
@@ -300,19 +807,30 @@ export default function ProfilePage() {
 		}
 	};
 
-	const filteredDTR = dtrRecords.filter((record) => {
+	const filteredDTR: DtrRecord[] = dtrRecords.filter((record: DtrRecord) => {
 		const matchesSearch =
 			record.date.toLowerCase().includes(searchTerm.toLowerCase()) ||
 			record.day.toLowerCase().includes(searchTerm.toLowerCase()) ||
 			record.remarks.toLowerCase().includes(searchTerm.toLowerCase());
 
-		const matchesMonth =
-			!selectedMonth || record.date.startsWith(selectedMonth);
+		// Apply date range filter
+		let matchesDateRange = true;
+		if (dateRange.startDate || dateRange.endDate) {
+			const recordDate = new Date(record.date);
+			if (dateRange.startDate) {
+				const startDate = new Date(dateRange.startDate);
+				matchesDateRange = matchesDateRange && recordDate >= startDate;
+			}
+			if (dateRange.endDate) {
+				const endDate = new Date(dateRange.endDate);
+				matchesDateRange = matchesDateRange && recordDate <= endDate;
+			}
+		}
 
-		return matchesSearch && matchesMonth;
+		return matchesSearch && matchesDateRange;
 	});
 
-	const totalHours = filteredDTR.reduce((sum, record) => sum + record.hours, 0);
+	const totalHours = filteredDTR.reduce((sum: number, record: DtrRecord) => sum + record.hours, 0);
 
 	return (
 		<div className="px-4 md:px-8 lg:px-16 ">
@@ -339,31 +857,41 @@ export default function ProfilePage() {
 							Manage your personal information and track your progress.
 						</p>
 					</div>
-					<Button
-						onClick={isEditing ? handleSave : () => setIsEditing(true)}
-						className={
-							isEditing
-								? "bg-green-500 hover:bg-green-600"
-								: "bg-primary-500 hover:bg-primary-600"
-						}
-					>
-						{isEditing ? (
-							<>
-								<Save className="w-4 h-4 mr-2" />
-								Save Changes
-							</>
-						) : (
-							<>
-								<Edit className="w-4 h-4 mr-2" />
-								Edit Profile
-							</>
-						)}
-					</Button>
+						<Button
+							onClick={isEditing ? handleSave : () => setIsEditing(true)}
+							disabled={isEditing && editUserMutation.isPending}
+							className={
+								isEditing
+									? "bg-green-500 hover:bg-green-600"
+									: "bg-primary-500 hover:bg-primary-600"
+							}
+						>
+							{isEditing ? (
+								<>
+									{editUserMutation.isPending ? (
+										<>
+											<Loader2 className="w-4 h-4 mr-2 animate-spin" />
+											Saving...
+										</>
+									) : (
+										<>
+											<Save className="w-4 h-4 mr-2" />
+											Save Changes
+										</>
+									)}
+								</>
+							) : (
+								<>
+									<Edit className="w-4 h-4 mr-2" />
+									Edit Profile
+								</>
+							)}
+						</Button>
 				</div>
 			</div>
 
 			<Tabs defaultValue="personal" className="space-y-6">
-				<TabsList className="grid w-full grid-cols-2 md:grid-cols-5 h-auto">
+				<TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto">
 					<TabsTrigger value="personal" className="text-xs sm:text-sm py-2">
 						Personal
 					</TabsTrigger>
@@ -372,9 +900,6 @@ export default function ProfilePage() {
 					</TabsTrigger>
 					<TabsTrigger value="progress" className="text-xs sm:text-sm py-2">
 						Progress
-					</TabsTrigger>
-					<TabsTrigger value="achievements" className="text-xs sm:text-sm py-2">
-						Achievements
 					</TabsTrigger>
 					<TabsTrigger value="dtr" className="text-xs sm:text-sm py-2">
 						DTR
@@ -388,7 +913,7 @@ export default function ProfilePage() {
 						<Card>
 							<CardContent className="p-6 text-center space-y-4">
 								<Avatar className="w-32 h-32 mx-auto">
-									<AvatarImage src="/placeholder-user.jpg" />
+									<AvatarImage src={avatarPreview || "/placeholder-user.jpg"} />
 									<AvatarFallback className="text-2xl">
 										{profileData.firstName[0]}
 										{profileData.lastName[0]}
@@ -404,10 +929,19 @@ export default function ProfilePage() {
 									</Badge>
 								</div>
 								{isEditing && (
-									<Button variant="outline" size="sm">
-										<Camera className="w-4 h-4 mr-2" />
-										Change Photo
-									</Button>
+									<>
+										<input
+											type="file"
+											id="student-avatar-upload"
+											accept="image/*"
+											onChange={handleAvatarChange}
+											className="hidden"
+										/>
+										<Button variant="outline" size="sm" onClick={() => document.getElementById('student-avatar-upload')?.click()}>
+											<Camera className="w-4 h-4 mr-2" />
+											Change Photo
+										</Button>
+									</>
 								)}
 							</CardContent>
 						</Card>
@@ -525,20 +1059,20 @@ export default function ProfilePage() {
 							<CardContent className="space-y-4">
 								<div className="space-y-2">
 									<Label>Student ID</Label>
-									<Input value={profileData.studentId} disabled />
+									<Input value={computedStudentId} disabled />
 								</div>
 								<div className="space-y-2">
 									<Label>Course</Label>
-									<Input value={profileData.course} disabled />
+									<Input value={computedCourse} disabled />
 								</div>
 								<div className="grid grid-cols-2 gap-4">
 									<div className="space-y-2">
-										<Label>Year Level</Label>
-										<Input value={profileData.year} disabled />
+									<Label>Year Level</Label>
+									<Input value={computedYear} disabled />
 									</div>
 									<div className="space-y-2">
-										<Label>Section</Label>
-										<Input value={profileData.section} disabled />
+									<Label>Section</Label>
+									<Input value={computedSection} disabled />
 									</div>
 								</div>
 							</CardContent>
@@ -554,24 +1088,24 @@ export default function ProfilePage() {
 							<CardContent className="space-y-4">
 								<div className="space-y-2">
 									<Label>Company</Label>
-									<Input value={profileData.company} disabled />
+									<Input value={computedCompany} disabled />
 								</div>
 								<div className="space-y-2">
 									<Label>Position</Label>
-									<Input value={profileData.position} disabled />
+									<Input value={computedPosition} disabled />
 								</div>
 								<div className="space-y-2">
 									<Label>Supervisor</Label>
-									<Input value={profileData.supervisor} disabled />
+									<Input value={computedSupervisor} disabled />
 								</div>
 								<div className="grid grid-cols-2 gap-4">
 									<div className="space-y-2">
-										<Label>Start Date</Label>
-										<Input value={profileData.startDate} disabled />
+									<Label>Start Date</Label>
+									<Input value={displayStartDate} disabled />
 									</div>
 									<div className="space-y-2">
-										<Label>End Date</Label>
-										<Input value={profileData.endDate} disabled />
+									<Label>End Date</Label>
+									<Input value={displayEndDate} disabled />
 									</div>
 								</div>
 							</CardContent>
@@ -592,11 +1126,13 @@ export default function ProfilePage() {
 									of {practicum_stats.totalHours} hours
 								</div>
 								<div className="text-xs text-gray-500 mt-1">
-									{(
-										(practicum_stats.hoursCompleted /
-											practicum_stats.totalHours) *
-										100
-									).toFixed(0)}
+									{practicum_stats.totalHours > 0
+										? (
+											(practicum_stats.hoursCompleted /
+												practicum_stats.totalHours) *
+											100
+										).toFixed(0)
+										: 0}
 									% Complete
 								</div>
 							</CardContent>
@@ -636,48 +1172,6 @@ export default function ProfilePage() {
 					</div>
 				</TabsContent>
 
-				{/* Achievements */}
-				<TabsContent value="achievements" className="space-y-6">
-					<Card>
-						<CardHeader>
-							<CardTitle className="flex items-center gap-2">
-								<Award className="w-5 h-5" />
-								Recent Achievements
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className="space-y-4">
-								{achievements.map((achievement, index) => (
-									<div
-										key={index}
-										className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg"
-									>
-										<div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
-											<Award className="w-5 h-5 text-primary-600" />
-										</div>
-										<div className="flex-1 min-w-0">
-											<h4 className="font-medium text-gray-900">
-												{achievement.title}
-											</h4>
-											<p className="text-sm text-gray-600 mt-1">
-												{achievement.description}
-											</p>
-											<div className="flex items-center gap-2 mt-2">
-												<Calendar className="w-3 h-3 text-gray-400" />
-												<span className="text-xs text-gray-500">
-													{achievement.date}
-												</span>
-												<Badge variant="secondary" className="text-xs">
-													{achievement.type}
-												</Badge>
-											</div>
-										</div>
-									</div>
-								))}
-							</div>
-						</CardContent>
-					</Card>
-				</TabsContent>
 
 				{/* DTR - Daily Time Record */}
 				<TabsContent value="dtr" className="space-y-6">
@@ -709,19 +1203,62 @@ export default function ProfilePage() {
 										</div>
 									</div>
 									<div className="flex flex-col sm:flex-row gap-2">
+										{/* Preset Range Selector */}
 										<select
-											value={selectedMonth}
-											onChange={(e) => setSelectedMonth(e.target.value)}
+											value={presetRange}
+											onChange={(e) => handlePresetRange(e.target.value)}
 											className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 min-w-[140px]"
 										>
-											<option value="">All Months</option>
-											<option value="2024-01">January 2024</option>
-											<option value="2024-02">February 2024</option>
-											<option value="2024-03">March 2024</option>
-											<option value="2024-04">April 2024</option>
+											<option value="all">All Time</option>
+											<option value="last7days">Last 7 Days</option>
+											<option value="last30days">Last 30 Days</option>
+											<option value="thisMonth">This Month</option>
+											<option value="lastMonth">Last Month</option>
+											<option value="custom">Custom Range</option>
 										</select>
 									</div>
 								</div>
+
+								{/* Custom Date Range Picker */}
+								{presetRange === "custom" && (
+									<div className="flex flex-col sm:flex-row gap-3 p-4 bg-gray-50 rounded-lg">
+										<div className="flex items-center gap-2">
+											<Label htmlFor="startDate" className="text-sm font-medium whitespace-nowrap">
+												From:
+											</Label>
+											<input
+												id="startDate"
+												type="date"
+												value={dateRange.startDate}
+												onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+												className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+											/>
+										</div>
+										<div className="flex items-center gap-2">
+											<Label htmlFor="endDate" className="text-sm font-medium whitespace-nowrap">
+												To:
+											</Label>
+											<input
+												id="endDate"
+												type="date"
+												value={dateRange.endDate}
+												onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+												className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+											/>
+										</div>
+										<Button
+											variant="outline"
+											size="sm"
+											onClick={() => {
+												setDateRange({ startDate: "", endDate: "" });
+												setPresetRange("all");
+											}}
+											className="whitespace-nowrap"
+										>
+											Clear
+										</Button>
+									</div>
+								)}
 
 								{/* Action Buttons Row */}
 								<div className="flex flex-col sm:flex-row gap-2">
@@ -734,22 +1271,32 @@ export default function ProfilePage() {
 										<span className="hidden sm:inline">Print DTR</span>
 										<span className="sm:hidden">Print</span>
 									</Button>
-									<Button
-										onClick={() => {
-											// TODO: Implement PDF download
-											console.log("Downloading PDF...");
-										}}
+									{/* <Button
+										onClick={handleDownloadPDF}
 										variant="outline"
 										className="flex items-center justify-center gap-2 flex-1 sm:flex-none sm:w-auto"
 									>
 										<Download className="w-4 h-4" />
 										<span className="hidden sm:inline">Download PDF</span>
 										<span className="sm:hidden">PDF</span>
-									</Button>
+									</Button> */}
 								</div>
 							</div>
 
 							{/* DTR Summary */}
+							<div className="mb-4">
+								<div className="text-sm text-gray-600 mb-2">
+									{presetRange === "all" && "Showing all time records"}
+									{presetRange === "last7days" && "Showing last 7 days"}
+									{presetRange === "last30days" && "Showing last 30 days"}
+									{presetRange === "thisMonth" && "Showing this month"}
+									{presetRange === "lastMonth" && "Showing last month"}
+									{presetRange === "custom" && dateRange.startDate && dateRange.endDate && 
+										`Showing from ${new Date(dateRange.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} to ${new Date(dateRange.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+									}
+									{presetRange === "custom" && (!dateRange.startDate || !dateRange.endDate) && "Select start and end dates"}
+								</div>
+							</div>
 							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
 								<Card>
 									<CardContent className="p-3 sm:p-4 text-center">
@@ -808,15 +1355,12 @@ export default function ProfilePage() {
 													Hours
 												</th>
 												<th className="border border-gray-300 px-3 py-2 text-left text-xs sm:text-sm font-medium text-gray-700">
-													Status
-												</th>
-												<th className="border border-gray-300 px-3 py-2 text-left text-xs sm:text-sm font-medium text-gray-700">
 													Remarks
 												</th>
 											</tr>
 										</thead>
 										<tbody>
-											{filteredDTR.map((record, index) => (
+						{filteredDTR.map((record: DtrRecord, index: number) => (
 												<tr key={index} className="hover:bg-gray-50">
 													<td className="border border-gray-300 px-3 py-2 text-xs sm:text-sm">
 														{record.date}
@@ -831,19 +1375,7 @@ export default function ProfilePage() {
 														{record.timeOut}
 													</td>
 													<td className="border border-gray-300 px-3 py-2 text-xs sm:text-sm">
-														{record.hours}
-													</td>
-													<td className="border border-gray-300 px-3 py-2 text-xs sm:text-sm">
-														<Badge
-															variant={
-																record.status === "present"
-																	? "default"
-																	: "secondary"
-															}
-															className="text-xs"
-														>
-															{record.status}
-														</Badge>
+														{record.hours.toFixed(2)}
 													</td>
 													<td className="border border-gray-300 px-3 py-2 text-xs sm:text-sm">
 														{record.remarks}
@@ -856,7 +1388,7 @@ export default function ProfilePage() {
 
 								{/* Mobile Card View */}
 								<div className="md:hidden space-y-3">
-									{filteredDTR.map((record, index) => (
+						{filteredDTR.map((record: DtrRecord, index: number) => (
 										<Card key={index} className="p-4">
 											<div className="space-y-3">
 												{/* Header Row */}
@@ -867,16 +1399,6 @@ export default function ProfilePage() {
 															{record.date}
 														</span>
 													</div>
-													<Badge
-														variant={
-															record.status === "present"
-																? "default"
-																: "secondary"
-														}
-														className="text-xs"
-													>
-														{record.status}
-													</Badge>
 												</div>
 
 												{/* Day */}
@@ -909,7 +1431,7 @@ export default function ProfilePage() {
 															Hours:
 														</span>
 														<div className="text-gray-900 font-semibold">
-															{record.hours}
+															{record.hours.toFixed(2)}
 														</div>
 													</div>
 													<div className="text-sm">

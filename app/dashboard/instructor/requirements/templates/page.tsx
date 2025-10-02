@@ -8,7 +8,6 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import { COURSES, getSectionOptions } from "@/data/instructor-courses";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,6 +45,15 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import {
+	Pagination,
+	PaginationContent,
+	PaginationEllipsis,
+	PaginationItem,
+	PaginationLink,
+	PaginationNext,
+	PaginationPrevious,
+} from "@/components/ui/pagination";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -54,187 +62,189 @@ import {
 	Trash2,
 	MoreHorizontal,
 	FileText,
-	Copy,
-	Eye,
-	Upload,
 	Download,
 } from "lucide-react";
+import {
+    useRequirementTemplates,
+    useCreateRequirementTemplate,
+    useUpdateRequirementTemplate,
+    useDeleteRequirementTemplate,
+    useToggleRequirementTemplateStatus,
+} from "@/hooks/requirement-template";
+import type {
+    RequirementTemplate as APIRequirementTemplate,
+    RequirementCategory,
+    RequirementPriority,
+} from "@/hooks/requirement-template/useRequirementTemplate";
 
-// Type definitions
-type TemplateFile = {
-	name: string;
-	size: string;
-	type: string;
-	uploadedAt: string;
-};
-
-type RequirementTemplate = {
-	id: number;
-	title: string;
-	description: string;
-	priority: string;
-	isRequired: boolean;
-	templateFile?: TemplateFile;
-	fileTypes: string[];
-	maxFileSize: string;
-	instructions: string;
-	courses: string[];
-	sections: string[];
-	isActive: boolean;
-	createdAt: string;
-	usageCount: number;
-	downloadCount: number;
-};
+// Use API types to ensure alignment with server response
+type RequirementTemplate = APIRequirementTemplate;
 
 type NewTemplate = {
-	title: string;
-	description: string;
-	priority: string;
-	isRequired: boolean;
-	templateFile?: TemplateFile;
-	fileTypes: string[];
-	maxFileSize: string;
-	instructions: string;
-	courses: string[];
-	sections: string[];
-	isActive: boolean;
+    title: string;
+    description: string;
+    category: RequirementCategory;
+    priority: RequirementPriority;
+    isRequired: boolean;
+    allowedFileTypes: string[];
+    maxFileSize: number; // in MB
+    instructions: string;
+    isActive: boolean;
 };
 
-// Mock data for requirement templates
-const requirementTemplates: RequirementTemplate[] = [
-	{
-		id: 1,
-		title: "Medical Certificate",
-		description: "Valid medical certificate from a licensed physician",
-		priority: "High",
-		isRequired: true,
-		templateFile: {
-			name: "medical-certificate-template.docx",
-			size: "45KB",
-			type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-			uploadedAt: "2024-01-10",
-		},
-		fileTypes: ["PDF", "DOCX"],
-		maxFileSize: "5MB",
-		instructions:
-			"Download the template, fill it out completely, and submit the signed document.",
-		courses: ["BSIT"],
-		sections: ["BSIT 4A", "BSIT 4B"],
-		isActive: true,
-		createdAt: "2024-01-10",
-		usageCount: 42,
-		downloadCount: 156,
-	},
-	{
-		id: 2,
-		title: "Company MOA",
-		description: "Memorandum of Agreement between student and company",
-		priority: "High",
-		isRequired: true,
-		templateFile: {
-			name: "company-moa-template.docx",
-			size: "78KB",
-			type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-			uploadedAt: "2024-01-08",
-		},
-		fileTypes: ["PDF", "DOCX"],
-		maxFileSize: "10MB",
-		instructions:
-			"Download the MOA template, complete all required fields, and get signatures from both parties.",
-		courses: ["BSIT"],
-		sections: ["BSIT 4A", "BSIT 4B", "BSIT 4C", "BSIT 4D"],
-		isActive: true,
-		createdAt: "2024-01-08",
-		usageCount: 38,
-		downloadCount: 124,
-	},
-];
+// Server-driven data via hooks
 
 export default function RequirementTemplatesPage() {
-	const [templates, setTemplates] =
-		useState<RequirementTemplate[]>(requirementTemplates);
+	const [page, setPage] = useState(1);
+	const [limit, setLimit] = useState(10);
+
+	const { data, isLoading } = useRequirementTemplates({ page, limit });
+    const templates = (data?.requirementTemplates as RequirementTemplate[] | undefined) || [];
+    const pagination = data?.pagination;
+
+	const createTemplate = useCreateRequirementTemplate();
+	const updateTemplate = useUpdateRequirementTemplate();
+	const deleteTemplate = useDeleteRequirementTemplate();
+	const toggleTemplateStatus = useToggleRequirementTemplateStatus();
+
+	const [newTemplateFile, setNewTemplateFile] = useState<File | null>(null);
+	const [editTemplateFile, setEditTemplateFile] = useState<File | null>(null);
 	const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 	const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 	const [selectedTemplate, setSelectedTemplate] =
 		useState<RequirementTemplate | null>(null);
-	const [newTemplate, setNewTemplate] = useState<NewTemplate>({
-		title: "",
-		description: "",
-		priority: "Medium",
-		isRequired: true,
-		fileTypes: [],
-		maxFileSize: "5MB",
-		instructions: "",
-		courses: [],
-		sections: [],
-		isActive: true,
-	});
+    const [newTemplate, setNewTemplate] = useState<NewTemplate>({
+        title: "",
+        description: "",
+        category: "health",
+        priority: "medium",
+        isRequired: true,
+        allowedFileTypes: [],
+        maxFileSize: 5,
+        instructions: "",
+        isActive: true,
+    });
 
 	const handleCreateTemplate = () => {
-		const template: RequirementTemplate = {
-			...newTemplate,
-			id: Math.max(...templates.map((t) => t.id)) + 1,
-			createdAt: new Date().toISOString().split("T")[0],
-			usageCount: 0,
-			downloadCount: 0,
-		};
-		setTemplates([...templates, template]);
-		setIsCreateDialogOpen(false);
-		resetForm();
+		createTemplate.mutate(
+			{
+				title: newTemplate.title,
+				description: newTemplate.description,
+				category: newTemplate.category,
+				priority: newTemplate.priority,
+				isRequired: newTemplate.isRequired,
+				instructions: newTemplate.instructions || "",
+				allowedFileTypes: newTemplate.allowedFileTypes,
+				maxFileSize: newTemplate.maxFileSize,
+				isActive: newTemplate.isActive,
+				templateFile: newTemplateFile || undefined,
+			},
+			{
+				onSuccess: () => {
+					setIsCreateDialogOpen(false);
+					resetForm();
+					setNewTemplateFile(null);
+				},
+			}
+		);
 	};
 
 	const handleEditTemplate = () => {
 		if (!selectedTemplate) return;
 
-		setTemplates(
-			templates.map((t) =>
-				t.id === selectedTemplate.id ? selectedTemplate : t
-			)
+		updateTemplate.mutate(
+			{
+				id: selectedTemplate.id,
+				data: {
+					title: selectedTemplate.title,
+					description: selectedTemplate.description,
+					category: selectedTemplate.category,
+					priority: selectedTemplate.priority,
+					isRequired: selectedTemplate.isRequired,
+					instructions: selectedTemplate.instructions || "",
+                    allowedFileTypes: (Array.isArray(selectedTemplate.allowedFileTypes)
+                        ? selectedTemplate.allowedFileTypes
+                        : typeof selectedTemplate.allowedFileTypes === "string"
+                        ? selectedTemplate.allowedFileTypes.split(",").filter(Boolean)
+                        : []),
+					maxFileSize: selectedTemplate.maxFileSize,
+					isActive: selectedTemplate.isActive,
+					templateFile: editTemplateFile || undefined,
+				},
+			},
+			{
+				onSuccess: () => {
+					setIsEditDialogOpen(false);
+					setSelectedTemplate(null);
+					setEditTemplateFile(null);
+				},
+			}
 		);
-		setIsEditDialogOpen(false);
-		setSelectedTemplate(null);
 	};
 
-	const handleDeleteTemplate = (id: number) => {
-		setTemplates(templates.filter((t) => t.id !== id));
+	const handleDeleteTemplate = (id: string) => {
+		deleteTemplate.mutate(id);
 	};
 
-	const handleToggleActive = (id: number) => {
-		setTemplates(
-			templates.map((t) => (t.id === id ? { ...t, isActive: !t.isActive } : t))
-		);
+	const handleToggleActive = (template: RequirementTemplate) => {
+		toggleTemplateStatus.mutate({ id: template.id, isActive: !template.isActive });
 	};
 
-	const resetForm = () => {
-		setNewTemplate({
-			title: "",
-			description: "",
-			priority: "Medium",
-			isRequired: true,
-			fileTypes: [],
-			maxFileSize: "5MB",
-			instructions: "",
-			courses: [],
-			sections: [],
-			isActive: true,
-		});
-	};
+    const resetForm = () => {
+        setNewTemplate({
+            title: "",
+            description: "",
+            category: "health",
+            priority: "medium",
+            isRequired: true,
+            allowedFileTypes: [],
+            maxFileSize: 5,
+            instructions: "",
+            isActive: true,
+        });
+    };
 
-	const getPriorityColor = (priority: string) => {
-		switch (priority.toLowerCase()) {
-			case "high":
-				return "bg-red-100 text-red-800";
-			case "medium":
-				return "bg-yellow-100 text-yellow-800";
-			case "low":
-				return "bg-green-100 text-green-800";
-			default:
-				return "bg-gray-100 text-gray-800";
+    const getPriorityColor = (priority: string) => {
+        switch (priority.toLowerCase()) {
+            case "urgent":
+                return "bg-red-200 text-red-900";
+            case "high":
+                return "bg-red-100 text-red-800";
+            case "medium":
+                return "bg-yellow-100 text-yellow-800";
+            case "low":
+                return "bg-green-100 text-green-800";
+            default:
+                return "bg-gray-100 text-gray-800";
+        }
+    };
+
+	const totalPages = pagination?.totalPages ?? 1;
+	const currentPage = pagination?.currentPage ?? page;
+	const itemsPerPage = pagination?.itemsPerPage ?? limit;
+	const totalItems = pagination?.totalItems ?? templates.length;
+
+	const startIndex = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+	const endIndex = totalItems === 0 ? 0 : startIndex + templates.length - 1;
+
+	const buildPages = (current: number, total: number): (number | "...")[] => {
+		if (total <= 7) {
+			return Array.from({ length: total }, (_, i) => i + 1);
 		}
+		if (current <= 4) {
+			return [1, 2, 3, 4, 5, "...", total];
+		}
+		if (current >= total - 3) {
+			return [1, "...", total - 4, total - 3, total - 2, total - 1, total];
+		}
+		return [1, "...", current - 1, current, current + 1, "...", total];
 	};
 
 	return (
 		<div className="space-y-6">
+            {isLoading && (
+                <div className="text-sm text-gray-500">Loading templates...</div>
+            )}
 			{/* Header */}
 			<div className="flex justify-between items-center">
 				<div>
@@ -261,7 +271,7 @@ export default function RequirementTemplatesPage() {
 							</DialogDescription>
 						</DialogHeader>
 						<div className="grid gap-4 py-4">
-							<div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 gap-4">
 								<div className="space-y-2">
 									<Label htmlFor="title">Title *</Label>
 									<Input
@@ -273,25 +283,50 @@ export default function RequirementTemplatesPage() {
 										placeholder="e.g., Medical Certificate"
 									/>
 								</div>
-								<div className="space-y-2">
-									<Label htmlFor="priority">Priority</Label>
-									<Select
-										value={newTemplate.priority}
-										onValueChange={(value) =>
-											setNewTemplate({ ...newTemplate, priority: value })
-										}
-									>
-										<SelectTrigger>
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											<SelectItem value="High">High</SelectItem>
-											<SelectItem value="Medium">Medium</SelectItem>
-											<SelectItem value="Low">Low</SelectItem>
-										</SelectContent>
-									</Select>
-								</div>
+                            <div className="space-y-2">
+                                <Label htmlFor="category">Category</Label>
+                                <Select
+                                    value={newTemplate.category}
+                                    onValueChange={(value) =>
+                                        setNewTemplate({ ...newTemplate, category: value as RequirementCategory })
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="health">Health</SelectItem>
+                                        <SelectItem value="reports">Reports</SelectItem>
+                                        <SelectItem value="training">Training</SelectItem>
+                                        <SelectItem value="academic">Academic</SelectItem>
+                                        <SelectItem value="evaluation">Evaluation</SelectItem>
+                                        <SelectItem value="legal">Legal</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
 							</div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="priority">Priority</Label>
+                                <Select
+                                    value={newTemplate.priority}
+                                    onValueChange={(value) =>
+                                        setNewTemplate({ ...newTemplate, priority: value as RequirementPriority })
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="urgent">Urgent</SelectItem>
+                                        <SelectItem value="high">High</SelectItem>
+                                        <SelectItem value="medium">Medium</SelectItem>
+                                        <SelectItem value="low">Low</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
 
 							<div className="space-y-2">
 								<Label htmlFor="description">Description</Label>
@@ -324,7 +359,23 @@ export default function RequirementTemplatesPage() {
 								/>
 							</div>
 
-							<div className="grid grid-cols-2 gap-4">
+							<div className="space-y-2">
+								<Label htmlFor="templateFile">Template File (optional)</Label>
+								<input
+									type="file"
+									id="templateFile"
+									accept=".docx"
+									onChange={(e) => setNewTemplateFile(e.target.files?.[0] || null)}
+								/>
+								{newTemplateFile && (
+									<div className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+										<FileText className="w-4 h-4 text-blue-600" />
+										<span className="text-sm">{newTemplateFile.name}</span>
+									</div>
+								)}
+							</div>
+
+                            <div className="grid grid-cols-2 gap-4">
 								<div className="space-y-2">
 									<Label>Allowed File Types</Label>
 									<div className="space-y-2">
@@ -332,17 +383,17 @@ export default function RequirementTemplatesPage() {
 											<div key={type} className="flex items-center space-x-2">
 												<Checkbox
 													id={type}
-													checked={newTemplate.fileTypes.includes(type)}
+                                                    checked={newTemplate.allowedFileTypes.includes(type)}
 													onCheckedChange={(checked) => {
 														if (checked) {
 															setNewTemplate({
 																...newTemplate,
-																fileTypes: [...newTemplate.fileTypes, type],
+                                                                allowedFileTypes: [...newTemplate.allowedFileTypes, type],
 															});
 														} else {
 															setNewTemplate({
 																...newTemplate,
-																fileTypes: newTemplate.fileTypes.filter(
+                                                                allowedFileTypes: newTemplate.allowedFileTypes.filter(
 																	(t) => t !== type
 																),
 															});
@@ -355,89 +406,23 @@ export default function RequirementTemplatesPage() {
 									</div>
 								</div>
 								<div className="space-y-2">
-									<Label htmlFor="maxFileSize">Max File Size</Label>
-									<Select
-										value={newTemplate.maxFileSize}
-										onValueChange={(value) =>
-											setNewTemplate({ ...newTemplate, maxFileSize: value })
-										}
-									>
-										<SelectTrigger>
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											<SelectItem value="1MB">1 MB</SelectItem>
-											<SelectItem value="3MB">3 MB</SelectItem>
-											<SelectItem value="5MB">5 MB</SelectItem>
-											<SelectItem value="10MB">10 MB</SelectItem>
-											<SelectItem value="25MB">25 MB</SelectItem>
-											<SelectItem value="50MB">50 MB</SelectItem>
-										</SelectContent>
-									</Select>
+                                    <Label htmlFor="maxFileSize">Max File Size (MB)</Label>
+                                    <Input
+                                        id="maxFileSize"
+                                        type="number"
+                                        min={1}
+                                        value={newTemplate.maxFileSize ?? 0}
+                                        onChange={(e) =>
+                                            setNewTemplate({
+                                                ...newTemplate,
+                                                maxFileSize: Number(e.target.value || 0),
+                                            })
+                                        }
+                                    />
 								</div>
 							</div>
 
-							<div className="grid grid-cols-2 gap-4">
-								<div className="space-y-2">
-									<Label>Target Courses</Label>
-									<div className="space-y-2">
-										<div className="flex items-center space-x-2">
-											<Checkbox
-												id="BSIT"
-												checked={newTemplate.courses.includes("BSIT")}
-												onCheckedChange={(checked) => {
-													if (checked) {
-														setNewTemplate({
-															...newTemplate,
-															courses: ["BSIT"],
-														});
-													} else {
-														setNewTemplate({
-															...newTemplate,
-															courses: [],
-														});
-													}
-												}}
-											/>
-											<Label htmlFor="BSIT">BSIT</Label>
-										</div>
-									</div>
-								</div>
-								<div className="space-y-2">
-									<Label>Target Sections</Label>
-									<div className="space-y-2">
-										{["BSIT 4A", "BSIT 4B", "BSIT 4C", "BSIT 4D"].map(
-											(section) => (
-												<div
-													key={section}
-													className="flex items-center space-x-2"
-												>
-													<Checkbox
-														id={section}
-														checked={newTemplate.sections.includes(section)}
-														onCheckedChange={(checked) => {
-															if (checked) {
-																setNewTemplate({
-																	...newTemplate,
-																	sections: [...newTemplate.sections, section],
-																});
-															} else {
-																setNewTemplate({
-																	...newTemplate,
-																	sections: newTemplate.sections.filter(
-																		(s) => s !== section
-																	),
-																});
-															}
-														}}
-													/>
-													<Label htmlFor={section}>{section}</Label>
-												</div>
-											)
-										)}
-									</div>
-								</div>
-							</div>
+                            {/* Courses/Sections removed: not part of server model */}
 
 							<div className="flex items-center space-x-2">
 								<Checkbox
@@ -469,53 +454,7 @@ export default function RequirementTemplatesPage() {
 								<Label htmlFor="isActive">Template is active</Label>
 							</div>
 
-							<div className="space-y-2">
-								<Label htmlFor="templateFile">Template File</Label>
-								<div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-									<input
-										type="file"
-										id="templateFile"
-										accept=".docx,.doc,.pdf,.xlsx,.xls,.pptx,.ppt"
-										className="hidden"
-										onChange={(e) => {
-											const file = e.target.files?.[0];
-											if (file) {
-												setNewTemplate({
-													...newTemplate,
-													templateFile: {
-														name: file.name,
-														size: `${Math.round(file.size / 1024)}KB`,
-														type: file.type,
-														uploadedAt: new Date().toISOString().split("T")[0],
-													},
-												});
-											}
-										}}
-									/>
-									<label htmlFor="templateFile" className="cursor-pointer">
-										<div className="flex flex-col items-center">
-											<Upload className="w-8 h-8 text-gray-400 mb-2" />
-											<p className="text-sm text-gray-600">
-												Click to upload template file
-											</p>
-											<p className="text-xs text-gray-500 mt-1">
-												DOCX, PDF, XLSX, PPTX (max 50MB)
-											</p>
-										</div>
-									</label>
-								</div>
-								{newTemplate.templateFile && (
-									<div className="flex items-center gap-2 p-2 bg-gray-50 rounded">
-										<FileText className="w-4 h-4 text-blue-600" />
-										<span className="text-sm">
-											{newTemplate.templateFile.name}
-										</span>
-										<span className="text-xs text-gray-500">
-											({newTemplate.templateFile.size})
-										</span>
-									</div>
-								)}
-							</div>
+                            {/* Template file upload removed: no file field in server model */}
 						</div>
 						<DialogFooter>
 							<Button
@@ -535,18 +474,16 @@ export default function RequirementTemplatesPage() {
 				</Dialog>
 			</div>
 
-			{/* Stats Cards */}
-			<div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 				<Card className="bg-secondary-50 border-primary-200">
 					<CardContent className="p-4">
 						<div className="flex items-center justify-between">
 							<div>
 								<p className="text-sm text-gray-600">Total Templates</p>
-								<p className="text-2xl font-bold text-gray-900">
-									{templates.length}
-								</p>
+								<p className="text-2xl font-bold text-gray-900">{totalItems}</p>
 							</div>
-							<FileText className="w-8 h-8 text-primary-600" />
+                            <div className="w-8 h-8" />
 						</div>
 					</CardContent>
 				</Card>
@@ -579,36 +516,7 @@ export default function RequirementTemplatesPage() {
 					</CardContent>
 				</Card>
 
-				<Card className="bg-secondary-50 border-blue-200">
-					<CardContent className="p-4">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="text-sm text-gray-600">Total Usage</p>
-								<p className="text-2xl font-bold text-blue-600">
-									{templates.reduce((sum, t) => sum + t.usageCount, 0)}
-								</p>
-							</div>
-							<Eye className="w-8 h-8 text-blue-600" />
-						</div>
-					</CardContent>
-				</Card>
-
-				<Card className="bg-secondary-50 border-purple-200">
-					<CardContent className="p-4">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="text-sm text-gray-600">Total Downloads</p>
-								<p className="text-2xl font-bold text-purple-600">
-									{templates.reduce(
-										(sum, t) => sum + (t.downloadCount || 0),
-										0
-									)}
-								</p>
-							</div>
-							<Download className="w-8 h-8 text-purple-600" />
-						</div>
-					</CardContent>
-				</Card>
+                {/* Usage/Downloads removed: not part of server model */}
 			</div>
 
 			{/* Templates Table */}
@@ -620,21 +528,28 @@ export default function RequirementTemplatesPage() {
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<div className="rounded-md border">
+								<div className="rounded-md border">
 						<Table>
 							<TableHeader>
-								<TableRow>
-									<TableHead>Template</TableHead>
-									<TableHead>Priority</TableHead>
-									<TableHead>File Types</TableHead>
-									<TableHead>Target</TableHead>
-									<TableHead>Usage</TableHead>
-									<TableHead>Status</TableHead>
-									<TableHead className="text-right">Actions</TableHead>
-								</TableRow>
+                                <TableRow>
+                                    <TableHead>Template</TableHead>
+                                    <TableHead>Category</TableHead>
+                                    <TableHead>Priority</TableHead>
+                                    <TableHead>File Types</TableHead>
+                                    <TableHead>Max Size</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
+                                    </TableRow>
 							</TableHeader>
 							<TableBody>
-								{templates.map((template) => (
+                                {templates.length === 0 && !isLoading && (
+                                    <TableRow>
+                                        <TableCell colSpan={7}>
+                                            <div className="text-sm text-gray-500">No templates found.</div>
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                                {templates.map((template) => (
 									<TableRow key={template.id}>
 										<TableCell>
 											<div>
@@ -644,14 +559,19 @@ export default function RequirementTemplatesPage() {
 												<div className="text-sm text-gray-600">
 													{template.description}
 												</div>
-												{template.templateFile && (
-													<div className="flex items-center gap-1 mt-1">
-														<FileText className="w-3 h-3 text-blue-600" />
-														<span className="text-xs text-blue-600">
-															{template.templateFile.name}
-														</span>
-													</div>
-												)}
+									{"templateFileUrl" in template && (template as any).templateFileUrl && (
+										<div className="flex items-center gap-1 mt-1">
+											<FileText className="w-3 h-3 text-blue-600" />
+											<a
+												className="text-xs text-blue-600 hover:underline"
+												href={(template as any).templateFileUrl as string}
+												target="_blank"
+												rel="noreferrer"
+											>
+												{(template as any).templateFileName || "Download template"}
+											</a>
+										</div>
+									)}
 												{template.isRequired && (
 													<Badge
 														variant="secondary"
@@ -662,52 +582,56 @@ export default function RequirementTemplatesPage() {
 												)}
 											</div>
 										</TableCell>
-										<TableCell>
-											<Badge
-												variant="secondary"
-												className={getPriorityColor(template.priority)}
-											>
-												{template.priority}
-											</Badge>
-										</TableCell>
-										<TableCell>
-											<div className="flex flex-wrap gap-1">
-												{template.fileTypes.map((type) => (
-													<Badge
-														key={type}
-														variant="outline"
-														className="text-xs"
-													>
-														{type}
-													</Badge>
-												))}
-											</div>
-											<div className="text-xs text-gray-500 mt-1">
-												Max: {template.maxFileSize}
-											</div>
-										</TableCell>
-										<TableCell>
-											<div className="text-sm">
-												<div>Courses: {template.courses.join(", ")}</div>
-												<div>Sections: {template.sections.join(", ")}</div>
-											</div>
-										</TableCell>
-										<TableCell>
-											<div className="text-sm font-medium">
-												{template.usageCount} students
-											</div>
-										</TableCell>
+                                        <TableCell>
+                                            <Badge variant="outline" className="text-xs capitalize">
+                                                {template.category}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge
+                                                variant="secondary"
+                                                className={getPriorityColor(template.priority)}
+                                            >
+                                                {template.priority}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-wrap gap-1">
+                                        {(
+                                            (Array.isArray(template.allowedFileTypes)
+                                                ? template.allowedFileTypes
+                                                : typeof template.allowedFileTypes === "string"
+                                                ? template.allowedFileTypes.split(",").filter(Boolean)
+                                                : []) as string[]
+                                        )
+                                            .filter((t: string) => t.toUpperCase() === "DOCX")
+                                            .map((type: string) => (
+                                                    <Badge
+                                                        key={type}
+                                                        variant="outline"
+                                                        className="text-xs"
+                                                    >
+                                                        {type}
+                                                    </Badge>
+                                            ))}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="text-xs text-gray-700">
+                                                {template.maxFileSize ?? 0} MB
+                                            </div>
+                                        </TableCell>
 										<TableCell>
 											<div className="flex items-center gap-2">
-												<Switch
-													checked={template.isActive}
-													onCheckedChange={() =>
-														handleToggleActive(template.id)
-													}
-												/>
-												<span className="text-sm">
-													{template.isActive ? "Active" : "Inactive"}
-												</span>
+										<Switch
+											checked={template.isActive}
+											onCheckedChange={() =>
+												handleToggleActive(template)
+											}
+										/>
+                                                <span className="text-sm">
+                                                    {template.isActive ? "Active" : "Inactive"}
+                                                </span>
 											</div>
 										</TableCell>
 										<TableCell className="text-right">
@@ -728,18 +652,8 @@ export default function RequirementTemplatesPage() {
 														<Edit className="mr-2 h-4 w-4" />
 														Edit Template
 													</DropdownMenuItem>
-													<DropdownMenuItem>
-														<Copy className="mr-2 h-4 w-4" />
-														Duplicate Template
-													</DropdownMenuItem>
-													<DropdownMenuItem>
-														<Eye className="mr-2 h-4 w-4" />
-														View Usage
-													</DropdownMenuItem>
-													<DropdownMenuItem>
-														<Download className="mr-2 h-4 w-4" />
-														Download Template
-													</DropdownMenuItem>
+ 
+                                                    
 													<DropdownMenuSeparator />
 													<DropdownMenuItem
 														className="text-red-600"
@@ -755,7 +669,38 @@ export default function RequirementTemplatesPage() {
 								))}
 							</TableBody>
 						</Table>
-					</div>
+						</div>
+
+						{/* Pagination Controls - counts + buttons aligned to end */}
+						<div className="flex items-center justify-between mt-4 px-2">
+							<span className="text-sm text-gray-600">
+								{startIndex}-{endIndex} of {totalItems}
+							</span>
+							<Pagination>
+								<PaginationContent>
+									<PaginationItem>
+										<PaginationPrevious
+											href="#"
+											className={currentPage <= 1 ? "pointer-events-none opacity-50" : undefined}
+											onClick={(e) => {
+												e.preventDefault();
+												if (currentPage > 1) setPage(currentPage - 1);
+											}}
+										/>
+									</PaginationItem>
+									<PaginationItem>
+										<PaginationNext
+											href="#"
+											className={currentPage >= totalPages ? "pointer-events-none opacity-50" : undefined}
+											onClick={(e) => {
+												e.preventDefault();
+												if (currentPage < totalPages) setPage(currentPage + 1);
+											}}
+										/>
+									</PaginationItem>
+								</PaginationContent>
+							</Pagination>
+						</div>
 				</CardContent>
 			</Card>
 
@@ -785,13 +730,13 @@ export default function RequirementTemplatesPage() {
 									/>
 								</div>
 								<div className="space-y-2">
-									<Label htmlFor="edit-priority">Priority</Label>
+									<Label htmlFor="edit-category">Category</Label>
 									<Select
-										value={selectedTemplate.priority}
+										value={selectedTemplate.category as any}
 										onValueChange={(value) =>
 											setSelectedTemplate({
 												...selectedTemplate,
-												priority: value,
+												category: value as any,
 											})
 										}
 									>
@@ -799,9 +744,37 @@ export default function RequirementTemplatesPage() {
 											<SelectValue />
 										</SelectTrigger>
 										<SelectContent>
-											<SelectItem value="High">High</SelectItem>
-											<SelectItem value="Medium">Medium</SelectItem>
-											<SelectItem value="Low">Low</SelectItem>
+											<SelectItem value="health">Health</SelectItem>
+											<SelectItem value="reports">Reports</SelectItem>
+											<SelectItem value="training">Training</SelectItem>
+											<SelectItem value="academic">Academic</SelectItem>
+											<SelectItem value="evaluation">Evaluation</SelectItem>
+											<SelectItem value="legal">Legal</SelectItem>
+										</SelectContent>
+									</Select>
+								</div>
+							</div>
+
+							<div className="grid grid-cols-2 gap-4">
+								<div className="space-y-2">
+									<Label htmlFor="edit-priority">Priority</Label>
+									<Select
+										value={selectedTemplate.priority as any}
+										onValueChange={(value) =>
+											setSelectedTemplate({
+												...selectedTemplate,
+												priority: value as any,
+											})
+										}
+									>
+										<SelectTrigger>
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="urgent">Urgent</SelectItem>
+											<SelectItem value="high">High</SelectItem>
+											<SelectItem value="medium">Medium</SelectItem>
+											<SelectItem value="low">Low</SelectItem>
 										</SelectContent>
 									</Select>
 								</div>
@@ -823,9 +796,9 @@ export default function RequirementTemplatesPage() {
 
 							<div className="space-y-2">
 								<Label htmlFor="edit-instructions">Instructions</Label>
-								<Textarea
+                                <Textarea
 									id="edit-instructions"
-									value={selectedTemplate.instructions}
+                                    value={selectedTemplate.instructions ?? ""}
 									onChange={(e) =>
 										setSelectedTemplate({
 											...selectedTemplate,
@@ -834,6 +807,33 @@ export default function RequirementTemplatesPage() {
 									}
 									rows={4}
 								/>
+							</div>
+
+							<div className="space-y-2">
+								<Label htmlFor="edit-templateFile">Template File (optional)</Label>
+								<input
+									type="file"
+									id="edit-templateFile"
+									accept=".docx"
+									onChange={(e) => setEditTemplateFile(e.target.files?.[0] || null)}
+								/>
+									{(editTemplateFile || ("templateFileUrl" in selectedTemplate && (selectedTemplate as any).templateFileUrl)) && (
+									<div className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+										<FileText className="w-4 h-4 text-blue-600" />
+										{editTemplateFile ? (
+											<span className="text-sm">{editTemplateFile.name}</span>
+										) : (
+											<a
+												className="text-sm text-blue-600 hover:underline"
+													href={(selectedTemplate as any).templateFileUrl || "#"}
+												target="_blank"
+												rel="noreferrer"
+											>
+													{(selectedTemplate as any).templateFileName || "Download template"}
+											</a>
+										)}
+									</div>
+								)}
 							</div>
 
 							<div className="flex items-center space-x-2">

@@ -22,86 +22,19 @@ import {
   CheckCircle,
   XCircle,
   Eye,
+  RefreshCw,
+  Trash2,
 } from "lucide-react"
-
-// Mock audit data
-const auditLogs = [
-  {
-    id: "1",
-    timestamp: "2024-01-15T10:30:00Z",
-    user: "Prof. Juan Dela Cruz",
-    userId: "instructor_001",
-    action: "Student Grade Updated",
-    resource: "Student Record",
-    resourceId: "student_123",
-    details: "Updated final grade for Maria Santos from B+ to A-",
-    ipAddress: "192.168.1.100",
-    userAgent: "Chrome 120.0.0.0",
-    severity: "medium",
-    category: "academic",
-    status: "success",
-  },
-  {
-    id: "2",
-    timestamp: "2024-01-15T09:45:00Z",
-    user: "Maria Santos",
-    userId: "student_123",
-    action: "Report Submitted",
-    resource: "Weekly Report",
-    resourceId: "report_456",
-    details: "Submitted Week 3 practicum report",
-    ipAddress: "192.168.1.105",
-    userAgent: "Firefox 121.0.0.0",
-    severity: "low",
-    category: "submission",
-    status: "success",
-  },
-  {
-    id: "3",
-    timestamp: "2024-01-15T09:15:00Z",
-    user: "System",
-    userId: "system",
-    action: "Failed Login Attempt",
-    resource: "Authentication",
-    resourceId: "auth_789",
-    details: "Multiple failed login attempts for user: john.doe@student.edu",
-    ipAddress: "203.0.113.45",
-    userAgent: "Chrome 119.0.0.0",
-    severity: "high",
-    category: "security",
-    status: "failed",
-  },
-  {
-    id: "4",
-    timestamp: "2024-01-15T08:30:00Z",
-    user: "Prof. Juan Dela Cruz",
-    userId: "instructor_001",
-    action: "Attendance Marked",
-    resource: "Attendance Record",
-    resourceId: "attendance_101",
-    details: "Marked attendance for 15 students in Section A",
-    ipAddress: "192.168.1.100",
-    userAgent: "Chrome 120.0.0.0",
-    severity: "low",
-    category: "attendance",
-    status: "success",
-  },
-  {
-    id: "5",
-    timestamp: "2024-01-15T08:00:00Z",
-    user: "Admin User",
-    userId: "admin_001",
-    action: "User Account Created",
-    resource: "User Management",
-    resourceId: "user_new_001",
-    details: "Created new student account for Pedro Reyes",
-    ipAddress: "192.168.1.50",
-    userAgent: "Chrome 120.0.0.0",
-    severity: "medium",
-    category: "user_management",
-    status: "success",
-  },
-]
+import {
+  useAuditLogs,
+  useAuditStats,
+  useAuditFilters,
+  useAuditPagination,
+  useAuditRealtime,
+  useExportAuditLogs,
+  useDeleteOldAuditLogs,
+  AuditFilters,
+} from "@/hooks/audit"
 
 const getSeverityColor = (severity: string) => {
   switch (severity) {
@@ -147,23 +80,55 @@ const getStatusIcon = (status: string) => {
 }
 
 export default function AuditTrailPage() {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState("all")
-  const [selectedSeverity, setSelectedSeverity] = useState("all")
-  const [selectedUser, setSelectedUser] = useState("all")
-
-  const filteredLogs = auditLogs.filter((log) => {
-    const matchesSearch =
-      log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.user.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.details.toLowerCase().includes(searchTerm.toLowerCase())
-
-    const matchesCategory = selectedCategory === "all" || log.category === selectedCategory
-    const matchesSeverity = selectedSeverity === "all" || log.severity === selectedSeverity
-    const matchesUser = selectedUser === "all" || log.userId === selectedUser
-
-    return matchesSearch && matchesCategory && matchesSeverity && matchesUser
+  const [filters, setFilters] = useState<AuditFilters>({
+    search: "",
+    category: "all",
+    severity: "all",
+    status: "all",
+    userId: "all",
+    page: 1,
+    limit: 10,
   })
+
+  // Hooks
+  const { data: auditData, isLoading } = useAuditLogs(filters)
+  const { data: stats, isLoading: statsLoading } = useAuditStats()
+  const { categories, severities, statuses, users } = useAuditFilters()
+  const { isEnabled: realtimeEnabled, enableRealtime, disableRealtime } = useAuditRealtime(filters)
+  const exportMutation = useExportAuditLogs()
+  const deleteOldMutation = useDeleteOldAuditLogs()
+
+  // Pagination
+  const {
+    currentPage,
+    pageSize,
+    totalPages,
+    totalItems,
+    goToPage,
+    nextPage,
+    prevPage,
+    changePageSize,
+    hasNextPage,
+    hasPrevPage,
+  } = useAuditPagination(filters)
+
+  const handleFilterChange = (key: keyof AuditFilters, value: string | number) => {
+    setFilters(prev => ({
+      ...prev,
+      [key]: value,
+      page: 1, // Reset to first page when filters change
+    }))
+  }
+
+  const handleExport = () => {
+    exportMutation.mutate(filters)
+  }
+
+  const handleDeleteOld = () => {
+    if (confirm("Are you sure you want to delete audit logs older than 90 days? This action cannot be undone.")) {
+      deleteOldMutation.mutate(90)
+    }
+  }
 
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleString("en-US", {
@@ -176,6 +141,14 @@ export default function AuditTrailPage() {
     })
   }
 
+  if (isLoading || statsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <RefreshCw className="w-8 h-8 animate-spin" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -185,59 +158,82 @@ export default function AuditTrailPage() {
           <p className="text-gray-600 mt-1">Track all system activities and changes for security and compliance</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => realtimeEnabled ? disableRealtime() : enableRealtime()}
+          >
+            {realtimeEnabled ? (
+              <>
+                <Activity className="w-4 h-4 mr-2" />
+                Real-time ON
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Enable Real-time
+              </>
+            )}
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExport} disabled={exportMutation.isPending}>
             <Download className="w-4 h-4 mr-2" />
             Export Logs
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleDeleteOld} disabled={deleteOldMutation.isPending}>
+            <Trash2 className="w-4 h-4 mr-2" />
+            Cleanup
           </Button>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Activities</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">1,247</div>
-            <p className="text-xs text-muted-foreground">+12% from last month</p>
-          </CardContent>
-        </Card>
+      {stats && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Activities</CardTitle>
+              <Activity className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalActivities.toLocaleString()}</div>
+              <p className="text-xs text-muted-foreground">All time activities</p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Security Events</CardTitle>
-            <Shield className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">23</div>
-            <p className="text-xs text-muted-foreground">-5% from last month</p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Security Events</CardTitle>
+              <Shield className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.securityEvents.toLocaleString()}</div>
+              <p className="text-xs text-muted-foreground">Security-related activities</p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Failed Actions</CardTitle>
-            <XCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">8</div>
-            <p className="text-xs text-muted-foreground">-2 from yesterday</p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Failed Actions</CardTitle>
+              <XCircle className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.failedActions.toLocaleString()}</div>
+              <p className="text-xs text-muted-foreground">Failed operations</p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Users</CardTitle>
-            <User className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">156</div>
-            <p className="text-xs text-muted-foreground">+8 new this week</p>
-          </CardContent>
-        </Card>
-      </div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Active Users</CardTitle>
+              <User className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.activeUsers.toLocaleString()}</div>
+              <p className="text-xs text-muted-foreground">Last 30 days</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Filters */}
       <Card>
@@ -256,8 +252,8 @@ export default function AuditTrailPage() {
                 <Input
                   id="search"
                   placeholder="Search activities..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  value={filters.search || ""}
+                  onChange={(e) => handleFilterChange("search", e.target.value)}
                   className="pl-10"
                 />
               </div>
@@ -265,58 +261,65 @@ export default function AuditTrailPage() {
 
             <div className="space-y-2">
               <Label>Category</Label>
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <Select value={filters.category || "all"} onValueChange={(value) => handleFilterChange("category", value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  <SelectItem value="security">Security</SelectItem>
-                  <SelectItem value="academic">Academic</SelectItem>
-                  <SelectItem value="submission">Submissions</SelectItem>
-                  <SelectItem value="attendance">Attendance</SelectItem>
-                  <SelectItem value="user_management">User Management</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category.value} value={category.value}>
+                      {category.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
               <Label>Severity</Label>
-              <Select value={selectedSeverity} onValueChange={setSelectedSeverity}>
+              <Select value={filters.severity || "all"} onValueChange={(value) => handleFilterChange("severity", value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="All Severities" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Severities</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
+                  {severities.map((severity) => (
+                    <SelectItem key={severity.value} value={severity.value}>
+                      {severity.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
               <Label>User</Label>
-              <Select value={selectedUser} onValueChange={setSelectedUser}>
+              <Select value={filters.userId || "all"} onValueChange={(value) => handleFilterChange("userId", value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="All Users" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Users</SelectItem>
-                  <SelectItem value="instructor_001">Prof. Juan Dela Cruz</SelectItem>
-                  <SelectItem value="student_123">Maria Santos</SelectItem>
-                  <SelectItem value="admin_001">Admin User</SelectItem>
-                  <SelectItem value="system">System</SelectItem>
+                  {users.map((user) => (
+                    <SelectItem key={user.value} value={user.value}>
+                      {user.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
-              <Label>Date Range</Label>
-              <Button variant="outline" className="w-full justify-start">
-                <Calendar className="w-4 h-4 mr-2" />
-                Last 7 days
-              </Button>
+              <Label>Page Size</Label>
+              <Select value={pageSize.toString()} onValueChange={(value) => changePageSize(Number(value))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10 per page</SelectItem>
+                  <SelectItem value="25">25 per page</SelectItem>
+                  <SelectItem value="50">50 per page</SelectItem>
+                  <SelectItem value="100">100 per page</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>
@@ -330,7 +333,8 @@ export default function AuditTrailPage() {
             Audit Logs
           </CardTitle>
           <CardDescription>
-            Showing {filteredLogs.length} of {auditLogs.length} activities
+            Showing {auditData?.auditLogs.length || 0} of {totalItems} activities
+            {realtimeEnabled && <span className="text-green-600 ml-2">• Real-time enabled</span>}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -356,13 +360,15 @@ export default function AuditTrailPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredLogs.map((log) => (
+                    {auditData?.auditLogs.map((log) => (
                       <TableRow key={log.id}>
-                        <TableCell className="font-mono text-sm">{formatTimestamp(log.timestamp)}</TableCell>
+                        <TableCell className="font-mono text-sm">{formatTimestamp(log.createdAt)}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <User className="w-4 h-4 text-gray-400" />
-                            <span className="font-medium">{log.user}</span>
+                            <span className="font-medium">
+                              {log.user ? `${log.user.firstName} ${log.user.lastName}` : "System"}
+                            </span>
                           </div>
                         </TableCell>
                         <TableCell className="font-medium">{log.action}</TableCell>
@@ -395,17 +401,57 @@ export default function AuditTrailPage() {
                   </TableBody>
                 </Table>
               </div>
+
+              {/* Pagination */}
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-500">
+                  Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalItems)} of {totalItems} results
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={prevPage}
+                    disabled={!hasPrevPage}
+                  >
+                    Previous
+                  </Button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      const page = i + 1;
+                      return (
+                        <Button
+                          key={page}
+                          variant={currentPage === page ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => goToPage(page)}
+                        >
+                          {page}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={nextPage}
+                    disabled={!hasNextPage}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
             </TabsContent>
 
             <TabsContent value="timeline" className="space-y-4">
               <div className="space-y-4">
-                {filteredLogs.map((log, index) => (
+                {auditData?.auditLogs.map((log, index) => (
                   <div key={log.id} className="flex gap-4">
                     <div className="flex flex-col items-center">
                       <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center">
                         {getStatusIcon(log.status)}
                       </div>
-                      {index < filteredLogs.length - 1 && <div className="w-px h-16 bg-gray-200 mt-2" />}
+                      {index < (auditData?.auditLogs.length || 0) - 1 && <div className="w-px h-16 bg-gray-200 mt-2" />}
                     </div>
                     <div className="flex-1 pb-8">
                       <div className="flex items-start justify-between">
@@ -421,9 +467,9 @@ export default function AuditTrailPage() {
                           </div>
                           <p className="text-sm text-gray-600">{log.details}</p>
                           <div className="flex items-center gap-4 text-xs text-gray-500">
-                            <span>By {log.user}</span>
+                            <span>By {log.user ? `${log.user.firstName} ${log.user.lastName}` : "System"}</span>
                             <span>•</span>
-                            <span>{formatTimestamp(log.timestamp)}</span>
+                            <span>{formatTimestamp(log.createdAt)}</span>
                             <span>•</span>
                             <span>IP: {log.ipAddress}</span>
                           </div>

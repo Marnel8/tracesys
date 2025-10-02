@@ -104,13 +104,12 @@ const getStudentAttendance = async (studentId: string, params?: {
 }) => {
 	try {
 		const queryParams = new URLSearchParams();
-		queryParams.append("studentId", studentId);
 		if (params?.page) queryParams.append("page", params.page.toString());
 		if (params?.limit) queryParams.append("limit", params.limit.toString());
 		if (params?.startDate) queryParams.append("startDate", params.startDate);
 		if (params?.endDate) queryParams.append("endDate", params.endDate);
 
-		const res = await api.get(`/attendance/student?${queryParams.toString()}`);
+		const res = await api.get(`/attendance/student/${studentId}?${queryParams.toString()}`);
 		return res.data;
 	} catch (error: any) {
 		if (error.response) {

@@ -64,7 +64,7 @@ const getStudentRequirements = async (studentId: string, params?: {
 		if (params?.category) queryParams.append("category", params.category);
 		if (params?.priority) queryParams.append("priority", params.priority);
 
-		const res = await api.get(`/requirements/student?${queryParams.toString()}`);
+		const res = await api.get(`/requirements?${queryParams.toString()}`);
 		return res.data;
 	} catch (error: any) {
 		if (error.response) {

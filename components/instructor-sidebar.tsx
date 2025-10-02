@@ -97,14 +97,14 @@ export function InstructorSidebar() {
 					url: "/dashboard/instructor/attendance",
 					// badge: badges.pendingAttendance.toString(),
 				},
-				{
-					title: "Attendance History",
-					url: "/dashboard/instructor/attendance/history",
-				},
-				{
-					title: "Reports",
-					url: "/dashboard/instructor/attendance/reports",
-				},
+				// {
+				// 	title: "Attendance History",
+				// 	url: "/dashboard/instructor/attendance/history",
+				// },
+				// {
+				// 	title: "Reports",
+				// 	url: "/dashboard/instructor/attendance/reports",
+				// },
 			],
 		},
 		{
@@ -112,14 +112,14 @@ export function InstructorSidebar() {
 			icon: FileText,
 			items: [
 				{
-					title: "Pending Review",
+					title: "Submissions",
 					url: "/dashboard/instructor/requirements",
 					// badge: badges.pendingRequirements.toString(),
 				},
-				{
-					title: "All Submissions",
-					url: "/dashboard/instructor/requirements/all",
-				},
+				// {
+				// 	title: "All Submissions",
+				// 	url: "/dashboard/instructor/requirements/all",
+				// },
 				{
 					title: "Manage Templates",
 					url: "/dashboard/instructor/requirements/templates",
@@ -139,10 +139,10 @@ export function InstructorSidebar() {
 					title: "Narrative Reports",
 					url: "/dashboard/instructor/reports/narrative",
 				},
-				{
-					title: "Report Templates",
-					url: "/dashboard/instructor/reports/templates",
-				},
+				// {
+				// 	title: "Report Templates",
+				// 	url: "/dashboard/instructor/reports/templates",
+				// },
 			],
 		},
 		{

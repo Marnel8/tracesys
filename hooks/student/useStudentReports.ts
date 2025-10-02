@@ -214,8 +214,10 @@ const getStudentReports = async (studentId: string, params?: {
 		if (params?.type) queryParams.append("type", params.type);
 		if (params?.status) queryParams.append("status", params.status);
 
-		const res = await api.get(`/reports/student?${queryParams.toString()}`);
-		return res.data;
+		// Use the unified reports listing endpoint, filtered by studentId
+		const res = await api.get(`/reports?${queryParams.toString()}`);
+		// Normalize to return the data payload consistent with other report list hooks
+		return res.data?.data ?? res.data;
 	} catch (error: any) {
 		if (error.response) {
 			throw new Error(error.response.data.message || "Failed to fetch reports");

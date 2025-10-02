@@ -18,7 +18,7 @@ import { ArrowLeft, Eye, EyeOff, GraduationCap } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useLogin } from "@/hooks/auth/useAuth";
+import { useLogin, useLogout } from "@/hooks/auth/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
 const studentLoginSchema = z.object({
@@ -32,7 +32,8 @@ export default function StudentLoginPage() {
 	const router = useRouter();
 	const [showPassword, setShowPassword] = useState(false);
 	const { toast } = useToast();
-	const loginMutation = useLogin();
+    const loginMutation = useLogin();
+    const logoutMutation = useLogout();
 
 	const {
 		register,
@@ -42,22 +43,34 @@ export default function StudentLoginPage() {
 		resolver: zodResolver(studentLoginSchema),
 	});
 
-	const onSubmit = async (data: StudentLoginForm) => {
-		try {
-			await loginMutation.mutateAsync(data);
-			toast({
-				title: "Login Successful",
-				description: "Welcome back! Redirecting to your dashboard...",
-			});
-			router.push("/dashboard/student");
-		} catch (error: any) {
-			toast({
-				title: "Login Failed",
-				description: error.message || "An error occurred during login. Please try again.",
-				variant: "destructive",
-			});
-		}
-	};
+    const onSubmit = async (data: StudentLoginForm) => {
+        try {
+            const res: any = await loginMutation.mutateAsync(data);
+            const userRole = res?.user?.role;
+            if (userRole !== "student") {
+                toast({
+                    title: "Wrong portal",
+                    description: "This login is for students only. Please use the correct portal.",
+                    variant: "destructive",
+                });
+                try {
+                    await logoutMutation.mutateAsync();
+                } catch {}
+                return;
+            }
+            toast({
+                title: "Login Successful",
+                description: "Welcome back! Redirecting to your dashboard...",
+            });
+            router.push("/dashboard/student");
+        } catch (error: any) {
+            toast({
+                title: "Login Failed",
+                description: error.message || "An error occurred during login. Please try again.",
+                variant: "destructive",
+            });
+        }
+    };
 
 	return (
 		<div

@@ -57,6 +57,8 @@ export interface Agency {
 	contactEmail: string;
 	branchType: string;
 	isActive: boolean;
+	latitude?: number | null;
+	longitude?: number | null;
 }
 
 export interface Supervisor {

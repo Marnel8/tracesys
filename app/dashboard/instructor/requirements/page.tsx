@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -39,107 +39,176 @@ import {
   Calendar,
   User,
   Clock,
+  FileImage,
+  File,
 } from "lucide-react"
+import { useApproveRequirement, useRejectRequirement, useRequirements } from "@/hooks/requirement"
+import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
 
-// Mock data for requirements
-const requirements = [
-  {
-    id: 1,
-    title: "Medical Certificate",
-    studentId: "2021-00001",
-    studentName: "Juan Dela Cruz",
-    studentAvatar: "/placeholder.svg?height=32&width=32",
-    submittedAt: "2024-01-15T10:30:00Z",
-    status: "Pending",
-    fileUrl: "/documents/medical-cert-001.pdf",
-    fileName: "medical_certificate.pdf",
-    fileSize: "2.3 MB",
-    comments: [],
-    priority: "High",
-  },
-  {
-    id: 2,
-    title: "Company MOA",
-    studentId: "2021-00002",
-    studentName: "Maria Santos",
-    studentAvatar: "/placeholder.svg?height=32&width=32",
-    submittedAt: "2024-01-14T14:20:00Z",
-    status: "Approved",
-    fileUrl: "/documents/moa-002.pdf",
-    fileName: "company_moa.pdf",
-    fileSize: "1.8 MB",
-    comments: [
-      {
-        id: 1,
-        text: "Document looks good. Approved.",
-        createdAt: "2024-01-14T15:00:00Z",
-        author: "Prof. Dela Cruz",
-      },
-    ],
-    priority: "Medium",
-  },
-  {
-    id: 3,
-    title: "Insurance Certificate",
-    studentId: "2021-00003",
-    studentName: "Pedro Rodriguez",
-    studentAvatar: "/placeholder.svg?height=32&width=32",
-    submittedAt: "2024-01-13T09:15:00Z",
-    status: "Returned",
-    fileUrl: "/documents/insurance-003.pdf",
-    fileName: "insurance_cert.pdf",
-    fileSize: "1.2 MB",
-    comments: [
-      {
-        id: 1,
-        text: "Please resubmit with updated expiration date.",
-        createdAt: "2024-01-13T11:00:00Z",
-        author: "Prof. Dela Cruz",
-      },
-    ],
-    priority: "High",
-  },
-  {
-    id: 4,
-    title: "Practicum Agreement",
-    studentId: "2021-00004",
-    studentName: "Ana Garcia",
-    studentAvatar: "/placeholder.svg?height=32&width=32",
-    submittedAt: "2024-01-12T16:45:00Z",
-    status: "Pending",
-    fileUrl: "/documents/agreement-004.pdf",
-    fileName: "practicum_agreement.pdf",
-    fileSize: "3.1 MB",
-    comments: [],
-    priority: "Medium",
-  },
-]
+const humanizeBytes = (bytes?: number | null) => {
+  if (!bytes && bytes !== 0) return "-"
+  const mb = bytes / (1024 * 1024)
+  return `${mb.toFixed(1)} MB`
+}
 
 export default function RequirementsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedStatus, setSelectedStatus] = useState("all")
-  const [selectedRequirement, setSelectedRequirement] = useState(null)
+  const [selectedRequirement, setSelectedRequirement] = useState<any>(null)
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false)
   const [reviewComment, setReviewComment] = useState("")
+  const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false)
+  const [previewFile, setPreviewFile] = useState<any>(null)
+  const [page, setPage] = useState(1)
+  const [limit] = useState(10)
+  const [debouncedSearch, setDebouncedSearch] = useState("")
 
-  const filteredRequirements = requirements.filter((req) => {
-    const matchesSearch =
-      req.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      req.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      req.studentId.includes(searchTerm)
-    const matchesStatus = selectedStatus === "all" || req.status.toLowerCase() === selectedStatus
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(searchTerm), 300)
+    return () => clearTimeout(id)
+  }, [searchTerm])
 
-    return matchesSearch && matchesStatus
-  })
+  useEffect(() => {
+    setPage(1)
+  }, [selectedStatus, debouncedSearch])
 
-  const handleApprove = (id: number) => {
-    console.log("Approve requirement:", id)
+  const { data } = useRequirements({ page, limit, status: selectedStatus as any, search: debouncedSearch || undefined })
+  // Stats: fetch counts by status using minimal payload (limit=1)
+  const { data: allStats } = useRequirements({ page: 1, limit: 1, status: "all" as any })
+  const { data: submittedStats } = useRequirements({ page: 1, limit: 1, status: "submitted" as any })
+  const { data: approvedStats } = useRequirements({ page: 1, limit: 1, status: "approved" as any })
+  const { data: rejectedStats } = useRequirements({ page: 1, limit: 1, status: "rejected" as any })
+  const items = data?.requirements ?? []
+  const pagination = data?.pagination
+  const currentPage = pagination?.currentPage ?? page
+  const totalPages = pagination?.totalPages ?? 1
+  const itemsPerPage = pagination?.itemsPerPage ?? limit
+  const totalItems = pagination?.totalItems ?? items.length
+  const startIndex = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1
+  const endIndex = totalItems === 0 ? 0 : startIndex + items.length - 1
+
+  const filteredRequirements = useMemo(() => {
+    return items.filter((r) => {
+      const studentName = `${r.student?.firstName ?? ""} ${r.student?.lastName ?? ""}`.trim()
+      const studentId = r.student?.id ?? ""
+      const matchesSearch =
+        r.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        studentId.includes(searchTerm)
+      const matchesStatus = selectedStatus === "all" || r.status.toLowerCase() === selectedStatus
+      return matchesSearch && matchesStatus
+    })
+  }, [items, searchTerm, selectedStatus])
+
+  const approve = useApproveRequirement()
+  const reject = useRejectRequirement()
+
+  const handleApprove = (id: string) => {
+    approve.mutate({ id })
   }
 
-  const handleReturn = (id: number, comment: string) => {
-    console.log("Return requirement:", id, "Comment:", comment)
+  const handleReturn = (id: string, comment: string) => {
+    reject.mutate({ id, reason: comment })
     setIsReviewDialogOpen(false)
     setReviewComment("")
+  }
+
+  const handlePreview = (requirement: any) => {
+    setPreviewFile(requirement)
+    setIsPreviewDialogOpen(true)
+  }
+
+  const getFileIcon = (fileName: string) => {
+    const extension = fileName.split('.').pop()?.toLowerCase()
+    switch (extension) {
+      case 'pdf':
+        return <FileText className="w-4 h-4" />
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'webp':
+        return <FileImage className="w-4 h-4" />
+      default:
+        return <File className="w-4 h-4" />
+    }
+  }
+
+  const canPreview = (fileName: string) => {
+    const extension = fileName.split('.').pop()?.toLowerCase()
+    const previewableTypes = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'txt', 'doc', 'docx']
+    return previewableTypes.includes(extension || '')
+  }
+
+  const renderFilePreview = () => {
+    if (!previewFile) return null
+
+    const extension = previewFile.fileName.split('.').pop()?.toLowerCase()
+
+    const resolveFileUrl = (url?: string) => {
+      if (!url) return ""
+      if (url.startsWith("http://") || url.startsWith("https://")) return url
+      const base = process.env.NEXT_PUBLIC_API_URL || ""
+      // Ensure exactly one slash between base and path
+      if (url.startsWith("/")) return `${base}${url}`
+      return `${base}/${url}`
+    }
+
+    const fileUrl = resolveFileUrl(previewFile.fileUrl)
+
+    switch (extension) {
+      case 'pdf':
+        return (
+          <iframe
+            src={fileUrl}
+            className="w-full h-96 border rounded"
+            title={`Preview of ${previewFile.fileName}`}
+          />
+        )
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'webp':
+        return (
+          <div className="flex justify-center">
+            <img
+              src={fileUrl}
+              alt={`Preview of ${previewFile.fileName}`}
+              className="max-w-full max-h-96 object-contain rounded"
+            />
+          </div>
+        )
+      case 'doc':
+      case 'docx': {
+        const encoded = encodeURIComponent(fileUrl)
+        const officeViewer = `https://view.officeapps.live.com/op/embed.aspx?src=${encoded}`
+        return (
+          <iframe
+            src={officeViewer}
+            className="w-full h-96 border rounded"
+            title={`Preview of ${previewFile.fileName}`}
+          />
+        )
+      }
+      case 'txt':
+        return (
+          <div className="w-full h-96 border rounded p-4 overflow-auto bg-gray-50">
+            <pre className="whitespace-pre-wrap text-sm">
+              {/* This would need to fetch the text content */}
+              Loading text content...
+            </pre>
+          </div>
+        )
+      default:
+        return (
+          <div className="flex flex-col items-center justify-center h-96 text-gray-500">
+            <File className="w-16 h-16 mb-4" />
+            <p>Preview not available for this file type</p>
+            <p className="text-sm">Please download to view the file</p>
+          </div>
+        )
+    }
   }
 
   const formatDate = (dateString: string) => {
@@ -158,8 +227,10 @@ export default function RequirementsPage() {
         return "bg-green-100 text-green-800"
       case "pending":
         return "bg-yellow-100 text-yellow-800"
-      case "returned":
+      case "rejected":
         return "bg-red-100 text-red-800"
+      case "submitted":
+        return "bg-blue-100 text-blue-800"
       default:
         return "bg-gray-100 text-gray-800"
     }
@@ -193,7 +264,7 @@ export default function RequirementsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Pending Review</p>
-                <p className="text-2xl font-bold text-yellow-600">8</p>
+                <p className="text-2xl font-bold text-yellow-600">{submittedStats?.pagination.totalItems ?? 0}</p>
               </div>
               <Clock className="w-8 h-8 text-yellow-600" />
             </div>
@@ -205,7 +276,7 @@ export default function RequirementsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Approved</p>
-                <p className="text-2xl font-bold text-green-600">45</p>
+                <p className="text-2xl font-bold text-green-600">{approvedStats?.pagination.totalItems ?? 0}</p>
               </div>
               <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
@@ -217,7 +288,7 @@ export default function RequirementsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Returned</p>
-                <p className="text-2xl font-bold text-red-600">7</p>
+                <p className="text-2xl font-bold text-red-600">{rejectedStats?.pagination.totalItems ?? 0}</p>
               </div>
               <XCircle className="w-8 h-8 text-red-600" />
             </div>
@@ -229,7 +300,7 @@ export default function RequirementsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Total Submissions</p>
-                <p className="text-2xl font-bold text-blue-600">60</p>
+                <p className="text-2xl font-bold text-blue-600">{allStats?.pagination.totalItems ?? 0}</p>
               </div>
               <FileText className="w-8 h-8 text-blue-600" />
             </div>
@@ -286,18 +357,10 @@ export default function RequirementsPage() {
                   <TableRow key={req.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <Avatar className="w-8 h-8">
-                          <AvatarImage src={req.studentAvatar || "/placeholder.svg"} alt={req.studentName} />
-                          <AvatarFallback>
-                            {req.studentName
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
-                          </AvatarFallback>
-                        </Avatar>
+                        
                         <div>
-                          <div className="font-medium text-gray-900">{req.studentName}</div>
-                          <div className="text-sm text-gray-600">{req.studentId}</div>
+                          <div className="font-medium text-gray-900">{`${req.student?.firstName ?? ""} ${req.student?.lastName ?? ""}`.trim()}</div>
+                          <div className="text-sm text-gray-600">{req.student?.email ?? req.student?.id}</div>
                         </div>
                       </div>
                     </TableCell>
@@ -305,15 +368,15 @@ export default function RequirementsPage() {
                       <div className="font-medium">{req.title}</div>
                     </TableCell>
                     <TableCell>
-                      <div>
-                        <div className="text-sm font-medium">{req.fileName}</div>
-                        <div className="text-xs text-gray-500">{req.fileSize}</div>
+                      <div className="max-w-[220px]">
+                        <div className="text-sm font-medium truncate" title={req.fileName ?? undefined}>{req.fileName}</div>
+                        <div className="text-xs text-gray-500">{humanizeBytes(req.fileSize)}</div>
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1 text-sm text-gray-600">
                         <Calendar className="w-4 h-4" />
-                        {formatDate(req.submittedAt)}
+                        {formatDate(req.submittedDate || req.createdAt)}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -331,10 +394,17 @@ export default function RequirementsPage() {
                         <Button variant="outline" size="sm">
                           <Download className="w-4 h-4" />
                         </Button>
-                        <Button variant="outline" size="sm">
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        {req.status === "Pending" && (
+                        {req.fileName && canPreview(req.fileName) && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handlePreview(req)}
+                            title="Preview file"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {req.status.toLowerCase() === "submitted" && (
                           <>
                             <Button
                               size="sm"
@@ -359,7 +429,7 @@ export default function RequirementsPage() {
                                 <div className="space-y-4">
                                   <div>
                                     <Label>Requirement: {selectedRequirement?.title}</Label>
-                                    <p className="text-sm text-gray-600">Student: {selectedRequirement?.studentName}</p>
+                                    <p className="text-sm text-gray-600">Student: {`${selectedRequirement?.student?.firstName ?? ""} ${selectedRequirement?.student?.lastName ?? ""}`.trim()}</p>
                                   </div>
                                   <div>
                                     <Label htmlFor="comment">Feedback Comment</Label>
@@ -387,29 +457,7 @@ export default function RequirementsPage() {
                             </Dialog>
                           </>
                         )}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <MoreHorizontal className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem>
-                              <MessageSquare className="mr-2 h-4 w-4" />
-                              Add Comment
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <User className="mr-2 h-4 w-4" />
-                              View Student Profile
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem>
-                              <Download className="mr-2 h-4 w-4" />
-                              Download File
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                       
                       </div>
                     </TableCell>
                   </TableRow>
@@ -423,8 +471,70 @@ export default function RequirementsPage() {
               <p className="text-gray-500">No requirements found matching your criteria.</p>
             </div>
           )}
+          {/* Pagination Controls - counts + buttons aligned to end */}
+          <div className="flex items-center justify-between mt-4 px-2">
+            <span className="text-sm text-gray-600">
+              {startIndex}-{endIndex} of {totalItems}
+            </span>
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    className={currentPage <= 1 ? "pointer-events-none opacity-50" : undefined}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      if (currentPage > 1) setPage(currentPage - 1)
+                    }}
+                  />
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    className={currentPage >= totalPages ? "pointer-events-none opacity-50" : undefined}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      if (currentPage < totalPages) setPage(currentPage + 1)
+                    }}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
         </CardContent>
       </Card>
+
+      {/* File Preview Dialog */}
+      <Dialog open={isPreviewDialogOpen} onOpenChange={setIsPreviewDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {previewFile && getFileIcon(previewFile.fileName)}
+              File Preview: {previewFile?.fileName}
+            </DialogTitle>
+            <DialogDescription>
+              Student: {previewFile && `${previewFile.student?.firstName ?? ""} ${previewFile.student?.lastName ?? ""}`.trim()}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto">
+            {renderFilePreview()}
+          </div>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setIsPreviewDialogOpen(false)}>
+              Close
+            </Button>
+            <Button onClick={() => {
+              const url = (previewFile?.fileUrl || '').startsWith('http')
+                ? previewFile?.fileUrl
+                : `${process.env.NEXT_PUBLIC_API_URL || ''}${previewFile?.fileUrl?.startsWith('/') ? '' : '/'}${previewFile?.fileUrl || ''}`
+              window.open(url || undefined, '_blank')
+            }}>
+              <Download className="w-4 h-4 mr-2" />
+              Download
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

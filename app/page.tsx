@@ -6,6 +6,8 @@ import Image from "next/image"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
+import { useAnnouncements } from "@/hooks/announcement/useAnnouncement"
 import { 
   GraduationCap, 
   Users, 
@@ -19,6 +21,20 @@ import {
 
 export default function LandingPage() {
   const router = useRouter()
+  const [carouselApi, setCarouselApi] = useState<any>(null)
+
+  const { data: announcementsData } = useAnnouncements({ status: "Published", limit: 10 })
+  const announcements = announcementsData?.announcements ?? []
+
+  useEffect(() => {
+    if (!carouselApi) return
+    const interval = setInterval(() => {
+      try {
+        carouselApi.scrollNext()
+      } catch {}
+    }, 4500)
+    return () => clearInterval(interval)
+  }, [carouselApi])
 
   const handleGetStarted = () => {
     router.push("/select-role")
@@ -114,6 +130,59 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* Announcements Section */}
+      {announcements.length > 0 && (
+        <section className="py-20 bg-gradient-to-br from-primary-50 to-secondary-50">
+          <div className="max-w-6xl mx-auto px-4">
+            <div className="text-center mb-10">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-3">Latest Announcements</h2>
+              <p className="text-lg text-gray-600">Stay updated with important news and updates.</p>
+            </div>
+
+            <Carousel
+              className="w-full"
+              opts={{ loop: true, align: "start" }}
+              setApi={setCarouselApi}
+            >
+              <CarouselContent className="-ml-0">
+                {announcements.map((a) => (
+                  <CarouselItem key={a.id} className="pl-0">
+                    <Card className="border-primary-100 shadow-lg">
+                      <CardContent className="p-8 md:p-10">
+                        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+                          <div className="flex-1 text-center md:text-left">
+                            <div className="flex items-center justify-center md:justify-start gap-3 mb-4">
+                              {a.isPinned && (
+                                <span className="text-xs font-medium px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full">Pinned</span>
+                              )}
+                              <span className="text-xs font-medium px-2 py-1 bg-primary-100 text-primary-700 rounded-full">{a.priority}</span>
+                            </div>
+                            <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">{a.title}</h3>
+                            <p className="text-gray-700 text-base md:text-lg leading-relaxed whitespace-pre-line">
+                              {a.content}
+                            </p>
+                          </div>
+                          <div className="md:w-56 shrink-0 text-sm text-gray-500 text-center md:text-right">
+                            <div>Posted: {new Date(a.createdAt).toLocaleDateString()}</div>
+                            {a.author && (
+                              <div className="mt-1">By: {a.author.firstName} {a.author.lastName}</div>
+                            )}
+                            {a.expiryDate && (
+                              <div className="mt-1">Expires: {new Date(a.expiryDate).toLocaleDateString()}</div>
+                            )}
+                            <div className="mt-2">Views: {a.views}</div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+            </Carousel>
+          </div>
+        </section>
+      )}
 
       {/* Features Section */}
       <section id="features" className="py-20 bg-gradient-to-br from-secondary-50 to-white">

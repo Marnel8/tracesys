@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { SECTIONS, getSectionOptions } from "@/data/instructor-courses"
+// Replace placeholder section data with live sections
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -12,107 +12,79 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Progress } from "@/components/ui/progress"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Search, Download, Eye, CheckCircle, XCircle, Clock, MoreHorizontal, FileText, User } from "lucide-react"
+import { useRequirements } from "@/hooks/requirement"
+import { useSections } from "@/hooks/section"
+import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
 
-// Mock data for all requirements
-const allRequirements = [
-  {
-    id: 1,
-    title: "Medical Certificate",
-    studentId: "2021-00001",
-    studentName: "Juan Dela Cruz",
-    studentAvatar: "/placeholder.svg?height=32&width=32",
-    section: SECTIONS[0].name,
-    submittedAt: "2024-01-15T10:30:00Z",
-    status: "Approved",
-    priority: "High",
-    fileSize: "2.3 MB",
-    approvedBy: "Prof. Dela Cruz",
-    approvedAt: "2024-01-15T14:20:00Z",
-  },
-  {
-    id: 2,
-    title: "Company MOA",
-    studentId: "2021-00002",
-    studentName: "Maria Santos",
-    studentAvatar: "/placeholder.svg?height=32&width=32",
-    section: SECTIONS[1].name,
-    submittedAt: "2024-01-14T14:20:00Z",
-    status: "Approved",
-    priority: "High",
-    fileSize: "1.8 MB",
-    approvedBy: "Prof. Dela Cruz",
-    approvedAt: "2024-01-14T16:45:00Z",
-  },
-  {
-    id: 3,
-    title: "Insurance Certificate",
-    studentId: "2021-00003",
-    studentName: "Pedro Rodriguez",
-    studentAvatar: "/placeholder.svg?height=32&width=32",
-    section: SECTIONS[2].name,
-    submittedAt: "2024-01-13T09:15:00Z",
-    status: "Returned",
-    priority: "High",
-    fileSize: "1.2 MB",
-    approvedBy: "Prof. Dela Cruz",
-    approvedAt: "2024-01-13T11:30:00Z",
-  },
-  {
-    id: 4,
-    title: "Practicum Agreement",
-    studentId: "2021-00004",
-    studentName: "Ana Garcia",
-    studentAvatar: "/placeholder.svg?height=32&width=32",
-    section: SECTIONS[0].name,
-    submittedAt: "2024-01-12T16:45:00Z",
-    status: "Pending",
-    priority: "Medium",
-    fileSize: "3.1 MB",
-    approvedBy: null,
-    approvedAt: null,
-  },
-  {
-    id: 5,
-    title: "Medical Certificate",
-    studentId: "2021-00005",
-    studentName: "Carlos Mendoza",
-    studentAvatar: "/placeholder.svg?height=32&width=32",
-    section: SECTIONS[1].name,
-    submittedAt: "2024-01-11T08:30:00Z",
-    status: "Approved",
-    priority: "High",
-    fileSize: "2.1 MB",
-    approvedBy: "Prof. Dela Cruz",
-    approvedAt: "2024-01-11T12:15:00Z",
-  },
-]
-
-// Mock data for requirement types and their completion rates
-const requirementTypes = [
-  { name: "Medical Certificate", total: 42, completed: 38, percentage: 90 },
-  { name: "Company MOA", total: 42, completed: 35, percentage: 83 },
-  { name: "Insurance Certificate", total: 42, completed: 32, percentage: 76 },
-  { name: "Practicum Agreement", total: 42, completed: 40, percentage: 95 },
-  { name: "Portfolio Submission", total: 42, completed: 15, percentage: 36 },
-]
+const humanizeBytes = (bytes?: number | null) => {
+  if (!bytes && bytes !== 0) return "-"
+  const mb = bytes / (1024 * 1024)
+  return `${mb.toFixed(1)} MB`
+}
 
 export default function AllRequirementsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedStatus, setSelectedStatus] = useState("all")
   const [selectedSection, setSelectedSection] = useState("all")
   const [selectedRequirement, setSelectedRequirement] = useState("all")
+  const [page, setPage] = useState(1)
+  const [limit] = useState(10)
+  const [debouncedSearch, setDebouncedSearch] = useState("")
 
-  const filteredRequirements = allRequirements.filter((req) => {
-    const matchesSearch =
-      req.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      req.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      req.studentId.includes(searchTerm)
-    const matchesStatus = selectedStatus === "all" || req.status.toLowerCase() === selectedStatus
-    const matchesSection = selectedSection === "all" || req.section === selectedSection
-    const matchesRequirement = selectedRequirement === "all" || req.title === selectedRequirement
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(searchTerm), 300)
+    return () => clearTimeout(id)
+  }, [searchTerm])
 
-    return matchesSearch && matchesStatus && matchesSection && matchesRequirement
+  useEffect(() => {
+    setPage(1)
+  }, [selectedStatus, debouncedSearch])
+
+  const { data, isLoading } = useRequirements({
+    page,
+    limit,
+    status: selectedStatus as any,
+    search: debouncedSearch || undefined,
   })
+
+  // Live sections for the filter options
+  const { data: sectionData } = useSections({ status: "active" })
+  const sectionOptions = useMemo(() => {
+    const list = sectionData?.sections ?? []
+    return list.map((s) => ({ value: s.id, label: s.name }))
+  }, [sectionData])
+
+  const items = data?.requirements ?? []
+  const pagination = data?.pagination
+  const currentPage = pagination?.currentPage ?? page
+  const totalPages = pagination?.totalPages ?? 1
+  const itemsPerPage = pagination?.itemsPerPage ?? limit
+  const totalItems = pagination?.totalItems ?? items.length
+  const startIndex = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1
+  const endIndex = totalItems === 0 ? 0 : startIndex + items.length - 1
+
+  const getReqSection = (r: any) => {
+    const enrollments = r.student?.enrollments as any[] | undefined
+    const sectionName = enrollments?.[0]?.section?.name
+    const sectionId = enrollments?.[0]?.section?.id
+    return { sectionName: sectionName || "N/A", sectionId }
+  }
+
+  const filteredRequirements = useMemo(() => {
+    return items.filter((r) => {
+      const { sectionId } = getReqSection(r)
+      const studentName = `${r.student?.firstName ?? ""} ${r.student?.lastName ?? ""}`.trim()
+      const studentId = r.student?.id ?? ""
+      const matchesSearch =
+        r.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        studentId.includes(searchTerm)
+      const matchesStatus = selectedStatus === "all" || r.status.toLowerCase() === selectedStatus
+      const matchesSection = selectedSection === "all" || sectionId === selectedSection
+      const matchesRequirement = selectedRequirement === "all" || r.title === selectedRequirement
+      return matchesSearch && matchesStatus && matchesSection && matchesRequirement
+    })
+  }, [items, searchTerm, selectedStatus, selectedSection, selectedRequirement])
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -120,8 +92,10 @@ export default function AllRequirementsPage() {
         return "bg-green-100 text-green-800"
       case "pending":
         return "bg-yellow-100 text-yellow-800"
-      case "returned":
+      case "rejected":
         return "bg-red-100 text-red-800"
+      case "submitted":
+        return "bg-blue-100 text-blue-800"
       default:
         return "bg-gray-100 text-gray-800"
     }
@@ -146,8 +120,10 @@ export default function AllRequirementsPage() {
         return <CheckCircle className="w-4 h-4 text-green-600" />
       case "pending":
         return <Clock className="w-4 h-4 text-yellow-600" />
-      case "returned":
+      case "rejected":
         return <XCircle className="w-4 h-4 text-red-600" />
+      case "submitted":
+        return <Clock className="w-4 h-4 text-blue-600" />
       default:
         return <FileText className="w-4 h-4 text-gray-600" />
     }
@@ -162,6 +138,26 @@ export default function AllRequirementsPage() {
       minute: "2-digit",
     })
   }
+
+  const totals = useMemo(() => {
+    const total = items.length
+    const approved = items.filter((r) => r.status === "approved").length
+    const pending = items.filter((r) => r.status === "pending").length
+    const rejected = items.filter((r) => r.status === "rejected").length
+    return { total, approved, pending, rejected }
+  }, [items])
+
+  const requirementTypes = useMemo(() => {
+    const map = new Map<string, { name: string; total: number; completed: number; percentage: number }>()
+    items.forEach((r) => {
+      const key = r.title
+      const entry = map.get(key) || { name: key, total: 0, completed: 0, percentage: 0 }
+      entry.total += 1
+      if (r.status === "approved") entry.completed += 1
+      map.set(key, entry)
+    })
+    return Array.from(map.values()).map((e) => ({ ...e, percentage: e.total ? Math.round((e.completed / e.total) * 100) : 0 }))
+  }, [items])
 
   return (
     <div className="space-y-6">
@@ -184,7 +180,7 @@ export default function AllRequirementsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Total Submissions</p>
-                <p className="text-2xl font-bold text-blue-600">{allRequirements.length}</p>
+                <p className="text-2xl font-bold text-blue-600">{totals.total}</p>
               </div>
               <FileText className="w-8 h-8 text-blue-600" />
             </div>
@@ -196,9 +192,7 @@ export default function AllRequirementsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Approved</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {allRequirements.filter((r) => r.status === "Approved").length}
-                </p>
+                <p className="text-2xl font-bold text-green-600">{totals.approved}</p>
               </div>
               <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
@@ -210,9 +204,7 @@ export default function AllRequirementsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Pending</p>
-                <p className="text-2xl font-bold text-yellow-600">
-                  {allRequirements.filter((r) => r.status === "Pending").length}
-                </p>
+                <p className="text-2xl font-bold text-yellow-600">{totals.pending}</p>
               </div>
               <Clock className="w-8 h-8 text-yellow-600" />
             </div>
@@ -223,10 +215,8 @@ export default function AllRequirementsPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Returned</p>
-                <p className="text-2xl font-bold text-red-600">
-                  {allRequirements.filter((r) => r.status === "Returned").length}
-                </p>
+                <p className="text-sm text-gray-600">Rejected</p>
+                <p className="text-2xl font-bold text-red-600">{totals.rejected}</p>
               </div>
               <XCircle className="w-8 h-8 text-red-600" />
             </div>
@@ -298,7 +288,8 @@ export default function AllRequirementsPage() {
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="returned">Returned</SelectItem>
+                <SelectItem value="submitted">Submitted</SelectItem>
+                <SelectItem value="rejected">Rejected</SelectItem>
               </SelectContent>
             </Select>
             <Select value={selectedSection} onValueChange={setSelectedSection}>
@@ -307,13 +298,11 @@ export default function AllRequirementsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Sections</SelectItem>
-                                    {getSectionOptions().map((section) => (
-                      <SelectItem key={section.value} value={section.value}>
-                        {section.label}
-                      </SelectItem>
-                    ))}
-                <SelectItem value="BSCS 4B">BSCS 4B</SelectItem>
-                <SelectItem value="BSIS 4A">BSIS 4A</SelectItem>
+                {sectionOptions.map((section) => (
+                  <SelectItem key={section.value} value={section.value}>
+                    {section.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={selectedRequirement} onValueChange={setSelectedRequirement}>
@@ -322,10 +311,9 @@ export default function AllRequirementsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Requirements</SelectItem>
-                <SelectItem value="Medical Certificate">Medical Certificate</SelectItem>
-                <SelectItem value="Company MOA">Company MOA</SelectItem>
-                <SelectItem value="Insurance Certificate">Insurance Certificate</SelectItem>
-                <SelectItem value="Practicum Agreement">Practicum Agreement</SelectItem>
+                {Array.from(new Set(items.map((r) => r.title))).map((title) => (
+                  <SelectItem key={title} value={title}>{title}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -351,17 +339,12 @@ export default function AllRequirementsPage() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="w-8 h-8">
-                          <AvatarImage src={req.studentAvatar || "/placeholder.svg"} alt={req.studentName} />
-                          <AvatarFallback>
-                            {req.studentName
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
-                          </AvatarFallback>
+                          <AvatarImage src={"/placeholder.svg"} alt={req.student?.firstName} />
+                          <AvatarFallback>{`${(req.student?.firstName?.[0] ?? "").toUpperCase()}${(req.student?.lastName?.[0] ?? "").toUpperCase()}`}</AvatarFallback>
                         </Avatar>
                         <div>
-                          <div className="font-medium text-gray-900">{req.studentName}</div>
-                          <div className="text-sm text-gray-600">{req.studentId}</div>
+                          <div className="font-medium text-gray-900">{`${req.student?.firstName ?? ""} ${req.student?.lastName ?? ""}`.trim()}</div>
+                          <div className="text-sm text-gray-600">{req.student?.email ?? req.student?.id}</div>
                         </div>
                       </div>
                     </TableCell>
@@ -369,10 +352,13 @@ export default function AllRequirementsPage() {
                       <div className="font-medium">{req.title}</div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{req.section}</Badge>
+                      {(() => {
+                        const { sectionName } = getReqSection(req)
+                        return <Badge variant="outline">{sectionName}</Badge>
+                      })()}
                     </TableCell>
                     <TableCell>
-                      <div className="text-sm">{formatDate(req.submittedAt)}</div>
+                      <div className="text-sm">{formatDate(req.submittedDate || req.createdAt)}</div>
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className={getPriorityColor(req.priority)}>
@@ -388,7 +374,7 @@ export default function AllRequirementsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="text-sm">{req.fileSize}</div>
+                      <div className="text-sm">{humanizeBytes(req.fileSize)}</div>
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
@@ -419,11 +405,41 @@ export default function AllRequirementsPage() {
             </Table>
           </div>
 
-          {filteredRequirements.length === 0 && (
+          {(!isLoading && filteredRequirements.length === 0) && (
             <div className="text-center py-8">
               <p className="text-gray-500">No requirements found matching your criteria.</p>
             </div>
           )}
+          {/* Pagination Controls - counts + buttons aligned to end */}
+          <div className="flex items-center justify-between mt-4 px-2">
+            <span className="text-sm text-gray-600">
+              {startIndex}-{endIndex} of {totalItems}
+            </span>
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    className={currentPage <= 1 ? "pointer-events-none opacity-50" : undefined}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      if (currentPage > 1) setPage(currentPage - 1)
+                    }}
+                  />
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    className={currentPage >= totalPages ? "pointer-events-none opacity-50" : undefined}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      if (currentPage < totalPages) setPage(currentPage + 1)
+                    }}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
         </CardContent>
       </Card>
     </div>

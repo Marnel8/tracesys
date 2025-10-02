@@ -18,7 +18,7 @@ import { ArrowLeft, Eye, EyeOff, Users } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useLogin } from "@useAuth";
+import { useLogin, useLogout } from "@useAuth";
 import { toast } from "sonner";
 
 const instructorLoginSchema = z.object({
@@ -33,6 +33,7 @@ export default function InstructorLoginPage() {
 	const [showPassword, setShowPassword] = useState(false);
 	const [isLoading, setIsLoading] = useState(false);
 	const loginMutation = useLogin();
+	const logoutMutation = useLogout();
 
 	const {
 		register,
@@ -52,6 +53,7 @@ export default function InstructorLoginPage() {
 			const userRole = res?.user?.role;
 			if (userRole !== "instructor") {
 				toast.error("This login is for instructors only.");
+				try { await logoutMutation.mutateAsync(); } catch {}
 				return;
 			}
 			toast.success("Signed in successfully");

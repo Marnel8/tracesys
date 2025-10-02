@@ -15,8 +15,126 @@ import {
 	Upload,
 	User,
 } from "lucide-react";
+import { useMemo } from "react";
+import { useAuth } from "@/hooks/auth/useAuth";
+import { useStudent } from "@/hooks/student/useStudent";
+import { useAttendanceStats, useStudentAttendance } from "@/hooks/student/useStudentAttendance";
+import { useStudentRequirements } from "@/hooks/student/useStudentRequirements";
+import { useStudentReports } from "@/hooks/student/useStudentReports";
+import { useAnnouncements } from "@/hooks/announcement/useAnnouncement";
 
 export default function StudentDashboard() {
+	const { user, isLoading: isUserLoading } = useAuth();
+	const studentId = (user as any)?.id as string | undefined;
+
+	const { data: studentData } = useStudent(studentId as string);
+
+	// Attendance overall stats
+	const { data: attendanceStats } = useAttendanceStats(studentId as string);
+
+	// Attendance this week (count present/late/excused as attended)
+	const startOfWeek = useMemo(() => {
+		const now = new Date();
+		const day = now.getDay() || 7; // Monday=1..Sunday=7
+		const monday = new Date(now);
+		monday.setDate(now.getDate() - (day - 1));
+		monday.setHours(0, 0, 0, 0);
+		return monday.toISOString().split("T")[0];
+	}, []);
+	const endOfWeek = useMemo(() => {
+		const now = new Date();
+		const day = now.getDay() || 7;
+		const sunday = new Date(now);
+		sunday.setDate(now.getDate() + (7 - day));
+		sunday.setHours(23, 59, 59, 999);
+		return sunday.toISOString().split("T")[0];
+	}, []);
+	const { data: thisWeekAttendance } = useStudentAttendance(studentId as string, {
+		page: 1,
+		limit: 200,
+		startDate: startOfWeek,
+		endDate: endOfWeek,
+	});
+	const thisWeekCounts = useMemo(() => {
+		const records: any[] = (thisWeekAttendance as any)?.records
+			?? (thisWeekAttendance as any)?.items
+			?? (thisWeekAttendance as any)?.data?.records
+			?? [];
+		const attended = records.filter((r) => ["present", "late", "excused"].includes(String(r?.status || "").toLowerCase())).length;
+		return { attended, total: records.length };
+	}, [thisWeekAttendance]);
+
+	// Requirements list to compute submitted/pending
+	const { data: requirementsData } = useStudentRequirements(studentId as string, { page: 1, limit: 200 });
+	const requirementCounts = useMemo(() => {
+		const list: any[] = (requirementsData as any)?.requirements
+			?? (requirementsData as any)?.items
+			?? (requirementsData as any)?.data?.requirements
+			?? [];
+		const submitted = list.filter((r) => String(r?.status || "").toLowerCase() === "submitted").length;
+		const approved = list.filter((r) => String(r?.status || "").toLowerCase() === "approved").length;
+		const pending = list.filter((r) => ["pending", "rejected", "expired"].includes(String(r?.status || "").toLowerCase())).length;
+		return { total: list.length, submitted: submitted + approved, pending };
+	}, [requirementsData]);
+
+	// Reports for upcoming deadlines (use endDate for weekly reports)
+	const { data: reportsData } = useStudentReports(studentId as string, { page: 1, limit: 50 });
+	const upcomingDeadlines = useMemo(() => {
+		const list: any[] = (reportsData as any)?.reports
+			?? (reportsData as any)?.items
+			?? (reportsData as any)?.data?.reports
+			?? [];
+		const now = new Date();
+		return list
+			.map((r) => ({
+				title: r?.title || (r?.weekNumber ? `Weekly Report #${r.weekNumber}` : "Report"),
+				date: r?.endDate || r?.dueDate || r?.startDate,
+				status: r?.status,
+			}))
+			.filter((i) => i.date)
+			.sort((a, b) => new Date(a.date!).getTime() - new Date(b.date!).getTime())
+			.filter((i) => new Date(i.date!).getTime() >= now.getTime())
+			.slice(0, 2);
+	}, [reportsData]);
+
+	// Announcements (latest published for this user)
+	const { data: announcementsData } = useAnnouncements({ status: "Published", userId: studentId, page: 1, limit: 2 });
+	const announcements = useMemo(() => {
+		return (announcementsData as any)?.announcements
+			?? (announcementsData as any)?.data?.announcements
+			?? [];
+	}, [announcementsData]);
+
+	// Hours progress calculated from actual attendance records
+	const { data: allAttendanceData } = useStudentAttendance(studentId as string, {
+		page: 1,
+		limit: 1000, // Get all records to calculate total hours
+	});
+	const hoursProgress = useMemo(() => {
+		// Get total hours from practicum
+		const student: any = (studentData as any)?.data ?? (studentData as any);
+		const practicum = student?.practicums?.[0];
+		const total = Number(practicum?.totalHours ?? 0);
+		
+		// Calculate completed hours from attendance records
+		const records: any[] = (allAttendanceData as any)?.data?.attendance
+			?? (allAttendanceData as any)?.attendance
+			?? (allAttendanceData as any)?.records
+			?? [];
+		
+		// Sum up hours from approved attendance records (present, late, excused)
+		const completed = records
+			.filter((r) => 
+				["present", "late", "excused"].includes(String(r?.status || "").toLowerCase()) &&
+				String(r?.approvalStatus || "").toLowerCase() === "approved" &&
+				r?.hours != null
+			)
+			.reduce((sum, r) => sum + Number(r.hours || 0), 0);
+		
+		const percent = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
+		return { completed: Math.round(completed * 100) / 100, total, percent };
+	}, [studentData, allAttendanceData]);
+
 	return (
 		<div className="px-4 md:px-8 lg:px-16">
 			{/* Header */}
@@ -42,10 +160,10 @@ export default function StudentDashboard() {
 						<div className="space-y-3">
 							<div className="flex justify-between text-sm">
 								<span>Completed</span>
-								<span className="font-medium">240 / 400 hours</span>
+								<span className="font-medium">{hoursProgress.completed} / {hoursProgress.total} hours</span>
 							</div>
-							<Progress value={60} className="h-2" />
-							<p className="text-xs text-gray-600">160 hours remaining</p>
+							<Progress value={hoursProgress.percent} className="h-2" />
+							<p className="text-xs text-gray-600">{Math.max(0, hoursProgress.total - hoursProgress.completed)} hours remaining</p>
 						</div>
 					</CardContent>
 				</Card>
@@ -65,7 +183,7 @@ export default function StudentDashboard() {
 									variant="secondary"
 									className="bg-green-100 text-green-800"
 								>
-									8/10
+									{requirementCounts.submitted}/{requirementCounts.total}
 								</Badge>
 							</div>
 							<div className="flex justify-between items-center">
@@ -74,7 +192,7 @@ export default function StudentDashboard() {
 									variant="secondary"
 									className="bg-yellow-100 text-yellow-800"
 								>
-									2
+									{requirementCounts.pending}
 								</Badge>
 							</div>
 						</div>
@@ -96,12 +214,12 @@ export default function StudentDashboard() {
 									variant="secondary"
 									className="bg-green-100 text-green-800"
 								>
-									5/5 days
+									{thisWeekCounts.attended}/{thisWeekCounts.total} days
 								</Badge>
 							</div>
 							<div className="flex justify-between items-center">
 								<span className="text-sm">Overall</span>
-								<span className="text-sm font-medium">95%</span>
+								<span className="text-sm font-medium">{Math.round(Number((attendanceStats as any)?.attendancePercentage ?? (attendanceStats as any)?.data?.attendancePercentage ?? 0))}%</span>
 							</div>
 						</div>
 					</CardContent>
@@ -155,24 +273,16 @@ export default function StudentDashboard() {
 						</CardTitle>
 					</CardHeader>
 					<CardContent className="space-y-4">
-						<div className="border-l-4 border-primary-500 pl-4 py-2">
-							<h4 className="font-medium text-gray-900">
-								Weekly Report Reminder
-							</h4>
-							<p className="text-sm text-gray-600">
-								Don't forget to submit your weekly report by Friday.
-							</p>
-							<p className="text-xs text-gray-500 mt-1">2 hours ago</p>
-						</div>
-						<div className="border-l-4 border-accent-500 pl-4 py-2">
-							<h4 className="font-medium text-gray-900">
-								New Requirement Added
-							</h4>
-							<p className="text-sm text-gray-600">
-								Medical Certificate requirement has been added to your list.
-							</p>
-							<p className="text-xs text-gray-500 mt-1">1 day ago</p>
-						</div>
+						{announcements.length === 0 && (
+							<div className="text-sm text-gray-500">No announcements.</div>
+						)}
+						{announcements.map((a: any) => (
+							<div key={a.id} className="border-l-4 border-primary-500 pl-4 py-2">
+								<h4 className="font-medium text-gray-900">{a.title}</h4>
+								<p className="text-sm text-gray-600 line-clamp-2">{a.content}</p>
+								<p className="text-xs text-gray-500 mt-1">{new Date(a.createdAt).toLocaleString()}</p>
+							</div>
+						))}
 					</CardContent>
 				</Card>
 
@@ -184,29 +294,24 @@ export default function StudentDashboard() {
 						</CardTitle>
 					</CardHeader>
 					<CardContent className="space-y-4">
-						<div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
-							<div>
-								<h4 className="font-medium text-gray-900">Weekly Report #8</h4>
-								<p className="text-sm text-gray-600">Due in 2 days</p>
-							</div>
-							<Badge
-								variant="secondary"
-								className="bg-yellow-100 text-yellow-800"
-							>
-								Pending
-							</Badge>
-						</div>
-						<div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-							<div>
-								<h4 className="font-medium text-gray-900">
-									Medical Certificate
-								</h4>
-								<p className="text-sm text-gray-600">Due in 5 days</p>
-							</div>
-							<Badge variant="secondary" className="bg-red-100 text-red-800">
-								Urgent
-							</Badge>
-						</div>
+						{upcomingDeadlines.length === 0 && (
+							<div className="text-sm text-gray-500">No upcoming deadlines.</div>
+						)}
+						{upcomingDeadlines.map((d, idx) => {
+							const daysLeft = Math.ceil((new Date(d.date!).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+							const urgent = daysLeft <= 3;
+							return (
+								<div key={idx} className={`flex items-center justify-between p-3 rounded-lg ${urgent ? "bg-red-50" : "bg-yellow-50"}`}>
+									<div>
+										<h4 className="font-medium text-gray-900">{d.title}</h4>
+										<p className="text-sm text-gray-600">Due {isNaN(daysLeft) ? "soon" : `in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`}</p>
+									</div>
+									<Badge variant="secondary" className={urgent ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"}>
+										{urgent ? "Urgent" : "Pending"}
+									</Badge>
+								</div>
+							);
+						})}
 					</CardContent>
 				</Card>
 			</div>

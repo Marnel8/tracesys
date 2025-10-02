@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,105 +31,67 @@ import {
   Star,
   FileText,
 } from "lucide-react"
-
-// Mock data for narrative reports
-const narrativeReports = [
-  {
-    id: 1,
-    studentId: "2021-00001",
-    studentName: "Juan Dela Cruz",
-    studentAvatar: "/placeholder.svg?height=32&width=32",
-    submittedAt: "2024-01-15T16:30:00Z",
-    status: "Pending",
-    title: "Mid-Term Narrative Report",
-    summary: "Comprehensive reflection on the first half of my practicum experience at OMSC IT Department.",
-    wordCount: 1250,
-    sections: {
-      introduction: "Detailed introduction about the practicum placement and objectives.",
-      experiences: "Rich description of daily activities, projects worked on, and skills developed.",
-      challenges: "Honest reflection on difficulties faced and how they were overcome.",
-      learnings: "Key insights gained and how they relate to academic coursework.",
-      conclusion: "Summary of growth and future goals for the remainder of the practicum.",
-    },
-    rating: null,
-    feedback: "",
-    fileUrl: "/reports/narrative-001.pdf",
-  },
-  {
-    id: 2,
-    studentId: "2021-00002",
-    studentName: "Maria Santos",
-    studentAvatar: "/placeholder.svg?height=32&width=32",
-    submittedAt: "2024-01-10T14:20:00Z",
-    status: "Approved",
-    title: "Final Narrative Report",
-    summary: "Complete reflection on the entire practicum experience at Municipal IT Office.",
-    wordCount: 2100,
-    sections: {
-      introduction: "Overview of the practicum program and personal objectives.",
-      experiences: "Detailed account of projects, responsibilities, and professional growth.",
-      challenges: "Analysis of obstacles encountered and problem-solving approaches.",
-      learnings: "Comprehensive review of technical and soft skills acquired.",
-      conclusion: "Final thoughts on career readiness and future aspirations.",
-    },
-    rating: 5,
-    feedback:
-      "Excellent narrative report with deep reflection and professional insights. Well-structured and comprehensive.",
-    fileUrl: "/reports/narrative-002.pdf",
-  },
-  {
-    id: 3,
-    studentId: "2021-00003",
-    studentName: "Pedro Rodriguez",
-    studentAvatar: "/placeholder.svg?height=32&width=32",
-    submittedAt: "2024-01-08T10:15:00Z",
-    status: "Returned",
-    title: "Mid-Term Narrative Report",
-    summary: "Reflection on practicum experience at Provincial Capitol.",
-    wordCount: 800,
-    sections: {
-      introduction: "Brief overview of placement and initial expectations.",
-      experiences: "General description of tasks and activities.",
-      challenges: "Limited discussion of difficulties faced.",
-      learnings: "Basic overview of skills learned.",
-      conclusion: "Short summary of experience so far.",
-    },
-    rating: null,
-    feedback:
-      "Report needs more depth and reflection. Please expand on specific experiences and provide more detailed analysis of learnings.",
-    fileUrl: "/reports/narrative-003.pdf",
-  },
-]
+import { useNarrativeReports } from "@/hooks/report/useNarrativeReport"
+import { useApproveReport, useRejectReport, Report } from "@/hooks/report/useReport"
+import { useAuth } from "@/hooks/auth/useAuth"
 
 export default function NarrativeReportsPage() {
   const [searchTerm, setSearchTerm] = useState("")
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("")
   const [selectedStatus, setSelectedStatus] = useState("all")
-  const [selectedReport, setSelectedReport] = useState(null)
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null)
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false)
   const [reviewFeedback, setReviewFeedback] = useState("")
   const [reviewRating, setReviewRating] = useState("")
 
-  const filteredReports = narrativeReports.filter((report) => {
-    const matchesSearch =
-      report.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.studentId.includes(searchTerm)
-    const matchesStatus = selectedStatus === "all" || report.status.toLowerCase() === selectedStatus
+  const { user } = useAuth()
 
-    return matchesSearch && matchesStatus
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearchTerm(searchTerm), 300)
+    return () => clearTimeout(t)
+  }, [searchTerm])
+
+  const { data: reportsData, isLoading } = useNarrativeReports({
+    page: 1,
+    limit: 50,
+    search: debouncedSearchTerm || undefined,
+    status: selectedStatus as any,
   })
 
-  const handleApprove = (id: number, rating: number, feedback: string) => {
-    console.log("Approve report:", id, "Rating:", rating, "Feedback:", feedback)
-    setIsReviewDialogOpen(false)
-    setReviewFeedback("")
-    setReviewRating("")
+  const narrativeReports = useMemo(() => reportsData?.reports ?? [], [reportsData])
+
+  const stats = useMemo(() => {
+    const reports = narrativeReports
+    const ratedReports = reports.filter((r: any) => r.rating)
+    return {
+      averageRating: ratedReports.length > 0
+        ? ratedReports.reduce((acc: number, r: any) => acc + (r.rating || 0), 0) / ratedReports.length
+        : 0,
+    }
+  }, [narrativeReports])
+
+  const { mutate: approveReport, isPending: isApproving } = useApproveReport()
+  const { mutate: rejectReport, isPending: isRejecting } = useRejectReport()
+
+  const handleApprove = (id: string, rating: number, feedback: string) => {
+    approveReport({ id, rating, feedback: feedback || null }, {
+      onSuccess: () => {
+        setIsReviewDialogOpen(false)
+        setReviewFeedback("")
+        setReviewRating("")
+        setSelectedReport(null)
+      }
+    })
   }
 
-  const handleReturn = (id: number, feedback: string) => {
-    console.log("Return report:", id, "Feedback:", feedback)
-    setIsReviewDialogOpen(false)
-    setReviewFeedback("")
+  const handleReturn = (id: string, feedback: string) => {
+    rejectReport({ id, reason: feedback }, {
+      onSuccess: () => {
+        setIsReviewDialogOpen(false)
+        setReviewFeedback("")
+        setSelectedReport(null)
+      }
+    })
   }
 
   const formatDate = (dateString: string) => {
@@ -146,9 +108,9 @@ export default function NarrativeReportsPage() {
     switch (status.toLowerCase()) {
       case "approved":
         return "bg-green-100 text-green-800"
-      case "pending":
+      case "submitted":
         return "bg-yellow-100 text-yellow-800"
-      case "returned":
+      case "rejected":
         return "bg-red-100 text-red-800"
       default:
         return "bg-gray-100 text-gray-800"
@@ -161,10 +123,9 @@ export default function NarrativeReportsPage() {
     ))
   }
 
-  const getWordCountColor = (wordCount: number) => {
-    if (wordCount >= 1500) return "text-green-600"
-    if (wordCount >= 1000) return "text-yellow-600"
-    return "text-red-600"
+  const getFullFileUrl = (fileUrl: string) => {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+    return `${baseUrl}${fileUrl}`
   }
 
   return (
@@ -182,9 +143,7 @@ export default function NarrativeReportsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Pending Review</p>
-                <p className="text-2xl font-bold text-yellow-600">
-                  {narrativeReports.filter((r) => r.status === "Pending").length}
-                </p>
+                <p className="text-2xl font-bold text-yellow-600">{narrativeReports.filter((r) => r.status === "submitted").length}</p>
               </div>
               <Clock className="w-8 h-8 text-yellow-600" />
             </div>
@@ -196,9 +155,7 @@ export default function NarrativeReportsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Approved</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {narrativeReports.filter((r) => r.status === "Approved").length}
-                </p>
+                <p className="text-2xl font-bold text-green-600">{narrativeReports.filter((r) => r.status === "approved").length}</p>
               </div>
               <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
@@ -210,9 +167,7 @@ export default function NarrativeReportsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Returned</p>
-                <p className="text-2xl font-bold text-red-600">
-                  {narrativeReports.filter((r) => r.status === "Returned").length}
-                </p>
+                <p className="text-2xl font-bold text-red-600">{narrativeReports.filter((r) => r.status === "rejected").length}</p>
               </div>
               <XCircle className="w-8 h-8 text-red-600" />
             </div>
@@ -223,10 +178,8 @@ export default function NarrativeReportsPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Avg. Word Count</p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {Math.round(narrativeReports.reduce((sum, r) => sum + r.wordCount, 0) / narrativeReports.length)}
-                </p>
+                <p className="text-sm text-gray-600">Avg. Rating</p>
+                <p className="text-2xl font-bold text-blue-600">{stats.averageRating.toFixed(1)}</p>
               </div>
               <FileText className="w-8 h-8 text-blue-600" />
             </div>
@@ -257,9 +210,9 @@ export default function NarrativeReportsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="submitted">Submitted</SelectItem>
                 <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="returned">Returned</SelectItem>
+                <SelectItem value="rejected">Rejected</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -271,7 +224,7 @@ export default function NarrativeReportsPage() {
                 <TableRow>
                   <TableHead>Student</TableHead>
                   <TableHead>Title</TableHead>
-                  <TableHead>Word Count</TableHead>
+                  <TableHead>Hours</TableHead>
                   <TableHead>Submitted</TableHead>
                   <TableHead>Rating</TableHead>
                   <TableHead>Status</TableHead>
@@ -279,41 +232,46 @@ export default function NarrativeReportsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredReports.map((report) => (
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8">
+                      <div className="flex items-center justify-center">
+                        <Clock className="w-4 h-4 mr-2 animate-spin" />
+                        Loading reports...
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : narrativeReports.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8">
+                      <p className="text-gray-500">No reports found matching your criteria.</p>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                narrativeReports.map((report) => (
                   <TableRow key={report.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <Avatar className="w-8 h-8">
-                          <AvatarImage src={report.studentAvatar || "/placeholder.svg"} alt={report.studentName} />
-                          <AvatarFallback>
-                            {report.studentName
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
-                          </AvatarFallback>
-                        </Avatar>
+                      
                         <div>
-                          <div className="font-medium text-gray-900">{report.studentName}</div>
-                          <div className="text-sm text-gray-600">{report.studentId}</div>
+                          <div className="font-medium text-gray-900">{report.student ? `${report.student.firstName} ${report.student.lastName}` : 'Unknown Student'}</div>
+                          <div className="text-sm text-gray-600">{report.student?.studentId || report.studentId}</div>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
                       <div>
                         <div className="font-medium">{report.title}</div>
-                        <div className="text-sm text-gray-600 max-w-xs truncate">{report.summary}</div>
+                        <div className="text-sm text-gray-600 max-w-xs truncate">{report.content || 'No content provided'}</div>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className={`font-medium ${getWordCountColor(report.wordCount)}`}>
-                        {report.wordCount.toLocaleString()}
-                      </div>
-                      <div className="text-xs text-gray-500">words</div>
+                      <div className="font-medium">{report.hoursLogged || 0}h</div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1 text-sm text-gray-600">
                         <Calendar className="w-4 h-4" />
-                        {formatDate(report.submittedAt)}
+                        {report.submittedDate ? formatDate(report.submittedDate) : 'Not submitted'}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -333,9 +291,23 @@ export default function NarrativeReportsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
-                        <Button variant="outline" size="sm">
-                          <Download className="w-4 h-4" />
-                        </Button>
+                        {report.fileUrl && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              const link = document.createElement('a')
+                              link.href = getFullFileUrl(report.fileUrl!)
+                              link.download = `Narrative_${report.title || 'Report'}.pdf`
+                              link.target = '_blank'
+                              document.body.appendChild(link)
+                              link.click()
+                              document.body.removeChild(link)
+                            }}
+                          >
+                            <Download className="w-4 h-4" />
+                          </Button>
+                        )}
                         <Dialog>
                           <DialogTrigger asChild>
                             <Button variant="outline" size="sm" onClick={() => setSelectedReport(report)}>
@@ -345,42 +317,17 @@ export default function NarrativeReportsPage() {
                           <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
                             <DialogHeader>
                               <DialogTitle>
-                                {selectedReport?.title} - {selectedReport?.studentName}
+                                {selectedReport?.title} - {selectedReport?.student ? `${selectedReport.student.firstName} ${selectedReport.student.lastName}` : 'Unknown Student'}
                               </DialogTitle>
                               <DialogDescription>
-                                Submitted on {selectedReport && formatDate(selectedReport.submittedAt)} •{" "}
-                                {selectedReport?.wordCount} words
+                                Submitted on {selectedReport?.submittedDate ? formatDate(selectedReport.submittedDate) : 'Not submitted'} •{" "}
+                                Hours: {selectedReport?.hoursLogged || 0}h
                               </DialogDescription>
                             </DialogHeader>
                             <div className="space-y-6">
                               <div>
                                 <h4 className="font-semibold mb-2">Summary</h4>
-                                <p className="text-gray-700">{selectedReport?.summary}</p>
-                              </div>
-                              <div>
-                                <h4 className="font-semibold mb-2">Report Sections</h4>
-                                <div className="space-y-3">
-                                  <div>
-                                    <h5 className="font-medium text-sm text-gray-800">Introduction</h5>
-                                    <p className="text-sm text-gray-600">{selectedReport?.sections.introduction}</p>
-                                  </div>
-                                  <div>
-                                    <h5 className="font-medium text-sm text-gray-800">Experiences</h5>
-                                    <p className="text-sm text-gray-600">{selectedReport?.sections.experiences}</p>
-                                  </div>
-                                  <div>
-                                    <h5 className="font-medium text-sm text-gray-800">Challenges</h5>
-                                    <p className="text-sm text-gray-600">{selectedReport?.sections.challenges}</p>
-                                  </div>
-                                  <div>
-                                    <h5 className="font-medium text-sm text-gray-800">Learnings</h5>
-                                    <p className="text-sm text-gray-600">{selectedReport?.sections.learnings}</p>
-                                  </div>
-                                  <div>
-                                    <h5 className="font-medium text-sm text-gray-800">Conclusion</h5>
-                                    <p className="text-sm text-gray-600">{selectedReport?.sections.conclusion}</p>
-                                  </div>
-                                </div>
+                                <p className="text-gray-700">{selectedReport?.content || 'No content provided'}</p>
                               </div>
                               {selectedReport?.feedback && (
                                 <div>
@@ -388,10 +335,37 @@ export default function NarrativeReportsPage() {
                                   <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">{selectedReport.feedback}</p>
                                 </div>
                               )}
+                              {selectedReport?.fileUrl && (
+                                <Card>
+                                  <CardHeader className="pb-3">
+                                    <CardTitle className="text-lg flex items-center gap-2">
+                                      <FileText className="w-5 h-5 text-red-600" />
+                                      Report File
+                                    </CardTitle>
+                                  </CardHeader>
+                                  <CardContent className="space-y-4">
+                                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                                      <FileText className="w-6 h-6 text-red-600" />
+                                      <div className="flex-1">
+                                        <p className="font-medium text-gray-700">{selectedReport.title || 'Narrative Report'}.pdf</p>
+                                        <p className="text-sm text-gray-500">PDF Document</p>
+                                      </div>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => window.open(getFullFileUrl(selectedReport.fileUrl!), '_blank')}
+                                      >
+                                        <Download className="w-4 h-4 mr-1" />
+                                        Open
+                                      </Button>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              )}
                             </div>
                           </DialogContent>
                         </Dialog>
-                        {report.status === "Pending" && (
+                        {report.status === "submitted" && (
                           <Dialog open={isReviewDialogOpen} onOpenChange={setIsReviewDialogOpen}>
                             <DialogTrigger asChild>
                               <Button
@@ -412,8 +386,8 @@ export default function NarrativeReportsPage() {
                               <div className="space-y-4">
                                 <div>
                                   <Label>Report: {selectedReport?.title}</Label>
-                                  <p className="text-sm text-gray-600">Student: {selectedReport?.studentName}</p>
-                                  <p className="text-sm text-gray-600">Word Count: {selectedReport?.wordCount}</p>
+                                  <p className="text-sm text-gray-600">Student: {selectedReport?.student ? `${selectedReport.student.firstName} ${selectedReport.student.lastName}` : 'Unknown Student'}</p>
+                                  <p className="text-sm text-gray-600">Hours: {selectedReport?.hoursLogged || 0}h</p>
                                 </div>
                                 <div>
                                   <Label htmlFor="rating">Rating (1-5 stars)</Label>
@@ -447,18 +421,19 @@ export default function NarrativeReportsPage() {
                                 </Button>
                                 <Button
                                   variant="destructive"
-                                  onClick={() => handleReturn(selectedReport?.id, reviewFeedback)}
+                                  onClick={() => handleReturn(selectedReport?.id || '', reviewFeedback)}
+                                  disabled={isRejecting}
                                 >
-                                  Return for Revision
+                                  {isRejecting ? 'Rejecting...' : 'Return for Revision'}
                                 </Button>
                                 <Button
                                   className="bg-green-600 hover:bg-green-700"
                                   onClick={() =>
-                                    handleApprove(selectedReport?.id, Number.parseInt(reviewRating), reviewFeedback)
+                                    handleApprove(selectedReport?.id || '', Number.parseInt(reviewRating), reviewFeedback)
                                   }
-                                  disabled={!reviewRating}
+                                  disabled={!reviewRating || isApproving}
                                 >
-                                  Approve Report
+                                  {isApproving ? 'Approving...' : 'Approve Report'}
                                 </Button>
                               </DialogFooter>
                             </DialogContent>
@@ -467,12 +442,12 @@ export default function NarrativeReportsPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                )))}
               </TableBody>
             </Table>
           </div>
 
-          {filteredReports.length === 0 && (
+          {(!isLoading && narrativeReports.length === 0) && (
             <div className="text-center py-8">
               <p className="text-gray-500">No narrative reports found matching your criteria.</p>
             </div>

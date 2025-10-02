@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Clock } from "lucide-react";
 let faceApiModule: typeof import("face-api.js") | null = null;
@@ -11,8 +11,27 @@ import SelfieCapture from "@/components/student/attendance/SelfieCapture";
 import ClockButtons from "@/components/student/attendance/ClockButtons";
 import CurrentLocationDisplay from "@/components/student/attendance/CurrentLocationDisplay";
 import RecentAttendance from "@/components/student/attendance/RecentAttendance";
+import { useAuth } from "@/hooks/auth/useAuth";
+import { useStudentRequirements } from "@/hooks/student/useStudentRequirements";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { useRequirementTemplates } from "@/hooks/requirement-template/useRequirementTemplate";
+import { useToast } from "@/hooks/use-toast";
+import { useStudent } from "@/hooks/student";
+import { useAttendance, useClockIn, useClockOut, AttendanceRecord } from "@/hooks/attendance";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function AttendancePage() {
+	const { toast } = useToast();
 	const [currentTime, setCurrentTime] = useState<string>("");
 	const [isMounted, setIsMounted] = useState(false);
 	const [location, setLocation] = useState<{
@@ -20,15 +39,15 @@ export default function AttendancePage() {
 		longitude: number;
 		address?: string;
 	} | null>(null);
+	const [locationType, setLocationType] = useState<"Inside" | "In-field" | "Outside" | null>(null);
+	const [deviceType, setDeviceType] = useState<"Mobile" | "Desktop" | "Tablet">("Desktop");
+	const [deviceUnit, setDeviceUnit] = useState<string>("");
+	const [macAddress, setMacAddress] = useState<string | null>(null);
 	const [locationError, setLocationError] = useState<string | null>(null);
 	const [isLoadingAddress, setIsLoadingAddress] = useState(false);
 	const [isClockingIn, setIsClockingIn] = useState(false);
 	const [isClockingOut, setIsClockingOut] = useState(false);
-	const [todayAttendance, setTodayAttendance] = useState<{
-		clockIn?: string;
-		clockOut?: string;
-		date: string;
-	} | null>(null);
+	const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord | null>(null);
 	const [isCapturing, setIsCapturing] = useState(false);
 	const [capturedImage, setCapturedImage] = useState<string | null>(null);
 	const [showCamera, setShowCamera] = useState(false);
@@ -41,6 +60,73 @@ export default function AttendancePage() {
 	const [isFaceDetected, setIsFaceDetected] = useState(false);
 	const detectionIntervalRef = useRef<number | null>(null);
 	const detectionRafRef = useRef<number | null>(null);
+	const [showClockOutConfirm, setShowClockOutConfirm] = useState(false);
+
+	// Auth and required-requirements gate
+	const { user } = useAuth();
+	const studentId = (user as any)?.id as string | undefined;
+	const { data: studentData } = useStudent(studentId as string);
+	const { data: requirementsData } = useStudentRequirements(studentId as string, { limit: 200, page: 1 });
+	const { data: templatesData } = useRequirementTemplates({ page: 1, limit: 200, status: "active" });
+	const requirementsList: any[] = (requirementsData as any)?.requirements
+		?? (requirementsData as any)?.items
+		?? (requirementsData as any)?.data?.requirements
+		?? [];
+	const templatesList: any[] = (templatesData as any)?.requirementTemplates
+		?? (templatesData as any)?.data?.requirementTemplates
+		?? [];
+
+	const requiredTemplates: any[] = templatesList.filter((t: any) => t?.isRequired);
+	const hasBlockingRequired = requiredTemplates.some((tpl: any) => {
+		const matches = requirementsList.filter((r: any) => r?.templateId === tpl?.id);
+		if (matches.length === 0) return true; // no submission for required template
+		const latest = matches.sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+		const status = String(latest?.status ?? "").toLowerCase();
+		// allow only when approved
+		return !["approved"].includes(status);
+	});
+
+	// Additional attendance gate: ensure student has an agency and has reached start date
+	const student: any = (studentData as any)?.student
+		?? (studentData as any)?.data
+		?? studentData;
+	const practicums: any[] = student?.practicums ?? [];
+	const practicumWithAgency: any | undefined = practicums.find((p: any) => p?.agency) ?? practicums[0];
+	const hasAgency = !!practicumWithAgency?.agency;
+	const startDateStr: string | undefined = practicumWithAgency?.startDate;
+	const todayYmd = new Date().toISOString().split("T")[0];
+	const isOnOrAfterStart = startDateStr ? todayYmd >= String(startDateStr).slice(0, 10) : false;
+	const hasAgencyOrDateBlocking = !hasAgency || !isOnOrAfterStart;
+
+	// Attendance hooks
+	const clockInMutation = useClockIn();
+	const clockOutMutation = useClockOut();
+	
+	// Get today's date for filtering
+	const today = new Date().toISOString().split('T')[0];
+	
+	// Fetch today's attendance record
+	const { data: attendanceData, isLoading: isLoadingAttendance } = useAttendance({
+		studentId: studentId,
+		date: today,
+		limit: 1,
+	});
+
+	// Fetch recent attendance for the history component
+	const { data: recentAttendanceData } = useAttendance({
+		studentId: studentId,
+		limit: 10,
+		page: 1,
+	});
+
+	// Set today's attendance from API data
+	useEffect(() => {
+		if (attendanceData?.attendance && attendanceData.attendance.length > 0) {
+			setTodayAttendance(attendanceData.attendance[0]);
+		} else {
+			setTodayAttendance(null);
+		}
+	}, [attendanceData]);
 
 	// Handle client-side mounting, time updates, and location tracking
 	useEffect(() => {
@@ -51,6 +137,20 @@ export default function AttendancePage() {
 
 		updateTime(); // Set initial time
 		const interval = setInterval(updateTime, 1000);
+
+		// Detect device type only on client side
+		if (typeof navigator !== "undefined") {
+			const userAgent = navigator.userAgent;
+			setDeviceUnit(userAgent);
+			
+			if (/Mobile|Android|iPhone|iPad/.test(userAgent)) {
+				setDeviceType("Mobile");
+			} else if (/iPad/.test(userAgent)) {
+				setDeviceType("Tablet");
+			} else {
+				setDeviceType("Desktop");
+			}
+		}
 
 		// Get user location
 		const getLocation = () => {
@@ -72,7 +172,11 @@ export default function AttendancePage() {
 						setLocationError(
 							"Location access denied. Please enable location services."
 						);
-						console.error("Location error:", error);
+						toast({
+							variant: "destructive",
+							title: "Location error",
+							description: "Location access denied. Please enable location services.",
+						});
 					}
 				);
 			} else {
@@ -100,8 +204,11 @@ export default function AttendancePage() {
 					);
 				}
 			} catch (error) {
-				console.error("Error getting address:", error);
-				// Don't show error to user, just log it
+				toast({
+					variant: "destructive",
+					title: "Reverse geocoding failed",
+					description: "Could not retrieve address for your current location.",
+				});
 			} finally {
 				setIsLoadingAddress(false);
 			}
@@ -109,23 +216,80 @@ export default function AttendancePage() {
 
 		getLocation();
 
-		// Check today's attendance (simulate API call)
-		const checkTodayAttendance = () => {
-			const today = new Date().toISOString().split("T")[0];
-			// TODO: Replace with actual API call
-			// For now, simulate checking localStorage or API
-			const savedAttendance = localStorage.getItem(`attendance_${today}`);
-			if (savedAttendance) {
-				setTodayAttendance(JSON.parse(savedAttendance));
-			} else {
-				setTodayAttendance({ date: today });
-			}
-		};
-
-		checkTodayAttendance();
+		// Today's attendance is now handled by the API hook above
 
 		return () => clearInterval(interval);
 	}, []);
+
+	// Compute location type whenever location or agency changes
+	useEffect(() => {
+		if (!location) return;
+		const agency = practicumWithAgency?.agency as any;
+		if (!agency) return;
+		const agencyLat = Number(agency?.latitude);
+		const agencyLng = Number(agency?.longitude);
+		if (isNaN(agencyLat) || isNaN(agencyLng)) return;
+
+		const toRad = (v: number) => (v * Math.PI) / 180;
+		const R = 6371000; // meters
+		const dLat = toRad(location.latitude - agencyLat);
+		const dLon = toRad(location.longitude - agencyLng);
+		const a =
+			Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+			Math.cos(toRad(agencyLat)) *
+				Math.cos(toRad(location.latitude)) *
+				Math.sin(dLon / 2) * Math.sin(dLon / 2);
+		const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+		const distance = R * c; // meters
+		
+		// Debug logging
+		console.log("Location Debug:", {
+			currentLocation: { lat: location.latitude, lng: location.longitude },
+			agencyLocation: { lat: agencyLat, lng: agencyLng },
+			distance: Math.round(distance) + "m",
+			locationType: distance <= 150 ? "Inside" : distance <= 500 ? "In-field" : "Outside"
+		});
+		
+		if (distance <= 150) setLocationType("Inside");
+		else if (distance <= 500) setLocationType("In-field");
+		else setLocationType("Outside");
+	}, [location, practicumWithAgency]);
+
+	// Short device label for UI display
+	const shortDevice = useMemo(() => {
+		if (!deviceUnit) return "";
+		try {
+			const ua = deviceUnit;
+			if (/iPhone/i.test(ua)) return "iPhone";
+			if (/iPad/i.test(ua)) return "iPad";
+			if (/Android/i.test(ua)) return "Android";
+			if (/Windows NT/i.test(ua)) return "Windows";
+			if (/Mac OS X/i.test(ua)) return "macOS";
+			if (/Linux/i.test(ua)) return "Linux";
+			return ua.split(" ").slice(0, 1)[0];
+		} catch {
+			return "";
+		}
+	}, [deviceUnit]);
+
+	// Helper function to shorten device type names
+	const shortenDeviceType = (deviceType: string) => {
+		const abbreviations: { [key: string]: string } = {
+			'Mobile Phone': 'Mobile',
+			'Desktop Computer': 'Desktop',
+			'Laptop Computer': 'Laptop',
+			'Tablet': 'Tablet',
+			'Smartphone': 'Phone',
+			'Computer': 'PC',
+			'Workstation': 'WS',
+			'Personal Computer': 'PC',
+			'Mobile Device': 'Mobile',
+			'Handheld Device': 'Handheld',
+			'Portable Device': 'Portable'
+		};
+		
+		return abbreviations[deviceType] || deviceType;
+	};
 
 	// Cleanup face detection interval and media stream on unmount
 	useEffect(() => {
@@ -161,7 +325,11 @@ export default function AttendancePage() {
 					setLocationError(
 						"Location access denied. Please enable location services."
 					);
-					console.error("Location error:", error);
+					toast({
+						variant: "destructive",
+						title: "Location error",
+						description: "Location access denied. Please enable location services.",
+					});
 				}
 			);
 		}
@@ -187,43 +355,17 @@ export default function AttendancePage() {
 				);
 			}
 		} catch (error) {
-			console.error("Error getting address:", error);
-			// Don't show error to user, just log it
+			toast({
+				variant: "destructive",
+				title: "Reverse geocoding failed",
+				description: "Could not retrieve address for your current location.",
+			});
 		} finally {
 			setIsLoadingAddress(false);
 		}
 	};
 
-	const attendanceHistory = [
-		{
-			date: "2024-01-15",
-			status: "present",
-			clockIn: "08:00 AM",
-			clockOut: "05:00 PM",
-			location: "Main Campus",
-		},
-		{
-			date: "2024-01-14",
-			status: "present",
-			clockIn: "08:15 AM",
-			clockOut: "05:15 PM",
-			location: "Main Campus",
-		},
-		{
-			date: "2024-01-13",
-			status: "late",
-			clockIn: "08:30 AM",
-			clockOut: "05:30 PM",
-			location: "Main Campus",
-		},
-		{
-			date: "2024-01-12",
-			status: "present",
-			clockIn: "07:55 AM",
-			clockOut: "04:55 PM",
-			location: "Main Campus",
-		},
-	];
+	// Mock data removed - now using real API data
 
 	// Load face-api models from /public/models
 	const loadFaceModels = async () => {
@@ -247,7 +389,11 @@ export default function AttendancePage() {
 
 			setIsFaceModelLoaded(true);
 		} catch (err) {
-			console.error("Failed to load face detection models:", err);
+			toast({
+				variant: "destructive",
+				title: "Face model load failed",
+				description: "Could not load face detection model. Try again.",
+			});
 			setIsFaceModelLoaded(false);
 		} finally {
 			setIsLoadingFaceModels(false);
@@ -389,10 +535,13 @@ export default function AttendancePage() {
 				}
 			}
 		} catch (error) {
-			console.error("Error accessing camera:", error);
 			setIsCapturing(false);
 			setShowCamera(false);
-			alert("Camera access denied. Please allow camera access to clock in.");
+			toast({
+				variant: "destructive",
+				title: "Camera access denied",
+				description: "Please allow camera access to clock in.",
+			});
 		}
 	};
 
@@ -420,10 +569,20 @@ export default function AttendancePage() {
 	};
 
 	const handleClockIn = async () => {
+		if (hasBlockingRequired) {
+			toast({
+				variant: "destructive",
+				title: "Action required",
+				description: "Get required items approved before recording attendance.",
+			});
+			return;
+		}
 		if (!location) {
-			alert(
-				"Location is required to clock in. Please enable location services."
-			);
+			toast({
+				variant: "destructive",
+				title: "Location required",
+				description: "Enable location services to clock in.",
+			});
 			return;
 		}
 
@@ -434,43 +593,68 @@ export default function AttendancePage() {
 
 	const submitClockIn = async () => {
 		if (!capturedImage) {
-			alert("Please take a selfie to complete clock in.");
+			toast({
+				variant: "destructive",
+				title: "Selfie required",
+				description: "Take a selfie to complete clock in.",
+			});
+			return;
+		}
+
+		if (!practicumWithAgency?.id) {
+			toast({
+				variant: "destructive",
+				title: "No practicum found",
+				description: "You need to be assigned to a practicum to clock in.",
+			});
 			return;
 		}
 
 		try {
-			const now = new Date();
-			const timeString = now.toLocaleTimeString();
-			const today = now.toISOString().split("T")[0];
+			// Convert captured image to File object
+			const response = await fetch(capturedImage);
+			const blob = await response.blob();
+			const file = new File([blob], 'selfie.jpg', { type: 'image/jpeg' });
 
-			const attendanceData = {
-				date: today,
-				clockIn: timeString,
-				selfieImage: capturedImage,
-				location: location
-					? {
-							latitude: location.latitude,
-							longitude: location.longitude,
-					  }
-					: null,
+			// Get device information
+			const deviceInfo = {
+				deviceType: /Mobile|Android|iPhone|iPad/.test(navigator.userAgent) ? "Mobile" : "Desktop",
+				deviceUnit: navigator.userAgent,
+				macAddress: null, // Not available in browser
 			};
 
-			// TODO: Replace with actual API call
-			localStorage.setItem(
-				`attendance_${today}`,
-				JSON.stringify(attendanceData)
-			);
-			setTodayAttendance(attendanceData);
+			// Determine if late (assuming 8:00 AM is the expected time)
+			const now = new Date();
+			const expectedTime = new Date();
+			expectedTime.setHours(8, 0, 0, 0);
+			const isLate = now > expectedTime;
+
+			await clockInMutation.mutateAsync({
+				practicumId: practicumWithAgency.id,
+				date: today,
+				day: now.toLocaleDateString('en-US', { weekday: 'long' }),
+				latitude: location?.latitude || null,
+				longitude: location?.longitude || null,
+				address: location?.address || null,
+				locationType: (locationType || "Inside") as any,
+				deviceType: deviceInfo.deviceType as "Mobile" | "Desktop" | "Tablet",
+				deviceUnit: deviceInfo.deviceUnit,
+				macAddress: macAddress,
+				remarks: isLate ? "Late" : "Normal",
+				photo: file,
+			});
 
 			// Reset camera state
 			setCapturedImage(null);
 			setShowCamera(false);
 			setIsClockingIn(false);
 
-			console.log("Clocked in successfully:", attendanceData);
 		} catch (error) {
-			console.error("Error clocking in:", error);
-			alert("Failed to clock in. Please try again.");
+			toast({
+				variant: "destructive",
+				title: "Clock in failed",
+				description: "Something went wrong. Please try again.",
+			});
 		}
 	};
 
@@ -489,7 +673,11 @@ export default function AttendancePage() {
 		try {
 			await startCamera();
 		} catch (error) {
-			console.error("Error restarting camera:", error);
+			toast({
+				variant: "destructive",
+				title: "Camera restart failed",
+				description: "Could not restart camera. Try again.",
+			});
 		}
 	};
 
@@ -508,44 +696,83 @@ export default function AttendancePage() {
 	};
 
 	const handleClockOut = async () => {
+		if (hasBlockingRequired) {
+			toast({
+				variant: "destructive",
+				title: "Action required",
+				description: "Get required items approved before recording attendance.",
+			});
+			return;
+		}
 		if (!location) {
-			alert(
-				"Location is required to clock out. Please enable location services."
-			);
+			toast({
+				variant: "destructive",
+				title: "Location required",
+				description: "Enable location services to clock out.",
+			});
 			return;
 		}
 
-		if (!todayAttendance?.clockIn) {
-			alert("You must clock in first before clocking out.");
+		if (!todayAttendance?.timeIn) {
+			toast({
+				variant: "destructive",
+				title: "Clock in first",
+				description: "You cannot clock out before clocking in.",
+			});
 			return;
 		}
 
+		if (!practicumWithAgency?.id) {
+			toast({
+				variant: "destructive",
+				title: "No practicum found",
+				description: "You need to be assigned to a practicum to clock out.",
+			});
+			return;
+		}
+
+		// Show confirmation modal
+		setShowClockOutConfirm(true);
+	};
+
+	const confirmClockOut = async () => {
 		setIsClockingOut(true);
+		setShowClockOutConfirm(false);
+		
 		try {
-			const now = new Date();
-			const timeString = now.toLocaleTimeString();
-			const today = now.toISOString().split("T")[0];
-
-			const updatedAttendance = {
-				...todayAttendance,
-				clockOut: timeString,
-				location: {
-					latitude: location.latitude,
-					longitude: location.longitude,
-				},
+			// Get device information
+			const deviceInfo = {
+				deviceType: /Mobile|Android|iPhone|iPad/.test(navigator.userAgent) ? "Mobile" : "Desktop",
+				deviceUnit: navigator.userAgent,
+				macAddress: null, // Not available in browser
 			};
 
-			// TODO: Replace with actual API call
-			localStorage.setItem(
-				`attendance_${today}`,
-				JSON.stringify(updatedAttendance)
-			);
-			setTodayAttendance(updatedAttendance);
+			// Determine if early departure (assuming 5:00 PM is the expected time)
+			const now = new Date();
+			const expectedTime = new Date();
+			expectedTime.setHours(17, 0, 0, 0);
+			const isEarlyDeparture = now < expectedTime;
 
-			console.log("Clocked out successfully:", updatedAttendance);
+			await clockOutMutation.mutateAsync({
+				practicumId: practicumWithAgency.id,
+				date: today,
+				latitude: location?.latitude || null,
+				longitude: location?.longitude || null,
+				address: location?.address || null,
+				locationType: (locationType || "Inside") as any,
+				deviceType: deviceInfo.deviceType as "Mobile" | "Desktop" | "Tablet",
+				deviceUnit: deviceInfo.deviceUnit,
+				macAddress: macAddress,
+				remarks: isEarlyDeparture ? "Early Departure" : "Normal",
+				photo: null, // Clock out doesn't require photo for now
+			});
+
 		} catch (error) {
-			console.error("Error clocking out:", error);
-			alert("Failed to clock out. Please try again.");
+			toast({
+				variant: "destructive",
+				title: "Clock out failed",
+				description: "Something went wrong. Please try again.",
+			});
 		} finally {
 			setIsClockingOut(false);
 		}
@@ -554,6 +781,36 @@ export default function AttendancePage() {
 	return (
 		<div className="px-3 sm:px-4 md:px-6 lg:px-8 xl:px-16">
 			<AttendanceHeader />
+
+			{(hasBlockingRequired || hasAgencyOrDateBlocking) && (
+				<Card className="mb-4 border-red-300 bg-red-50">
+					<CardHeader className="pb-2">
+						<CardTitle className="text-red-700 text-base sm:text-lg">Action required before using Attendance</CardTitle>
+					</CardHeader>
+					<CardContent className="text-sm text-red-800 flex flex-col gap-3">
+						{hasBlockingRequired && (
+							<div>
+								<p className="mb-2">Your account has required requirements that are not yet approved. Please submit and have them approved to continue.</p>
+								<Link href="/dashboard/student/requirements">
+									<Button variant="destructive">Go to Requirements</Button>
+								</Link>
+							</div>
+						)}
+						{hasAgencyOrDateBlocking && (
+							<div>
+								<p className="mb-2">You can only record attendance once you have an assigned agency and your practicum start date has begun.</p>
+								<ul className="list-disc pl-5">
+									{!hasAgency && <li>No agency is assigned to your account yet.</li>}
+									{startDateStr && !isOnOrAfterStart && (
+										<li>Start date is {new Date(startDateStr).toLocaleDateString()} — attendance opens on/after this date.</li>
+									)}
+									{!startDateStr && <li>Your practicum start date is not set.</li>}
+								</ul>
+							</div>
+						)}
+					</CardContent>
+				</Card>
+			)}
 
 			<div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
 				{/* Attendance Logging */}
@@ -595,21 +852,38 @@ export default function AttendancePage() {
 							/>
 
 							{!showCamera && (
-								<ClockButtons
-									onClockIn={handleClockIn}
-									onClockOut={handleClockOut}
-									disableClockIn={
-										!location || isClockingIn || !!todayAttendance?.clockIn
-									}
-									disableClockOut={
-										!location ||
-										isClockingOut ||
-										!todayAttendance?.clockIn ||
-										!!todayAttendance?.clockOut
-									}
-									isClockingOut={isClockingOut}
+							<ClockButtons
+								onClockIn={handleClockIn}
+								onClockOut={handleClockOut}
+								disableClockIn={
+									hasBlockingRequired || hasAgencyOrDateBlocking || !location || isClockingIn || clockInMutation.isPending || !!todayAttendance?.timeIn
+								}
+								disableClockOut={
+									hasBlockingRequired || hasAgencyOrDateBlocking || !location ||
+									isClockingOut || clockOutMutation.isPending ||
+									!todayAttendance?.timeIn ||
+									!!todayAttendance?.timeOut
+								}
+								isClockingOut={isClockingOut || clockOutMutation.isPending}
 								/>
 							)}
+
+							<div className="text-xs text-gray-600 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-md border p-3">
+								<div>
+									<span className="font-medium">Location Type:</span>
+									<span className="ml-2">
+										{locationType || "Unknown"}
+									</span>
+								</div>
+								<div>
+									<span className="font-medium">Device:</span>
+									<span className="ml-2">{shortenDeviceType(deviceType)} — {shortDevice}</span>
+								</div>
+								{/* <div>
+									<span className="font-medium">MAC Address:</span>
+									<span className="ml-2">{macAddress || "Unavailable in browser"}</span>
+								</div> */}
+							</div>
 
 							<CurrentLocationDisplay
 								location={location}
@@ -641,9 +915,46 @@ export default function AttendancePage() {
 						</CardContent>
 					</Card> */}
 
-					<RecentAttendance records={attendanceHistory} />
+					<RecentAttendance 
+						records={recentAttendanceData?.attendance?.map(record => ({
+							date: record.date,
+							status: record.status,
+							clockIn: record.timeIn ? new Date(record.timeIn).toLocaleTimeString('en-US', { 
+								hour: '2-digit', 
+								minute: '2-digit',
+								hour12: true 
+							}) : 'N/A',
+							clockOut: record.timeOut ? new Date(record.timeOut).toLocaleTimeString('en-US', { 
+								hour: '2-digit', 
+								minute: '2-digit',
+								hour12: true 
+							}) : 'N/A',
+							location: record.address || record.agencyName || 'N/A',
+							locationType: record.timeInLocationType || record.timeOutLocationType || undefined,
+							timeInRemarks: record.timeInRemarks || undefined,
+							timeOutRemarks: record.timeOutRemarks || undefined
+						})) || []} 
+					/>
 				</div>
 			</div>
+
+			{/* Clock Out Confirmation Modal */}
+			<AlertDialog open={showClockOutConfirm} onOpenChange={setShowClockOutConfirm}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Confirm Clock Out</AlertDialogTitle>
+						<AlertDialogDescription>
+							Are you sure you want to clock out? This action will record your departure time and cannot be undone.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogAction onClick={confirmClockOut}>
+							Clock Out
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</div>
 	);
 }

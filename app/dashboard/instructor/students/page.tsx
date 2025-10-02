@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import {
 	Table,
 	TableBody,
@@ -74,6 +75,13 @@ import {
 	Phone,
 	Building,
 	RefreshCw,
+	CheckCircle,
+	Clock,
+	AlertTriangle,
+	FileText,
+	FileCheck,
+	XCircle,
+	Star,
 } from "lucide-react";
 import { useAuth } from "@/hooks/auth/useAuth";
 import { useStudentsByTeacher, useStudent, useUpdateStudent, useDeleteStudent, type UpdateStudentParams } from "@/hooks/student/useStudent";
@@ -81,8 +89,13 @@ import { useAgencies } from "@/hooks/agency";
 import { useDepartments } from "@/hooks/department";
 import { useCourses } from "@/hooks/course";
 import { useSections } from "@/hooks/section";
+import { useAttendance } from "@/hooks/attendance";
+import { useRequirements } from "@/hooks/requirement/useRequirement";
+import { useRequirementTemplates } from "@/hooks/requirement-template/useRequirementTemplate";
+import { useReports } from "@/hooks/report/useReport";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import * as XLSX from 'xlsx';
 
 export default function StudentsPage() {
 	const [searchTerm, setSearchTerm] = useState("");
@@ -141,6 +154,33 @@ export default function StudentsPage() {
 	const { data: selectedStudentData, isLoading: isLoadingStudent } = useStudent(selectedStudentId || "");
 	const updateStudentMutation = useUpdateStudent();
 	const deleteStudentMutation = useDeleteStudent();
+
+	// Fetch attendance records for the selected student
+	const { data: attendanceData, isLoading: isLoadingAttendance } = useAttendance({
+		studentId: selectedStudentId || undefined,
+		limit: 10,
+	});
+
+	// Fetch requirements data for the selected student
+	const { data: requirementsData, isLoading: isLoadingRequirements } = useRequirements({
+		studentId: selectedStudentId || undefined,
+		limit: 100,
+	});
+
+	// Fetch requirement templates
+	const { data: templatesData } = useRequirementTemplates({
+		page: 1,
+		limit: 100,
+		status: "active"
+	});
+
+	// Fetch reports data for the selected student
+	const { data: reportsData, isLoading: isLoadingReports } = useReports({
+		page: 1,
+		limit: 50,
+		studentId: selectedStudentId || undefined,
+		type: "weekly",
+	});
 
 	// Form setup for editing
 	const form = useForm<UpdateStudentParams>({
@@ -379,9 +419,109 @@ export default function StudentsPage() {
 		}
 	};
 
+	const handleExportToExcel = () => {
+		try {
+			// Prepare data for export
+			const exportData = filteredStudents.map((student: any, index: number) => ({
+				'#': index + 1,
+				'Student ID': student.studentId,
+				'Full Name': student.name,
+				'Email': student.email,
+				'Course': student.course,
+				'Section': student.section,
+				'Agency': student.agency,
+				'Status': student.status,
+				'Requirements Completed': `${student.requirements}/${templatesData?.requirementTemplates?.length || 0}`,
+				'Requirements %': `${student.requirementsCompletion.toFixed(1)}%`,
+				'Attendance %': `${student.attendance}%`,
+				'Attendance Remarks': student.attendanceRemarks,
+				'Reports': student.reports || 0,
+			}));
+
+			// Calculate summary statistics
+			const totalStudents = filteredStudents.length;
+			const activeStudents = filteredStudents.filter((s: any) => s.status === 'Active').length;
+			const inactiveStudents = totalStudents - activeStudents;
+			const avgAttendance = totalStudents > 0 ? 
+				(filteredStudents.reduce((sum: number, s: any) => sum + s.attendance, 0) / totalStudents).toFixed(1) : 0;
+			const avgRequirements = totalStudents > 0 ? 
+				(filteredStudents.reduce((sum: number, s: any) => sum + s.requirementsCompletion, 0) / totalStudents).toFixed(1) : 0;
+			const completedRequirements = filteredStudents.filter((s: any) => s.requirementsCompletion >= 100).length;
+
+			// Create summary data
+			const summaryData = [
+				{ 'Metric': 'Total Students', 'Value': totalStudents },
+				{ 'Metric': 'Active Students', 'Value': activeStudents },
+				{ 'Metric': 'Inactive Students', 'Value': inactiveStudents },
+				{ 'Metric': 'Average Attendance %', 'Value': `${avgAttendance}%` },
+				{ 'Metric': 'Average Requirements %', 'Value': `${avgRequirements}%` },
+				{ 'Metric': 'Students with Complete Requirements', 'Value': completedRequirements },
+				{ 'Metric': 'Export Date', 'Value': new Date().toLocaleDateString() },
+				{ 'Metric': 'Export Time', 'Value': new Date().toLocaleTimeString() },
+			];
+
+			// Create workbook
+			const wb = XLSX.utils.book_new();
+
+			// Create students worksheet
+			const studentsWs = XLSX.utils.json_to_sheet(exportData);
+			const studentsColWidths = [
+				{ wch: 5 },   // #
+				{ wch: 15 },  // Student ID
+				{ wch: 25 },  // Full Name
+				{ wch: 30 },  // Email
+				{ wch: 20 },  // Course
+				{ wch: 15 },  // Section
+				{ wch: 25 },  // Agency
+				{ wch: 10 },  // Status
+				{ wch: 20 },  // Requirements Completed
+				{ wch: 15 },  // Requirements %
+				{ wch: 15 },  // Attendance %
+				{ wch: 20 },  // Attendance Remarks
+				{ wch: 10 },  // Reports
+			];
+			studentsWs['!cols'] = studentsColWidths;
+
+			// Create summary worksheet
+			const summaryWs = XLSX.utils.json_to_sheet(summaryData);
+			const summaryColWidths = [
+				{ wch: 30 },  // Metric
+				{ wch: 20 },  // Value
+			];
+			summaryWs['!cols'] = summaryColWidths;
+
+			// Add worksheets to workbook
+			XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+			XLSX.utils.book_append_sheet(wb, studentsWs, 'Students');
+
+			// Generate filename with current date
+			const currentDate = new Date().toISOString().split('T')[0];
+			const filename = `students_export_${currentDate}.xlsx`;
+
+			// Save file
+			XLSX.writeFile(wb, filename);
+
+			toast.success(`Exported ${filteredStudents.length} students to ${filename}`);
+		} catch (error) {
+			console.error('Export error:', error);
+			toast.error('Failed to export data to Excel');
+		}
+	};
+
 	const serverStudents = (data as any)?.data?.students ?? [];
 
 	const normalizedStudents = useMemo(() => {
+		const totalRequirements = templatesData?.requirementTemplates?.length || 0;
+		
+		// Debug: Log the first student's data structure
+		if (serverStudents.length > 0) {
+			console.log('First student data structure:', {
+				student: serverStudents[0],
+				totalRequirements,
+				templatesData: templatesData?.requirementTemplates
+			});
+		}
+		
 		return serverStudents.map((s: any) => {
 			const enrollment = s.enrollments?.[0];
 			const section = enrollment?.section;
@@ -394,6 +534,46 @@ export default function StudentsPage() {
 			const sectionName = s.computed?.sectionName || section?.name || "-";
 			const agencyName = s.computed?.agencyName || agency?.name || "-";
 			
+			// Calculate attendance percentage and requirements completion
+			const attendancePercentage = s.computed?.attendance || 0;
+			const reports = s.computed?.reports || 0;
+			
+			// Calculate requirements completion based on actual requirements data
+			// Count approved requirements from the student's requirements array
+			const studentRequirements = s.requirements || [];
+			const approvedRequirements = studentRequirements.filter((req: any) => 
+				req.status === 'approved'
+			).length;
+			
+			// Calculate attendance remarks based on attendance records
+			const attendanceRecords = s.attendanceRecords || [];
+			const lateCount = attendanceRecords.filter((record: any) => record.status === 'late').length;
+			const absentCount = attendanceRecords.filter((record: any) => record.status === 'absent').length;
+			
+			let attendanceRemarks = "Good";
+			if (absentCount >= 3) {
+				attendanceRemarks = "Too Many Absences";
+			} else if (lateCount >= 3) {
+				attendanceRemarks = "Too Many Lates";
+			}
+			
+			// Debug logging for all students to see the data structure
+			console.log(`Student ${s.firstName} ${s.lastName}:`, {
+				studentRequirements: studentRequirements,
+				approvedRequirements,
+				totalRequirements,
+				requirementsCompletion: totalRequirements > 0 ? (approvedRequirements / totalRequirements) * 100 : 0,
+				hasRequirements: !!s.requirements,
+				requirementsLength: studentRequirements.length,
+				attendanceRecords: attendanceRecords.length,
+				lateCount,
+				absentCount,
+				attendanceRemarks
+			});
+			
+			// Calculate requirements completion percentage
+			const requirementsCompletion = totalRequirements > 0 ? (approvedRequirements / totalRequirements) * 100 : 0;
+			
 			return {
 				id: s.id,
 				name: `${s.firstName} ${s.lastName}`,
@@ -402,13 +582,15 @@ export default function StudentsPage() {
 				email: s.email,
 				agency: agencyName,
 				status: s.isActive ? "Active" : "Inactive",
-				attendance: s.computed?.attendance,
-				requirements: s.computed?.requirements,
-				reports: s.computed?.reports,
+				attendance: attendancePercentage,
+				requirements: approvedRequirements,
+				reports: reports,
+				requirementsCompletion: requirementsCompletion,
+				attendanceRemarks: attendanceRemarks,
 				studentId: s.studentId,
 			};
 		});
-	}, [serverStudents]);
+	}, [serverStudents, templatesData]);
 
 	// Get unique sections from the data for dynamic filter options
 	const availableSections = useMemo(() => {
@@ -562,9 +744,13 @@ export default function StudentsPage() {
 								<SelectItem value="Inactive">Inactive</SelectItem>
 							</SelectContent>
 						</Select>
-						<Button variant="outline">
+						<Button 
+							variant="outline"
+							onClick={handleExportToExcel}
+							disabled={!hasMounted || isLoading || filteredStudents.length === 0}
+						>
 							<Download className="w-4 h-4 mr-2" />
-							Export
+							Export to Excel
 						</Button>
 					</div>
 
@@ -586,11 +772,11 @@ export default function StudentsPage() {
 									<TableHeader>
 										<TableRow>
 											<TableHead>Student Info</TableHead>
-											<TableHead>Course & Section</TableHead>
+											<TableHead className="w-32">Course & Section</TableHead>
 											<TableHead>Agency</TableHead>
 											<TableHead>Status</TableHead>
-											<TableHead>Attendance</TableHead>
-											<TableHead>Progress</TableHead>
+											<TableHead>Requirements</TableHead>
+											<TableHead>Remarks</TableHead>
 											<TableHead className="text-right">Actions</TableHead>
 										</TableRow>
 									</TableHeader>
@@ -610,11 +796,13 @@ export default function StudentsPage() {
 														</div>
 													</div>
 												</TableCell>
-												<TableCell>
-													<div>
-														<div className="font-medium">{student.course}</div>
-														<div className="text-sm text-gray-600">
-															Section {student.section}
+												<TableCell className="w-32">
+													<div className="truncate">
+														<div className="font-medium text-sm truncate" title={student.course}>
+															{student.course}
+														</div>
+														<div className="text-xs text-gray-600 truncate" title={`Section ${student.section}`}>
+															Sec {student.section}
 														</div>
 													</div>
 												</TableCell>
@@ -636,26 +824,36 @@ export default function StudentsPage() {
 													</Badge>
 												</TableCell>
 												<TableCell>
-													<div className="flex items-center gap-2">
-														<div className="text-sm font-medium">
-															{student.attendance !== undefined ? `${student.attendance}%` : "-"}
-														</div>
-														<div
-															className={`w-2 h-2 rounded-full ${
-																student.attendance >= 90
-																	? "bg-green-500"
-																: student.attendance >= 80
-																? "bg-yellow-500"
-																: "bg-red-500"
-															}`}
-														/>
-													</div>
+													<Badge
+														variant={
+															student.requirementsCompletion >= 100 ? "default" : "secondary"
+														}
+														className={
+															student.requirementsCompletion >= 100
+																? "bg-green-100 text-green-800"
+																: student.requirementsCompletion >= 50
+																? "bg-yellow-100 text-yellow-800"
+																: "bg-red-100 text-red-800"
+														}
+													>
+														{student.requirementsCompletion >= 100 ? "Complete" : "Incomplete"}
+													</Badge>
 												</TableCell>
 												<TableCell>
-													<div className="text-sm">
-														<div>Req: {student.requirements ?? "-"}</div>
-														<div>Rep: {student.reports ?? "-"}</div>
-													</div>
+													<Badge
+														variant={
+															student.attendanceRemarks === "Good" ? "default" : "destructive"
+														}
+														className={
+															student.attendanceRemarks === "Good"
+																? "bg-green-100 text-green-800"
+																: student.attendanceRemarks === "Too Many Lates"
+																? "bg-yellow-100 text-yellow-800"
+																: "bg-red-100 text-red-800"
+														}
+													>
+														{student.attendanceRemarks}
+													</Badge>
 												</TableCell>
 												<TableCell className="text-right">
 													<DropdownMenu>
@@ -893,6 +1091,357 @@ export default function StudentsPage() {
 									</CardContent>
 								</Card>
 							)}
+
+							{/* Attendance Information */}
+							<Card>
+								<CardHeader>
+									<CardTitle className="text-lg flex items-center gap-2">
+										<Calendar className="w-4 h-4" />
+										Attendance Record
+									</CardTitle>
+								</CardHeader>
+								<CardContent>
+									<div className="text-center p-4 bg-gray-50 rounded-lg mb-4">
+										<div className="text-3xl font-bold text-gray-900">
+											{selectedStudentData.data.computed?.attendance || 0}%
+										</div>
+										<div className="text-sm text-gray-600">Overall Attendance</div>
+									</div>
+									
+									{/* Attendance Records Table */}
+									<div className="space-y-2">
+										<h4 className="font-medium text-gray-900">Recent Attendance</h4>
+										<div className="border rounded-lg overflow-hidden">
+											<Table>
+												<TableHeader>
+													<TableRow>
+														<TableHead>Date</TableHead>
+														<TableHead>Time In</TableHead>
+														<TableHead>Time Out</TableHead>
+														<TableHead>Status</TableHead>
+														<TableHead>Hours</TableHead>
+													</TableRow>
+												</TableHeader>
+												<TableBody>
+													{isLoadingAttendance ? (
+														<TableRow>
+															<TableCell colSpan={5} className="text-center text-gray-500 py-4">
+																Loading attendance records...
+															</TableCell>
+														</TableRow>
+													) : (attendanceData?.attendance?.length ?? 0) > 0 ? (
+														attendanceData?.attendance?.map((attendance: any, index: number) => (
+															<TableRow key={attendance.id || index}>
+																<TableCell className="text-sm">
+																	{new Date(attendance.date).toLocaleDateString()}
+																</TableCell>
+																<TableCell className="text-sm">
+																	{attendance.timeIn ? new Date(attendance.timeIn).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-'}
+																</TableCell>
+																<TableCell className="text-sm">
+																	{attendance.timeOut ? new Date(attendance.timeOut).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-'}
+																</TableCell>
+																<TableCell>
+																	<Badge
+																		variant={
+																			attendance.status === 'present' ? 'default' : 
+																			attendance.status === 'late' ? 'secondary' : 'destructive'
+																		}
+																		className={
+																			attendance.status === 'present' ? 'bg-green-100 text-green-800' :
+																			attendance.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
+																			attendance.status === 'absent' ? 'bg-red-100 text-red-800' :
+																			'bg-gray-100 text-gray-800'
+																		}
+																	>
+																		{attendance.status || 'Unknown'}
+																	</Badge>
+																</TableCell>
+																<TableCell className="text-sm">
+																	{attendance.hours ? `${attendance.hours}h` : '-'}
+																</TableCell>
+															</TableRow>
+														))
+													) : (
+														<TableRow>
+															<TableCell colSpan={5} className="text-center text-gray-500 py-4">
+																No attendance records found
+															</TableCell>
+														</TableRow>
+													)}
+												</TableBody>
+											</Table>
+										</div>
+									</div>
+								</CardContent>
+							</Card>
+
+							{/* Requirements Progress */}
+							<Card>
+								<CardHeader>
+									<CardTitle className="text-lg flex items-center gap-2">
+										<FileText className="w-4 h-4" />
+										Requirements Progress
+									</CardTitle>
+								</CardHeader>
+								<CardContent>
+									{isLoadingRequirements ? (
+										<div className="text-center py-8">
+											<p className="text-gray-500">Loading requirements...</p>
+										</div>
+									) : (
+										<>
+											{/* Progress Stats */}
+											<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+												<Card>
+													<CardContent className="p-4">
+														<div className="flex items-center justify-between mb-2">
+															<span className="text-sm font-medium">Completion Rate</span>
+															<span className="text-sm text-gray-600">
+																{(() => {
+																	const requirements = requirementsData?.requirements || [];
+																	const templates = templatesData?.requirementTemplates || [];
+																	const approvedCount = requirements.filter((r: any) => r.status === "approved").length;
+																	const totalCount = templates.length;
+																	return `${approvedCount}/${totalCount}`;
+																})()}
+															</span>
+														</div>
+														<Progress 
+															value={(() => {
+																const requirements = requirementsData?.requirements || [];
+																const templates = templatesData?.requirementTemplates || [];
+																const approvedCount = requirements.filter((r: any) => r.status === "approved").length;
+																const totalCount = templates.length;
+																return totalCount > 0 ? (approvedCount / totalCount) * 100 : 0;
+															})()} 
+															className="h-2 mb-2" 
+														/>
+														<span className="text-xs text-gray-500">
+															{(() => {
+																const requirements = requirementsData?.requirements || [];
+																const templates = templatesData?.requirementTemplates || [];
+																const approvedCount = requirements.filter((r: any) => r.status === "approved").length;
+																const totalCount = templates.length;
+																const percentage = totalCount > 0 ? (approvedCount / totalCount) * 100 : 0;
+																return `${percentage.toFixed(0)}% Complete`;
+															})()}
+														</span>
+													</CardContent>
+												</Card>
+
+												<Card>
+													<CardContent className="p-4">
+														<div className="flex items-center gap-2 mb-2">
+															<CheckCircle className="w-4 h-4 text-green-600" />
+															<span className="text-sm font-medium">Approved</span>
+														</div>
+														<span className="text-2xl font-bold text-green-600">
+															{requirementsData?.requirements?.filter((r: any) => r.status === "approved").length || 0}
+														</span>
+													</CardContent>
+												</Card>
+
+												<Card>
+													<CardContent className="p-4">
+														<div className="flex items-center gap-2 mb-2">
+															<Clock className="w-4 h-4 text-yellow-600" />
+															<span className="text-sm font-medium">Submitted</span>
+														</div>
+														<span className="text-2xl font-bold text-yellow-600">
+															{requirementsData?.requirements?.filter((r: any) => r.status === "submitted").length || 0}
+														</span>
+													</CardContent>
+												</Card>
+											</div>
+
+										</>
+									)}
+								</CardContent>
+							</Card>
+
+							{/* Weekly Reports */}
+							<Card>
+								<CardHeader>
+									<CardTitle className="text-lg flex items-center gap-2">
+										<FileCheck className="w-4 h-4" />
+										Weekly Reports
+									</CardTitle>
+								</CardHeader>
+								<CardContent>
+									{isLoadingReports ? (
+										<div className="text-center py-8">
+											<p className="text-gray-500">Loading reports...</p>
+										</div>
+									) : (
+										<>
+											{/* Reports Stats */}
+											<div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+												<Card className="bg-yellow-50 border-yellow-200">
+													<CardContent className="p-4">
+														<div className="flex items-center justify-between">
+															<div>
+																<p className="text-sm text-gray-600">Total Reports</p>
+																<p className="text-2xl font-bold text-yellow-600">
+																	{reportsData?.reports?.length || 0}
+																</p>
+															</div>
+															<FileCheck className="w-8 h-8 text-yellow-600" />
+														</div>
+													</CardContent>
+												</Card>
+
+												<Card className="bg-green-50 border-green-200">
+													<CardContent className="p-4">
+														<div className="flex items-center justify-between">
+															<div>
+																<p className="text-sm text-gray-600">Approved</p>
+																<p className="text-2xl font-bold text-green-600">
+																	{reportsData?.reports?.filter((r: any) => r.status === "approved").length || 0}
+																</p>
+															</div>
+															<CheckCircle className="w-8 h-8 text-green-600" />
+														</div>
+													</CardContent>
+												</Card>
+
+												<Card className="bg-yellow-50 border-yellow-200">
+													<CardContent className="p-4">
+														<div className="flex items-center justify-between">
+															<div>
+																<p className="text-sm text-gray-600">Pending</p>
+																<p className="text-2xl font-bold text-yellow-600">
+																	{reportsData?.reports?.filter((r: any) => r.status === "submitted").length || 0}
+																</p>
+															</div>
+															<Clock className="w-8 h-8 text-yellow-600" />
+														</div>
+													</CardContent>
+												</Card>
+
+												<Card className="bg-blue-50 border-blue-200">
+													<CardContent className="p-4">
+														<div className="flex items-center justify-between">
+															<div>
+																<p className="text-sm text-gray-600">Avg. Rating</p>
+																<p className="text-2xl font-bold text-blue-600">
+																	{(() => {
+																		const reports = reportsData?.reports || [];
+																		const ratedReports = reports.filter((r: any) => r.rating);
+																		return ratedReports.length > 0 
+																			? (ratedReports.reduce((acc: number, r: any) => acc + (r.rating || 0), 0) / ratedReports.length).toFixed(1)
+																			: "0.0";
+																	})()}
+																</p>
+															</div>
+															<Star className="w-8 h-8 text-blue-600" />
+														</div>
+													</CardContent>
+												</Card>
+											</div>
+
+											{/* Reports List */}
+											<div className="space-y-4">
+												<h4 className="font-medium text-gray-900">Recent Reports</h4>
+												{reportsData?.reports && reportsData.reports.length > 0 ? (
+													<div className="space-y-3">
+														{reportsData.reports.slice(0, 5).map((report: any) => (
+															<Card key={report.id} className="border-l-4 border-l-blue-500">
+																<CardContent className="p-4">
+																	<div className="flex items-center justify-between">
+																		<div className="flex-1">
+																			<div className="flex items-center gap-2 mb-2">
+																				<h5 className="font-medium text-gray-900">
+																					Week {report.weekNumber || 'N/A'} - {report.title}
+																				</h5>
+																				<Badge 
+																					variant="secondary" 
+																					className={
+																						report.status === "approved" ? "bg-green-100 text-green-800" :
+																						report.status === "submitted" ? "bg-yellow-100 text-yellow-800" :
+																						report.status === "rejected" ? "bg-red-100 text-red-800" :
+																						"bg-gray-100 text-gray-800"
+																					}
+																				>
+																					{report.status}
+																				</Badge>
+																			</div>
+																			<div className="flex items-center gap-4 text-sm text-gray-600">
+																				<span className="flex items-center gap-1">
+																					<Calendar className="w-4 h-4" />
+																					{report.submittedDate ? new Date(report.submittedDate).toLocaleDateString() : 'Not submitted'}
+																				</span>
+																				<span className="flex items-center gap-1">
+																					<Clock className="w-4 h-4" />
+																					{report.hoursLogged || 0}h logged
+																				</span>
+																				{report.rating && (
+																					<span className="flex items-center gap-1">
+																						<Star className="w-4 h-4 text-yellow-500" />
+																						{report.rating}/5
+																					</span>
+																				)}
+																			</div>
+																			{report.content && (
+																				<p className="text-sm text-gray-600 mt-2 line-clamp-2">
+																					{report.content}
+																				</p>
+																			)}
+																		</div>
+																		<div className="flex gap-2">
+																			{report.fileUrl && (
+																				<Button
+																					size="sm"
+																					variant="outline"
+																					onClick={() => {
+																						const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+																						const fullUrl = `${baseUrl}${report.fileUrl}`;
+																						const link = document.createElement('a');
+																						link.href = fullUrl;
+																						link.download = `DTR_Week_${report.weekNumber || 'Unknown'}.pdf`;
+																						link.target = '_blank';
+																						document.body.appendChild(link);
+																						link.click();
+																						document.body.removeChild(link);
+																					}}
+																				>
+																					<Download className="w-4 h-4" />
+																				</Button>
+																			)}
+																			<Button
+																				size="sm"
+																				variant="outline"
+																				onClick={() => {
+																					// You can add a detailed view here if needed
+																					console.log('View report details:', report);
+																				}}
+																			>
+																				<Eye className="w-4 h-4" />
+																			</Button>
+																		</div>
+																	</div>
+																</CardContent>
+															</Card>
+														))}
+														{reportsData.reports.length > 5 && (
+															<div className="text-center">
+																<Button variant="outline" size="sm">
+																	View All Reports ({reportsData.reports.length})
+																</Button>
+															</div>
+														)}
+													</div>
+												) : (
+													<div className="text-center py-8 bg-gray-50 rounded-lg">
+														<FileCheck className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+														<p className="text-gray-500">No reports submitted yet</p>
+													</div>
+												)}
+											</div>
+										</>
+									)}
+								</CardContent>
+							</Card>
 						</div>
 					) : (
 						<div className="text-center py-8">
