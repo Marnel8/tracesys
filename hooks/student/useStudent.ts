@@ -361,15 +361,31 @@ const updateStudent = async (studentData: UpdateStudentParams) => {
 const deleteStudent = async (id: string) => {
 	try {
 		console.log("Attempting to delete student with ID:", id);
+		console.log("API base URL:", process.env.NEXT_PUBLIC_API_URL);
+		console.log("Full delete URL:", `${process.env.NEXT_PUBLIC_API_URL}/api/v1/student/${id}`);
+		
 		const res = await api.delete(`/student/${id}`);
 		console.log("Delete response:", res.data);
+		console.log("Delete response status:", res.status);
 		return res.data;
 	} catch (error: any) {
-		console.error("Delete student error:", error);
+		console.error("Delete student error details:", {
+			message: error.message,
+			response: error.response?.data,
+			status: error.response?.status,
+			statusText: error.response?.statusText,
+			config: {
+				url: error.config?.url,
+				method: error.config?.method,
+				baseURL: error.config?.baseURL
+			}
+		});
+		
 		if (error.response) {
-			throw new Error(error.response.data.message || "Failed to delete student");
+			const errorMessage = error.response.data?.message || error.response.data?.error || "Failed to delete student";
+			throw new Error(`${errorMessage} (Status: ${error.response.status})`);
 		} else if (error.request) {
-			throw new Error("No response from server");
+			throw new Error("No response from server. Please check your internet connection.");
 		} else {
 			throw new Error("Error deleting student: " + error.message);
 		}
@@ -444,10 +460,14 @@ export const useDeleteStudent = () => {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: deleteStudent,
-		onSuccess: () => {
+		onSuccess: (data) => {
+			console.log("Student deleted successfully:", data);
 			// Invalidate students query to refresh the list
 			queryClient.invalidateQueries({ queryKey: ["students"] });
 			queryClient.invalidateQueries({ queryKey: ["students-by-teacher"] });
+		},
+		onError: (error: any) => {
+			console.error("Delete student mutation error:", error);
 		},
 	});
 };

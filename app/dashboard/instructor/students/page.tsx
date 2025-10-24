@@ -393,6 +393,7 @@ export default function StudentsPage() {
 		setDeleteAlertOpen(true);
 	};
 
+
 	const handleUpdateStudent = async (data: UpdateStudentParams) => {
 		try {
 			await updateStudentMutation.mutateAsync(data);
@@ -406,15 +407,13 @@ export default function StudentsPage() {
 
 	const handleConfirmDelete = async () => {
 		if (!selectedStudentId) return;
+		
 		try {
-			console.log("Deleting student with ID:", selectedStudentId);
 			await deleteStudentMutation.mutateAsync(selectedStudentId);
-			console.log("Student deleted successfully");
 			toast.success("Student deleted successfully");
 			setDeleteAlertOpen(false);
 			setSelectedStudentId(null);
 		} catch (error: any) {
-			console.error("Delete error:", error);
 			toast.error(error.message || "Failed to delete student");
 		}
 	};
@@ -2083,15 +2082,26 @@ export default function StudentsPage() {
 							Are you sure you want to delete this student? This action cannot be undone and will permanently remove the student's data from the system.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
+					<AlertDialogFooter className="flex gap-2">
 						<AlertDialogCancel>Cancel</AlertDialogCancel>
-						<AlertDialogAction
-							onClick={handleConfirmDelete}
-							className="bg-red-600 hover:bg-red-700"
+						<Button
+							onClick={(e) => {
+								e.preventDefault();
+								console.log("Delete button clicked!");
+								handleConfirmDelete();
+							}}
+							className="bg-red-600 hover:bg-red-700 text-white"
 							disabled={deleteStudentMutation.isPending}
 						>
-							{deleteStudentMutation.isPending ? "Deleting..." : "Delete Student"}
-						</AlertDialogAction>
+							{deleteStudentMutation.isPending ? (
+								<>
+									<RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+									Deleting...
+								</>
+							) : (
+								"Delete Student"
+							)}
+						</Button>
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>

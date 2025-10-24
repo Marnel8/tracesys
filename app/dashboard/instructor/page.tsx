@@ -66,6 +66,13 @@ export default function InstructorDashboard() {
     status: "submitted"
   })
 
+  // Fetch all weekly reports to calculate on-time submission rate
+  const { data: allWeeklyReportsData, isLoading: isWeeklyReportsLoading } = useReports({
+    page: 1,
+    limit: 1000,
+    type: "weekly"
+  })
+
   const pendingItems = useMemo(() => {
     const attendanceRecords = attendanceData?.attendance ?? []
     const requirements = requirementsData?.requirements ?? []
@@ -169,8 +176,35 @@ export default function InstructorDashboard() {
     }
     const averageCompletion = totalReqs > 0 ? Math.round((approvedReqs / totalReqs) * 100) : 0
 
-    return { totalStudents, sectionsCount, averageAttendance, averageCompletion }
-  }, [students, sectionsAgg])
+    // Calculate on-time submission rate for weekly reports
+    const weeklyReports = allWeeklyReportsData?.reports ?? []
+    const studentIds = new Set(students.map(s => s.id))
+    
+    // Filter reports to only include those from students under this instructor
+    const instructorWeeklyReports = weeklyReports.filter(report => 
+      studentIds.has(report.studentId) && report.submittedDate
+    )
+    
+    let onTimeSubmissions = 0
+    let totalSubmissions = 0
+    
+    for (const report of instructorWeeklyReports) {
+      if (report.submittedDate && report.dueDate) {
+        const submittedDate = new Date(report.submittedDate)
+        const dueDate = new Date(report.dueDate)
+        
+        // Consider submitted on time if submitted on or before due date
+        if (submittedDate <= dueDate) {
+          onTimeSubmissions++
+        }
+        totalSubmissions++
+      }
+    }
+    
+    const onTimeSubmissionRate = totalSubmissions > 0 ? Math.round((onTimeSubmissions / totalSubmissions) * 100) : 0
+
+    return { totalStudents, sectionsCount, averageAttendance, averageCompletion, onTimeSubmissionRate }
+  }, [students, sectionsAgg, allWeeklyReportsData])
 
   const weeklyAttendanceData = useMemo(() => {
     // Build last 8 weeks series from attendance record dates
@@ -283,7 +317,7 @@ export default function InstructorDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="bg-secondary-50 border-blue-200">
+        {/* <Card className="bg-secondary-50 border-blue-200">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-blue-600" />
@@ -291,10 +325,12 @@ export default function InstructorDashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-gray-900">78%</div>
+            <div className="text-3xl font-bold text-gray-900">
+              {isWeeklyReportsLoading ? "…" : `${stats.onTimeSubmissionRate}%`}
+            </div>
             <p className="text-sm text-gray-600">Submitted on time</p>
           </CardContent>
-        </Card>
+        </Card> */}
       </div>
 
       {/* Analytics Charts */}
