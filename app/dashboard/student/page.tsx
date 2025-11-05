@@ -172,7 +172,7 @@ export default function StudentDashboard() {
 					<CardHeader className="pb-3">
 						<CardTitle className="text-lg flex items-center gap-2">
 							<FileText className="w-5 h-5 text-accent-600" />
-							Requirements
+							Pre-internship Requirements
 						</CardTitle>
 					</CardHeader>
 					<CardContent>
@@ -249,7 +249,7 @@ export default function StudentDashboard() {
 						className="h-20 flex-col gap-2 border-primary-300 hover:bg-primary-50 w-full"
 					>
 						<FileText className="w-6 h-6" />
-						<span>Requirements</span>
+						<span>Pre-internship Requirements</span>
 					</Button>
 				</Link>
 				<Link href="/dashboard/student/profile">

@@ -89,13 +89,7 @@ export default function StudentLoginPage() {
 				<Card className="bg-secondary-50/95 backdrop-blur-md border-primary-200 shadow-2xl animate-fade-in">
 					<CardHeader className="text-center pb-6">
 						<div className="flex justify-center items-center gap-4 mb-4">
-							<Image
-								src="/images/omsc-logo.png"
-								alt="OMSC Logo"
-								width={60}
-								height={60}
-								className="object-contain"
-							/>
+						
 							<Image
 								src="/images/tracesys-logo.png"
 								alt="TracèSys Logo"

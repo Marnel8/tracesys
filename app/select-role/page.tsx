@@ -44,13 +44,7 @@ export default function SelectRolePage() {
 				<Card className="bg-secondary-50/95 backdrop-blur-md border-primary-200 shadow-2xl">
 					<CardHeader className="text-center pb-4 sm:pb-8 px-4 sm:px-6">
 						<div className="flex justify-center items-center gap-3 sm:gap-6 mb-4 sm:mb-6">
-							<Image
-								src="/images/omsc-logo.png"
-								alt="OMSC Logo"
-								width={60}
-								height={60}
-								className="w-12 h-12 sm:w-20 sm:h-20 object-contain"
-							/>
+						
 							<Image
 								src="/images/tracesys-logo.png"
 								alt="TracèSys Logo"

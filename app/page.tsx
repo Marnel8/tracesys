@@ -78,13 +78,13 @@ export default function LandingPage() {
         <div className="relative z-10 text-center px-4 max-w-4xl mx-auto">
           {/* Logos */}
           <div className="flex justify-center items-center gap-8 mb-8 animate-fade-in">
-            <Image 
+            {/* <Image 
               src="/images/omsc-logo.png" 
               alt="OMSC Logo" 
               width={100} 
               height={100} 
               className="object-contain drop-shadow-2xl" 
-            />
+            /> */}
             <Image
               src="/images/tracesys-logo.png"
               alt="TracèSys Logo"
@@ -418,13 +418,13 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center">
             <div className="flex justify-center items-center gap-6 mb-6">
-              <Image 
+              {/* <Image 
                 src="/images/omsc-logo.png" 
                 alt="OMSC Logo" 
                 width={60} 
                 height={60} 
                 className="object-contain" 
-              />
+              /> */}
               <Image
                 src="/images/tracesys-logo.png"
                 alt="TracèSys Logo"

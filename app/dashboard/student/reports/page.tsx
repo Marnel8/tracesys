@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +38,7 @@ import Link from "next/link";
 import { useAuth } from "@/hooks/auth/useAuth";
 import { useReports, useSubmitReport, useCreateReport, useReportStats, useReport, Report, ReportType } from "@/hooks/report/useReport";
 import { useCreateNarrativeReport } from "@/hooks/report/useNarrativeReport";
+import { useAttendance } from "@/hooks/attendance";
 
 export default function ReportsPage() {
 	const [reportTitle, setReportTitle] = useState("");
@@ -51,6 +52,34 @@ export default function ReportsPage() {
 	const [reportTypeFilter, setReportTypeFilter] = useState<ReportType | "all">("all");
 
 	const { user } = useAuth();
+	// Fetch all attendance records to compute total approved hours (DTR total)
+	const { data: allAttendanceData } = useAttendance({
+		studentId: user?.id,
+		limit: 10000,
+	});
+
+	// Compute total approved hours similar to Profile DTR logic
+	const totalApprovedHours = useMemo(() => {
+		const records: any[] = (allAttendanceData as any)?.data?.attendance
+			?? (allAttendanceData as any)?.attendance
+			?? (allAttendanceData as any)?.records
+			?? [];
+		const completed = records
+			.filter((r) =>
+				["present", "late", "excused"].includes(String(r?.status || "").toLowerCase()) &&
+				String(r?.approvalStatus || "").toLowerCase() === "approved" &&
+				r?.hours != null
+			)
+			.reduce((sum, r) => sum + Number(r.hours || 0), 0);
+		return Math.round(completed * 100) / 100;
+	}, [allAttendanceData]);
+
+	// Initialize and lock Hours Logged field from DTR total
+	useEffect(() => {
+		if (typeof totalApprovedHours === "number" && !Number.isNaN(totalApprovedHours)) {
+			setHoursLogged(totalApprovedHours);
+		}
+	}, [totalApprovedHours]);
 	const { data: reportsData } = useReports({
 		page: 1,
 		limit: 50,
@@ -244,15 +273,16 @@ export default function ReportsPage() {
 							</div>
 
 							<div className="space-y-2">
-								<Label htmlFor="hours-logged" className="text-sm font-medium">Hours Logged</Label>
-								<Input
-									id="hours-logged"
-									type="number"
-									placeholder="e.g., 40"
-									value={hoursLogged}
-									onChange={(e) => setHoursLogged(e.target.value ? Number(e.target.value) : "")}
-									className="w-full text-sm"
-								/>
+							<Label htmlFor="hours-logged" className="text-sm font-medium">Hours Logged</Label>
+							<Input
+								id="hours-logged"
+								type="number"
+								placeholder="Auto-calculated from DTR"
+								value={typeof hoursLogged === "number" ? hoursLogged : ""}
+								readOnly
+								disabled
+								className="w-full text-sm"
+							/>
 							</div>
 
 							<div className="space-y-2">
