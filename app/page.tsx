@@ -1,67 +1,75 @@
-"use client"
+"use client";
 
-import { useState, useRef, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import Image from "next/image"
-import Link from "next/link"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
-import { useAnnouncements } from "@/hooks/announcement/useAnnouncement"
-import { 
-  GraduationCap, 
-  Users, 
-  FileText, 
-  BarChart3, 
+import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
+import Link from "next/link";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+} from "@/components/ui/carousel";
+import { usePublicAnnouncements } from "@/hooks/announcement/useAnnouncement";
+import {
+  GraduationCap,
+  Users,
+  FileText,
+  BarChart3,
   Clock,
   Star,
   ChevronRight,
-  ExternalLink
-} from "lucide-react"
+  ExternalLink,
+} from "lucide-react";
 
 export default function LandingPage() {
-  const router = useRouter()
-  const [carouselApi, setCarouselApi] = useState<any>(null)
+  const router = useRouter();
+  const [carouselApi, setCarouselApi] = useState<any>(null);
 
-  const { data: announcementsData } = useAnnouncements({ status: "Published", limit: 10 })
-  const announcements = announcementsData?.announcements ?? []
+  const {
+    data: announcementsData,
+    isLoading: isLoadingAnnouncements,
+    error: announcementsError,
+  } = usePublicAnnouncements({ limit: 10 });
+  const announcements = announcementsData?.announcements ?? [];
 
   useEffect(() => {
-    if (!carouselApi) return
+    if (!carouselApi) return;
     const interval = setInterval(() => {
       try {
-        carouselApi.scrollNext()
+        carouselApi.scrollNext();
       } catch {}
-    }, 4500)
-    return () => clearInterval(interval)
-  }, [carouselApi])
+    }, 4500);
+    return () => clearInterval(interval);
+  }, [carouselApi]);
 
   const handleGetStarted = () => {
-    router.push("/select-role")
-  }
+    router.push("/select-role");
+  };
 
   const features = [
     {
       icon: <FileText className="w-6 h-6" />,
       title: "Document Management",
-      description: "Organize and track all practicum documents in one place"
+      description: "Organize and track all practicum documents in one place",
     },
     {
       icon: <BarChart3 className="w-6 h-6" />,
       title: "Performance Monitoring",
-      description: "Real-time tracking of student progress and achievements"
+      description: "Real-time tracking of student progress and achievements",
     },
     {
       icon: <Clock className="w-6 h-6" />,
       title: "Time Tracking",
-      description: "Accurate recording of training hours and attendance"
+      description: "Accurate recording of training hours and attendance",
     },
     {
       icon: <Star className="w-6 h-6" />,
       title: "Assessment Tools",
-      description: "Comprehensive evaluation and grading system"
-    }
-  ]
+      description: "Comprehensive evaluation and grading system",
+    },
+  ];
 
   return (
     <div className="min-h-screen">
@@ -98,14 +106,14 @@ export default function LandingPage() {
           <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 drop-shadow-2xl animate-fade-in">
             Tracè<span className="text-primary-200">Sys</span>
           </h1>
-          
+
           <h2 className="text-xl md:text-2xl font-semibold text-white/95 mb-6 drop-shadow-xl animate-fade-in">
             Performance Monitoring & File Management System
           </h2>
 
           <p className="text-lg md:text-xl text-white/90 mb-8 max-w-2xl mx-auto leading-relaxed drop-shadow-xl animate-fade-in">
-            Streamline your On-The-Job Training (Practicum) experience with our comprehensive 
-            digital platform designed for OMSC Mamburao Campus
+            Streamline your On-The-Job Training (Practicum) experience with our
+            comprehensive digital platform designed for OMSC Mamburao Campus
           </p>
 
           {/* CTA Buttons */}
@@ -118,7 +126,7 @@ export default function LandingPage() {
               Get Started
               <ChevronRight className="w-5 h-5 ml-2" />
             </Button>
-            
+
             <Button
               variant="outline"
               size="lg"
@@ -132,14 +140,28 @@ export default function LandingPage() {
       </section>
 
       {/* Announcements Section */}
-      {announcements.length > 0 && (
-        <section className="py-20 bg-gradient-to-br from-primary-50 to-secondary-50">
-          <div className="max-w-6xl mx-auto px-4">
-            <div className="text-center mb-10">
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-3">Latest Announcements</h2>
-              <p className="text-lg text-gray-600">Stay updated with important news and updates.</p>
-            </div>
+      <section className="py-20 bg-gradient-to-br from-primary-50 to-secondary-50">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-3">
+              Latest Announcements
+            </h2>
+            <p className="text-lg text-gray-600">
+              Stay updated with important news and updates.
+            </p>
+          </div>
 
+          {isLoadingAnnouncements ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500">Loading announcements...</p>
+            </div>
+          ) : announcementsError ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500">
+                Unable to load announcements at this time.
+              </p>
+            </div>
+          ) : announcements.length > 0 ? (
             <Carousel
               className="w-full"
               opts={{ loop: true, align: "start" }}
@@ -154,22 +176,36 @@ export default function LandingPage() {
                           <div className="flex-1 text-center md:text-left">
                             <div className="flex items-center justify-center md:justify-start gap-3 mb-4">
                               {a.isPinned && (
-                                <span className="text-xs font-medium px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full">Pinned</span>
+                                <span className="text-xs font-medium px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full">
+                                  Pinned
+                                </span>
                               )}
-                              <span className="text-xs font-medium px-2 py-1 bg-primary-100 text-primary-700 rounded-full">{a.priority}</span>
+                              <span className="text-xs font-medium px-2 py-1 bg-primary-100 text-primary-700 rounded-full">
+                                {a.priority}
+                              </span>
                             </div>
-                            <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">{a.title}</h3>
+                            <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">
+                              {a.title}
+                            </h3>
                             <p className="text-gray-700 text-base md:text-lg leading-relaxed whitespace-pre-line">
                               {a.content}
                             </p>
                           </div>
                           <div className="md:w-56 shrink-0 text-sm text-gray-500 text-center md:text-right">
-                            <div>Posted: {new Date(a.createdAt).toLocaleDateString()}</div>
+                            <div>
+                              Posted:{" "}
+                              {new Date(a.createdAt).toLocaleDateString()}
+                            </div>
                             {a.author && (
-                              <div className="mt-1">By: {a.author.firstName} {a.author.lastName}</div>
+                              <div className="mt-1">
+                                By: {a.author.firstName} {a.author.lastName}
+                              </div>
                             )}
                             {a.expiryDate && (
-                              <div className="mt-1">Expires: {new Date(a.expiryDate).toLocaleDateString()}</div>
+                              <div className="mt-1">
+                                Expires:{" "}
+                                {new Date(a.expiryDate).toLocaleDateString()}
+                              </div>
                             )}
                             <div className="mt-2">Views: {a.views}</div>
                           </div>
@@ -180,26 +216,38 @@ export default function LandingPage() {
                 ))}
               </CarouselContent>
             </Carousel>
-          </div>
-        </section>
-      )}
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-gray-500">
+                No announcements available at this time.
+              </p>
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* Features Section */}
-      <section id="features" className="py-20 bg-gradient-to-br from-secondary-50 to-white">
+      <section
+        id="features"
+        className="py-20 bg-gradient-to-br from-secondary-50 to-white"
+      >
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">
               Everything you need for successful practicum management
             </h2>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Our platform provides comprehensive tools for both students and instructors 
-              to ensure a smooth and productive training experience
+              Our platform provides comprehensive tools for both students and
+              instructors to ensure a smooth and productive training experience
             </p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
             {features.map((feature, index) => (
-              <Card key={index} className="bg-white/80 backdrop-blur-sm border-primary-200 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+              <Card
+                key={index}
+                className="bg-white/80 backdrop-blur-sm border-primary-200 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+              >
                 <CardContent className="p-6 text-center">
                   <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center mx-auto mb-4 text-primary-600">
                     {feature.icon}
@@ -207,9 +255,7 @@ export default function LandingPage() {
                   <h3 className="text-lg font-semibold text-gray-800 mb-2">
                     {feature.title}
                   </h3>
-                  <p className="text-gray-600 text-sm">
-                    {feature.description}
-                  </p>
+                  <p className="text-gray-600 text-sm">{feature.description}</p>
                 </CardContent>
               </Card>
             ))}
@@ -225,8 +271,9 @@ export default function LandingPage() {
               OJT Requirements
             </h2>
             <p className="text-lg text-gray-600 max-w-3xl mx-auto">
-              Complete checklist of documents needed for your On-The-Job Training (Practicum) program. 
-              Track your progress and ensure all requirements are submitted on time.
+              Complete checklist of documents needed for your On-The-Job
+              Training (Practicum) program. Track your progress and ensure all
+              requirements are submitted on time.
             </p>
           </div>
 
@@ -235,83 +282,91 @@ export default function LandingPage() {
               {
                 number: 1,
                 title: "Registration Form",
-                description: "Registration form that the trainee is currently enrolled",
-                category: "Academic"
+                description:
+                  "Registration form that the trainee is currently enrolled",
+                category: "Academic",
               },
               {
                 number: 2,
                 title: "Proof of Payment",
                 description: "OJT Fee payment confirmation",
-                category: "Financial"
+                category: "Financial",
               },
               {
                 number: 3,
                 title: "Validated ID",
                 description: "Validated ID for the Current Semester",
-                category: "Academic"
+                category: "Academic",
               },
               {
                 number: 4,
                 title: "Evaluation of Grades",
-                description: "Evaluation of Grades from the Registrar / Computation of Grades: GWA",
-                category: "Academic"
+                description:
+                  "Evaluation of Grades from the Registrar / Computation of Grades: GWA",
+                category: "Academic",
               },
               {
                 number: 5,
                 title: "Certificate of Good Moral",
                 description: "Certificate of good moral",
-                category: "Character"
+                category: "Character",
               },
               {
                 number: 6,
                 title: "Medical Certificate",
-                description: "Medical Certificate that the trainee is physically fit for deployment (CBC with Blood typing, Urinalysis, Chest X-Ray, Fecalysis)",
-                category: "Health"
+                description:
+                  "Medical Certificate that the trainee is physically fit for deployment (CBC with Blood typing, Urinalysis, Chest X-Ray, Fecalysis)",
+                category: "Health",
               },
               {
                 number: 7,
                 title: "Community Tax Certificate",
                 description: "Community Tax Certificate (Cedula)",
-                category: "Legal"
+                category: "Legal",
               },
               {
                 number: 8,
                 title: "Barangay Clearance",
                 description: "Barangay Clearance",
-                category: "Legal"
+                category: "Legal",
               },
               {
                 number: 9,
                 title: "Police Clearance",
                 description: "Police Clearance",
-                category: "Legal"
+                category: "Legal",
               },
               {
                 number: 10,
                 title: "Certificate of Attendance",
-                description: "Certificate of attendance at the Pre-Internship Orientation",
-                category: "Program"
+                description:
+                  "Certificate of attendance at the Pre-Internship Orientation",
+                category: "Program",
               },
               {
                 number: 11,
                 title: "Application Letter & Resume",
                 description: "Letter of application and resume",
-                category: "Application"
+                category: "Application",
               },
               {
                 number: 12,
                 title: "Parent's Consent",
                 description: "Parent's Consent",
-                category: "Legal"
+                category: "Legal",
               },
               {
                 number: 13,
                 title: "Memorandum of Agreement",
-                description: "Duly notarized memorandum of agreement with the cooperating agency",
-                category: "Legal"
-              }
+                description:
+                  "Duly notarized memorandum of agreement with the cooperating agency",
+                category: "Legal",
+              },
             ].map((requirement) => (
-              <Card key={requirement.number} className="group bg-white/90 backdrop-blur-sm border-2 border-primary-100 shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 hover:border-primary-300">
+              <Card
+                key={requirement.number}
+                className="group bg-white/90 backdrop-blur-sm border-2 border-primary-100 shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 hover:border-primary-300"
+              >
                 <CardContent className="p-5 h-full flex flex-col">
                   <div className="flex items-center justify-between mb-3">
                     <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-600 text-white rounded-xl flex items-center justify-center text-sm font-bold shadow-lg">
@@ -321,7 +376,7 @@ export default function LandingPage() {
                       {requirement.category}
                     </span>
                   </div>
-                  
+
                   <div className="flex-1">
                     <h3 className="text-base font-bold text-gray-800 mb-2 group-hover:text-primary-700 transition-colors">
                       {requirement.title}
@@ -330,7 +385,7 @@ export default function LandingPage() {
                       {requirement.description}
                     </p>
                   </div>
-                  
+
                   <div className="mt-4 pt-3 border-t border-gray-100">
                     <div className="flex items-center text-xs text-gray-500">
                       <div className="w-2 h-2 bg-yellow-400 rounded-full mr-2"></div>
@@ -363,7 +418,8 @@ export default function LandingPage() {
               Choose Your Path
             </h2>
             <p className="text-lg text-gray-600">
-              Whether you're a student trainee or an instructor, we have the right tools for you
+              Whether you're a student trainee or an instructor, we have the
+              right tools for you
             </p>
           </div>
 
@@ -377,8 +433,9 @@ export default function LandingPage() {
                   Student Trainees
                 </h3>
                 <p className="text-gray-600 mb-6">
-                  Access your practicum records, submit reports, track your progress, 
-                  and communicate with your supervisors all in one place.
+                  Access your practicum records, submit reports, track your
+                  progress, and communicate with your supervisors all in one
+                  place.
                 </p>
                 <Button
                   onClick={() => router.push("/login/student")}
@@ -398,7 +455,7 @@ export default function LandingPage() {
                   Instructors & Advisers
                 </h3>
                 <p className="text-gray-600 mb-6">
-                  Manage your students, create assignments, monitor progress, 
+                  Manage your students, create assignments, monitor progress,
                   and generate comprehensive reports with ease.
                 </p>
                 <Button
@@ -446,5 +503,5 @@ export default function LandingPage() {
         </div>
       </footer>
     </div>
-  )
+  );
 }

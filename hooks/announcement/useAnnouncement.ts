@@ -60,6 +60,26 @@ export const useAnnouncements = (filters: AnnouncementFilters = {}) => {
 	});
 };
 
+// Get public announcements (no authentication required) - for landing page
+export const usePublicAnnouncements = (filters: Omit<AnnouncementFilters, "status" | "authorId" | "userId"> = {}) => {
+	return useQuery({
+		queryKey: [...announcementKeys.all, "public", filters],
+		queryFn: async (): Promise<AnnouncementResponse> => {
+			const params = new URLSearchParams();
+			
+			if (filters.search) params.append("search", filters.search);
+			if (filters.priority && filters.priority !== "all") params.append("priority", filters.priority);
+			if (filters.page) params.append("page", filters.page.toString());
+			if (filters.limit) params.append("limit", filters.limit.toString());
+			
+			const response = await api.get(`/announcement/public?${params.toString()}`);
+			return response.data.data;
+		},
+		placeholderData: (previousData) => previousData,
+		retry: 1, // Only retry once for public endpoint
+	});
+};
+
 // Get single announcement
 export const useAnnouncement = (id: string) => {
 	return useQuery({

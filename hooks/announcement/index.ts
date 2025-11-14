@@ -1,5 +1,6 @@
 export {
 	useAnnouncements,
+	usePublicAnnouncements,
 	useAnnouncement,
 	useAnnouncementStats,
 	useCreateAnnouncement,
