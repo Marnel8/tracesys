@@ -15,6 +15,8 @@ export interface Report {
 	type: ReportType;
 	status: ReportStatus;
 	weekNumber?: number | null;
+	startDate?: string | null;
+	endDate?: string | null;
 	dueDate?: string | null;
 	submittedDate?: string | null;
 	approvedDate?: string | null;
@@ -70,6 +72,8 @@ export const useReports = (filters: {
 	studentId?: string;
 	practicumId?: string;
 	weekNumber?: number;
+	startDate?: string;
+	endDate?: string;
 } = {}) => {
 	return useQuery({
 		queryKey: reportKeys.list(filters),
@@ -83,6 +87,8 @@ export const useReports = (filters: {
 			if (filters.studentId) params.append("studentId", filters.studentId);
 			if (filters.practicumId) params.append("practicumId", filters.practicumId);
 			if (typeof filters.weekNumber === "number") params.append("weekNumber", String(filters.weekNumber));
+			if (filters.startDate) params.append("startDate", filters.startDate);
+			if (filters.endDate) params.append("endDate", filters.endDate);
 			const res = await api.get(`${ENDPOINTS.list}?${params.toString()}`);
 			return res.data.data as ReportListResponse;
 		},
@@ -121,7 +127,7 @@ export const useCreateReportFromTemplate = () => {
 export const useCreateReport = () => {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: async (data: { title: string; content?: string; type: ReportType; weekNumber?: number; practicumId?: string | null; dueDate?: string | null }) => {
+        mutationFn: async (data: { title: string; content?: string; type: ReportType; weekNumber?: number; startDate?: string; endDate?: string; practicumId?: string | null; dueDate?: string | null }) => {
             const res = await api.post(ENDPOINTS.list, data);
             return res.data.data as Report;
         },
@@ -138,11 +144,13 @@ export const useCreateReport = () => {
 export const useSubmitReport = () => {
 	const qc = useQueryClient();
 	return useMutation({
-		mutationFn: async ({ id, payload }: { id: string; payload: { title?: string; content?: string; weekNumber?: number; hoursLogged?: number; activities?: string; learnings?: string; challenges?: string; file?: File | null } }) => {
+		mutationFn: async ({ id, payload }: { id: string; payload: { title?: string; content?: string; weekNumber?: number; startDate?: string; endDate?: string; hoursLogged?: number; activities?: string; learnings?: string; challenges?: string; file?: File | null } }) => {
 			const form = new FormData();
 			if (payload.title) form.append("title", payload.title);
 			if (payload.content) form.append("content", payload.content);
 			if (typeof payload.weekNumber === "number") form.append("weekNumber", String(payload.weekNumber));
+			if (payload.startDate) form.append("startDate", payload.startDate);
+			if (payload.endDate) form.append("endDate", payload.endDate);
 			if (typeof payload.hoursLogged === "number") form.append("hoursLogged", String(payload.hoursLogged));
 			if (payload.activities) form.append("activities", payload.activities);
 			if (payload.learnings) form.append("learnings", payload.learnings);

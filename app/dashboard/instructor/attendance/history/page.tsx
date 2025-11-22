@@ -12,6 +12,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Search, CalendarIcon, Download, Clock, CheckCircle, XCircle } from "lucide-react"
 import { format } from "date-fns"
+import { InstructorStatsCard } from "@/components/instructor-stats-card"
 
 // Mock data for attendance history
 const attendanceHistory = [
@@ -127,6 +128,14 @@ export default function AttendanceHistoryPage() {
     console.log("Exporting attendance history data...")
   }
 
+  const approvedRecords = attendanceHistory.filter((r) => r.status === "Approved")
+  const declinedRecords = attendanceHistory.filter((r) => r.status === "Declined")
+  const totalApproved = approvedRecords.length
+  const totalDeclined = declinedRecords.length
+  const totalApprovedHours = approvedRecords.reduce((sum, r) => sum + r.totalHours, 0)
+  const averageDailyHours =
+    approvedRecords.length > 0 ? (totalApprovedHours / approvedRecords.length).toFixed(1) : "0.0"
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -143,64 +152,33 @@ export default function AttendanceHistoryPage() {
 
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-secondary-50 border-green-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Approved</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {attendanceHistory.filter((r) => r.status === "Approved").length}
-                </p>
-              </div>
-              <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-secondary-50 border-red-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Declined</p>
-                <p className="text-2xl font-bold text-red-600">
-                  {attendanceHistory.filter((r) => r.status === "Declined").length}
-                </p>
-              </div>
-              <XCircle className="w-8 h-8 text-red-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-secondary-50 border-blue-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Hours</p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {attendanceHistory.filter((r) => r.status === "Approved").reduce((sum, r) => sum + r.totalHours, 0)}
-                </p>
-              </div>
-              <Clock className="w-8 h-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-secondary-50 border-purple-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Avg. Daily Hours</p>
-                <p className="text-2xl font-bold text-purple-600">
-                  {(
-                    attendanceHistory.filter((r) => r.status === "Approved").reduce((sum, r) => sum + r.totalHours, 0) /
-                    attendanceHistory.filter((r) => r.status === "Approved").length
-                  ).toFixed(1)}
-                </p>
-              </div>
-              <CalendarIcon className="w-8 h-8 text-purple-600" />
-            </div>
-          </CardContent>
-        </Card>
+        <InstructorStatsCard
+          icon={CheckCircle}
+          label="Total Approved"
+          value={totalApproved}
+          helperText="Logs cleared"
+        />
+        <InstructorStatsCard
+          icon={XCircle}
+          label="Total Declined"
+          value={totalDeclined}
+          helperText="Needs attention"
+          trend={
+            totalDeclined > 0 ? { label: "Follow up required", variant: "negative" } : undefined
+          }
+        />
+        <InstructorStatsCard
+          icon={Clock}
+          label="Total Hours"
+          value={`${totalApprovedHours}h`}
+          helperText="Approved entries"
+        />
+        <InstructorStatsCard
+          icon={CalendarIcon}
+          label="Avg. Daily Hours"
+          value={`${averageDailyHours}h`}
+          helperText="Per approved log"
+        />
       </div>
 
       {/* Filters */}

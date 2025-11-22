@@ -34,6 +34,7 @@ import {
 import { useNarrativeReports } from "@/hooks/report/useNarrativeReport"
 import { useApproveReport, useRejectReport, Report } from "@/hooks/report/useReport"
 import { useAuth } from "@/hooks/auth/useAuth"
+import { InstructorStatsCard } from "@/components/instructor-stats-card"
 
 export default function NarrativeReportsPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -64,9 +65,13 @@ export default function NarrativeReportsPage() {
     const reports = narrativeReports
     const ratedReports = reports.filter((r: any) => r.rating)
     return {
-      averageRating: ratedReports.length > 0
-        ? ratedReports.reduce((acc: number, r: any) => acc + (r.rating || 0), 0) / ratedReports.length
-        : 0,
+      pending: reports.filter((r) => r.status === "submitted").length,
+      approved: reports.filter((r) => r.status === "approved").length,
+      returned: reports.filter((r) => r.status === "rejected").length,
+      averageRating:
+        ratedReports.length > 0
+          ? ratedReports.reduce((acc: number, r: any) => acc + (r.rating || 0), 0) / ratedReports.length
+          : 0,
     }
   }, [narrativeReports])
 
@@ -138,53 +143,40 @@ export default function NarrativeReportsPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-secondary-50 border-yellow-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Pending Review</p>
-                <p className="text-2xl font-bold text-yellow-600">{narrativeReports.filter((r) => r.status === "submitted").length}</p>
-              </div>
-              <Clock className="w-8 h-8 text-yellow-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-secondary-50 border-green-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Approved</p>
-                <p className="text-2xl font-bold text-green-600">{narrativeReports.filter((r) => r.status === "approved").length}</p>
-              </div>
-              <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-secondary-50 border-red-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Returned</p>
-                <p className="text-2xl font-bold text-red-600">{narrativeReports.filter((r) => r.status === "rejected").length}</p>
-              </div>
-              <XCircle className="w-8 h-8 text-red-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-secondary-50 border-blue-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Avg. Rating</p>
-                <p className="text-2xl font-bold text-blue-600">{stats.averageRating.toFixed(1)}</p>
-              </div>
-              <FileText className="w-8 h-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
+        <InstructorStatsCard
+          icon={Clock}
+          label="Pending Review"
+          value={stats.pending}
+          helperText="Awaiting evaluation"
+        />
+        <InstructorStatsCard
+          icon={CheckCircle}
+          label="Approved"
+          value={stats.approved}
+          helperText="Marked complete"
+          trend={
+            stats.approved > 0
+              ? { label: `${stats.approved} cleared`, variant: "positive" }
+              : undefined
+          }
+        />
+        <InstructorStatsCard
+          icon={XCircle}
+          label="Returned"
+          value={stats.returned}
+          helperText="Needs revision"
+          trend={
+            stats.returned > 0
+              ? { label: "Review required", variant: "negative" }
+              : undefined
+          }
+        />
+        <InstructorStatsCard
+          icon={FileText}
+          label="Avg. Rating"
+          value={stats.averageRating.toFixed(1)}
+          helperText="Overall feedback"
+        />
       </div>
 
       {/* Filters and Search */}

@@ -22,6 +22,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Search, Download, Eye, CheckCircle, XCircle, MessageSquare, Calendar, Clock, Star, FileText, ChevronLeft, ChevronRight, X } from "lucide-react"
 import { useReports, useApproveReport, useRejectReport, Report } from "@/hooks/report/useReport"
 import { useAuth } from "@/hooks/auth/useAuth"
+import { InstructorStatsCard } from "@/components/instructor-stats-card"
 
 export default function WeeklyReportsPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -176,53 +177,40 @@ export default function WeeklyReportsPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-secondary-50 border-yellow-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Pending Review</p>
-                <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
-              </div>
-              <Clock className="w-8 h-8 text-yellow-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-secondary-50 border-green-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Approved</p>
-                <p className="text-2xl font-bold text-green-600">{stats.approved}</p>
-              </div>
-              <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-secondary-50 border-red-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Rejected</p>
-                <p className="text-2xl font-bold text-red-600">{stats.rejected}</p>
-              </div>
-              <XCircle className="w-8 h-8 text-red-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-secondary-50 border-blue-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Avg. Rating</p>
-                <p className="text-2xl font-bold text-blue-600">{stats.averageRating.toFixed(1)}</p>
-              </div>
-              <Star className="w-8 h-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
+        <InstructorStatsCard
+          icon={Clock}
+          label="Pending Review"
+          value={stats.pending}
+          helperText="Awaiting approval"
+        />
+        <InstructorStatsCard
+          icon={CheckCircle}
+          label="Approved"
+          value={stats.approved}
+          helperText="Cleared this week"
+          trend={
+            stats.approved > 0
+              ? { label: `${stats.approved} approved`, variant: "positive" }
+              : undefined
+          }
+        />
+        <InstructorStatsCard
+          icon={XCircle}
+          label="Rejected"
+          value={stats.rejected}
+          helperText="Needs revision"
+          trend={
+            stats.rejected > 0
+              ? { label: "Follow up", variant: "negative" }
+              : undefined
+          }
+        />
+        <InstructorStatsCard
+          icon={Star}
+          label="Avg. Rating"
+          value={stats.averageRating.toFixed(1)}
+          helperText="Reviewer feedback"
+        />
       </div>
 
       {/* Filters and Search */}

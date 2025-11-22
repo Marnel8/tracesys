@@ -20,26 +20,47 @@ import {
   Users,
   FileCheck,
   Clock,
-  TrendingUp,
   Plus,
   MessageSquare,
   Settings,
-  BarChart3,
   AlertTriangle,
   CheckCircle,
+  MailPlus,
 } from "lucide-react";
+import { InstructorStatsCard } from "@/components/instructor-stats-card";
 import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+  type ChartConfig,
   LineChart,
   Line,
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
   BarChart,
   Bar,
-} from "recharts";
+} from "@/components/ui/chart";
+
+const weeklyAttendanceChartConfig: ChartConfig = {
+  attendance: {
+    label: "Attendance %",
+    color: "#c026d3",
+  },
+  submissions: {
+    label: "Submissions",
+    color: "#0ea5e9",
+  },
+};
+
+const sectionPerformanceChartConfig: ChartConfig = {
+  completion: {
+    label: "Completion Rate %",
+    color: "#c026d3",
+  },
+};
 
 export default function InstructorDashboard() {
   const router = useRouter();
@@ -331,334 +352,371 @@ export default function InstructorDashboard() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Welcome Section */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Welcome back{user?.firstName ? `, ${user.firstName}!` : "!"}
-        </h1>
-        <p className="text-gray-600">
-          Here's what's happening with your students today.
-        </p>
+    <div>
+      <div className="mx-auto flex w-full flex-col gap-6 border border-primary-200 bg-white px-6 py-8 text-gray-900">
+        <div className="space-y-3">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary-700">
+            Instructor overview
+          </p>
+          <h1 className="text-3xl font-semibold text-gray-900">
+            Welcome back{user?.firstName ? `, ${user.firstName}!` : "!"}
+          </h1>
+          <p className="max-w-2xl text-muted-foreground">
+            Track everything from attendance to requirements with the same calm
+            palette as your invitations workspace.
+          </p>
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Button
+            variant="outline"
+            className="h-11 rounded-2xl border border-gray-300 bg-white px-6 text-gray-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50 w-full sm:w-auto"
+            onClick={() => router.push("/dashboard/instructor/invitations")}
+          >
+            Manage invitations
+          </Button>
+          <Button
+            variant="outline"
+            className="h-11 rounded-2xl border border-primary-500 bg-primary-50 px-6 text-primary-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50 w-full sm:w-auto"
+            onClick={() =>
+              router.push("/dashboard/instructor/invitations/send")
+            }
+          >
+            <MailPlus className="mr-2 h-4 w-4" />
+            Send invites
+          </Button>
+        </div>
       </div>
 
-      {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="bg-secondary-50 border-primary-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Users className="w-5 h-5 text-primary-600" />
-              Total Students
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-900">
-              {isUserLoading || isStudentsLoading ? "…" : stats.totalStudents}
-            </div>
-            <p className="text-sm text-gray-600">
-              Across{" "}
-              {isUserLoading || isStudentsLoading ? "…" : stats.sectionsCount}{" "}
-              sections
-            </p>
-          </CardContent>
-        </Card>
+      <div className="mx-auto mt-8 flex w-full flex-col gap-8">
+        {/* Stats Overview */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <InstructorStatsCard
+            icon={Users}
+            label="Total Students"
+            value={stats.totalStudents}
+            helperText={
+              <>
+                Across{" "}
+                {isUserLoading || isStudentsLoading ? "…" : stats.sectionsCount}{" "}
+                sections
+              </>
+            }
+            isLoading={isUserLoading || isStudentsLoading}
+          />
+          <InstructorStatsCard
+            icon={FileCheck}
+            label="Requirements"
+            value={`${stats.averageCompletion}%`}
+            helperText="Completion rate"
+            isLoading={isUserLoading || isStudentsLoading}
+          />
+          <InstructorStatsCard
+            icon={Clock}
+            label="Attendance"
+            value={`${stats.averageAttendance}%`}
+            helperText="Average rate"
+            isLoading={isUserLoading || isStudentsLoading}
+          />
+        </div>
 
-        <Card className="bg-secondary-50 border-accent-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <FileCheck className="w-5 h-5 text-accent-600" />
-              Requirements
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-900">
-              {isUserLoading || isStudentsLoading
-                ? "…"
-                : `${stats.averageCompletion}%`}
-            </div>
-            <p className="text-sm text-gray-600">Completion rate</p>
-          </CardContent>
-        </Card>
+        {/* Analytics Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="border border-primary-200 shadow-sm">
+            <CardHeader>
+              <CardTitle>Weekly Attendance Trends</CardTitle>
+              <CardDescription>
+                Attendance rates and submission counts over the past 8 weeks
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer
+                config={weeklyAttendanceChartConfig}
+                className="h-[300px] w-full"
+              >
+                <LineChart data={weeklyAttendanceData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="week" />
+                  <YAxis />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <ChartLegend content={<ChartLegendContent />} />
+                  <Line
+                    type="monotone"
+                    dataKey="attendance"
+                    stroke="var(--color-attendance)"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="submissions"
+                    stroke="var(--color-submissions)"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                </LineChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
 
-        <Card className="bg-secondary-50 border-green-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Clock className="w-5 h-5 text-green-600" />
-              Attendance
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-900">
-              {isUserLoading || isStudentsLoading
-                ? "…"
-                : `${stats.averageAttendance}%`}
-            </div>
-            <p className="text-sm text-gray-600">Average rate</p>
-          </CardContent>
-        </Card>
+          <Card className="border border-primary-200 shadow-sm">
+            <CardHeader>
+              <CardTitle>Section Performance</CardTitle>
+              <CardDescription>Completion rates by section</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer
+                config={sectionPerformanceChartConfig}
+                className="h-[300px] w-full"
+              >
+                <BarChart data={sectionPerformanceData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="section" />
+                  <YAxis />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <ChartLegend content={<ChartLegendContent />} />
+                  <Bar
+                    dataKey="completion"
+                    fill="var(--color-completion)"
+                    radius={[6, 6, 0, 0]}
+                  />
+                </BarChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+        </div>
 
-        {/* <Card className="bg-secondary-50 border-blue-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-blue-600" />
-              Reports
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-900">
-              {isWeeklyReportsLoading ? "…" : `${stats.onTimeSubmissionRate}%`}
-            </div>
-            <p className="text-sm text-gray-600">Submitted on time</p>
-          </CardContent>
-        </Card> */}
-      </div>
-
-      {/* Analytics Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
+        {/* Quick Actions */}
+        <Card className="border border-primary-200 shadow-sm">
           <CardHeader>
-            <CardTitle>Weekly Attendance Trends</CardTitle>
+            <CardTitle>Quick Actions</CardTitle>
             <CardDescription>
-              Attendance rates and submission counts over the past 8 weeks
+              Frequently used actions for managing your students
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={weeklyAttendanceData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="week" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="attendance"
-                  stroke="#10B981"
-                  strokeWidth={2}
-                  name="Attendance %"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="submissions"
-                  stroke="#3B82F6"
-                  strokeWidth={2}
-                  name="Submissions"
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Section Performance</CardTitle>
-            <CardDescription>Completion rates by section</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={sectionPerformanceData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="section" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar
-                  dataKey="completion"
-                  fill="#8884d8"
-                  name="Completion Rate %"
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>
-            Frequently used actions for managing your students
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Button
-              className="h-20 flex-col gap-2 bg-primary-500 hover:bg-primary-600"
-              onClick={() => handleQuickAction("add-student")}
-            >
-              <Plus className="w-6 h-6" />
-              <span>Add Student</span>
-            </Button>
-            <Button
-              variant="outline"
-              className="h-20 flex-col gap-2 border-accent-300 hover:bg-accent-50"
-              onClick={() => handleQuickAction("post-announcement")}
-            >
-              <MessageSquare className="w-6 h-6" />
-              <span>Post Announcement</span>
-            </Button>
-            {/* <Button
-              variant="outline"
-              className="h-20 flex-col gap-2 border-green-300 hover:bg-green-50"
-              onClick={() => handleQuickAction("view-analytics")}
-            >
-              <BarChart3 className="w-6 h-6" />
-              <span>View Analytics</span>
-            </Button> */}
-            <Button
-              variant="outline"
-              className="h-20 flex-col gap-2 border-gray-300 hover:bg-gray-50"
-              onClick={() => handleQuickAction("settings")}
-            >
-              <Settings className="w-6 h-6" />
-              <span>Settings</span>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Recent Activity & Pending Items */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-yellow-600" />
-              Pending Approvals
-            </CardTitle>
-            <CardDescription>Items requiring your attention</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-              <div>
-                <h4 className="font-medium text-gray-900">Attendance Logs</h4>
-                <p className="text-sm text-gray-600">
-                  {isAttendanceLoading
-                    ? "Loading..."
-                    : `${pendingItems.attendance.length} pending approvals`}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant="secondary"
-                  className="bg-yellow-100 text-yellow-800"
-                >
-                  {pendingItems.attendance.length > 0 ? "Urgent" : "None"}
-                </Badge>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    router.push("/dashboard/instructor/attendance")
-                  }
-                >
-                  Review
-                </Button>
-              </div>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
-              <div>
-                <h4 className="font-medium text-gray-900">Weekly Reports</h4>
-                <p className="text-sm text-gray-600">
-                  {isReportsLoading
-                    ? "Loading..."
-                    : `${pendingItems.reports.length} new submissions`}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant="secondary"
-                  className="bg-blue-100 text-blue-800"
-                >
-                  {pendingItems.reports.length > 0 ? "New" : "None"}
-                </Badge>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    router.push("/dashboard/instructor/reports/weekly")
-                  }
-                >
-                  View
-                </Button>
-              </div>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
-              <div>
-                <h4 className="font-medium text-gray-900">Requirements</h4>
-                <p className="text-sm text-gray-600">
-                  {isRequirementsLoading
-                    ? "Loading..."
-                    : `${pendingItems.requirements.length} documents ready for review`}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant="secondary"
-                  className="bg-green-100 text-green-800"
-                >
-                  {pendingItems.requirements.length > 0 ? "Ready" : "None"}
-                </Badge>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    router.push("/dashboard/instructor/requirements")
-                  }
-                >
-                  Check
-                </Button>
-              </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <Button
+                variant="outline"
+                className="h-20 flex-col gap-2 border border-primary-500 bg-primary-50 text-primary-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50"
+                onClick={() => handleQuickAction("add-student")}
+              >
+                <Plus className="w-6 h-6" />
+                <span>Add Student</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-20 flex-col gap-2 border border-gray-300 text-gray-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50"
+                onClick={() => handleQuickAction("post-announcement")}
+              >
+                <MessageSquare className="w-6 h-6" />
+                <span>Post Announcement</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-20 flex-col gap-2 border border-gray-300 text-gray-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50"
+                onClick={() => handleQuickAction("settings")}
+              >
+                <Settings className="w-6 h-6" />
+                <span>Settings</span>
+              </Button>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-              Section Performance
-            </CardTitle>
-            <CardDescription>
-              Overview of your assigned sections
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {sectionsAgg.map((section) => (
-              <div key={section.id} className="border rounded-lg p-4 bg-white">
-                <div className="flex justify-between items-center mb-3">
-                  <h4 className="font-medium text-gray-900">{section.name}</h4>
+        {/* Recent Activity & Pending Items */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Card className="border border-primary-200 shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                Pending Approvals
+              </CardTitle>
+              <CardDescription>Items requiring your attention</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-start gap-4 border border-primary-200 bg-white p-5 shadow-sm">
+                <div>
+                  <h4 className="font-medium text-foreground">
+                    Attendance Logs
+                  </h4>
+                  <p className="text-sm text-muted-foreground">
+                    {isAttendanceLoading
+                      ? "Loading..."
+                      : `${pendingItems.attendance.length} pending approvals`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
                   <Badge
-                    variant="outline"
-                    className="bg-primary-50 text-primary-700"
+                    variant="secondary"
+                    className="rounded-full bg-primary-50 px-3 py-1 text-xs font-medium text-primary-700"
                   >
-                    {section.totalStudents} students
+                    {pendingItems.attendance.length > 0 ? "Urgent" : "None"}
                   </Badge>
-                </div>
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-green-600">
-                      {section.avgAttendance}%
-                    </div>
-                    <span className="text-gray-600">Attendance</span>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-600">
-                      {section.completionRate}%
-                    </div>
-                    <span className="text-gray-600">Requirements</span>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-purple-600">
-                      {Math.round(section.completionRate * 0.9)}%
-                    </div>
-                    <span className="text-gray-600">Reports</span>
-                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border border-gray-300 text-gray-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50"
+                    onClick={() =>
+                      router.push("/dashboard/instructor/attendance")
+                    }
+                  >
+                    Review
+                  </Button>
                 </div>
               </div>
-            ))}
-          </CardContent>
-        </Card>
+              <div className="flex items-start gap-4 border border-primary-200 bg-white p-5 shadow-sm">
+                <div>
+                  <h4 className="font-medium text-foreground">
+                    Weekly Reports
+                  </h4>
+                  <p className="text-sm text-muted-foreground">
+                    {isReportsLoading
+                      ? "Loading..."
+                      : `${pendingItems.reports.length} new submissions`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant="secondary"
+                    className="rounded-full bg-primary-50 px-3 py-1 text-xs font-medium text-primary-700"
+                  >
+                    {pendingItems.reports.length > 0 ? "New" : "None"}
+                  </Badge>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border border-gray-300 text-gray-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50"
+                    onClick={() =>
+                      router.push("/dashboard/instructor/reports/weekly")
+                    }
+                  >
+                    View
+                  </Button>
+                </div>
+              </div>
+              <div className="flex items-start gap-4 border border-primary-200 bg-white p-5 shadow-sm">
+                <div>
+                  <h4 className="font-medium text-foreground">Requirements</h4>
+                  <p className="text-sm text-muted-foreground">
+                    {isRequirementsLoading
+                      ? "Loading..."
+                      : `${pendingItems.requirements.length} documents ready for review`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant="secondary"
+                    className="rounded-full bg-primary-50 px-3 py-1 text-xs font-medium text-primary-700"
+                  >
+                    {pendingItems.requirements.length > 0 ? "Ready" : "None"}
+                  </Badge>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border border-gray-300 text-gray-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50"
+                    onClick={() =>
+                      router.push("/dashboard/instructor/requirements")
+                    }
+                  >
+                    Check
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-primary-200 shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                Section Performance
+              </CardTitle>
+              <CardDescription>
+                Overview of your assigned sections
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                {sectionsAgg.map((section) => (
+                  <div
+                    key={section.id}
+                    className="rounded-2xl border border-primary-200 bg-white p-4 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-primary-600">
+                          Section
+                        </p>
+                        <h4 className="text-lg font-semibold text-foreground">
+                          {section.name}
+                        </h4>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className="border border-gray-300 bg-white text-gray-700"
+                      >
+                        {section.totalStudents} students
+                      </Badge>
+                    </div>
+
+                    <div className="mt-4 space-y-3">
+                      <div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">
+                            Attendance
+                          </span>
+                          <span className="font-semibold text-primary-700">
+                            {section.avgAttendance}%
+                          </span>
+                        </div>
+                        <div className="mt-2 h-2 rounded-full bg-primary-100">
+                          <div
+                            className="h-full rounded-full bg-primary"
+                            style={{ width: `${section.avgAttendance}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">
+                            Requirements
+                          </span>
+                          <span className="font-semibold text-primary-700">
+                            {section.completionRate}%
+                          </span>
+                        </div>
+                        <div className="mt-2 h-2 rounded-full bg-primary-100">
+                          <div
+                            className="h-full rounded-full bg-primary/80"
+                            style={{ width: `${section.completionRate}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Reports</span>
+                          <span className="font-semibold text-primary-700">
+                            {Math.round(section.completionRate * 0.9)}%
+                          </span>
+                        </div>
+                        <div className="mt-2 h-2 rounded-full bg-primary-100">
+                          <div
+                            className="h-full rounded-full bg-primary/60"
+                            style={{
+                              width: `${Math.round(
+                                section.completionRate * 0.9
+                              )}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

@@ -50,6 +50,7 @@ import {
 import { useAttendance, AttendanceRecord } from "@/hooks/attendance";
 import { toast } from "sonner";
 import * as XLSX from 'xlsx';
+import { InstructorStatsCard } from "@/components/instructor-stats-card";
 
 // Helper functions for formatting data
 const formatTime = (dateString: string | null | undefined) => {
@@ -283,53 +284,39 @@ export default function AttendancePage() {
 
 			{/* Stats Cards */}
 			<div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-				<Card className="bg-secondary-50 border-yellow-200">
-					<CardContent className="p-4">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="text-sm text-gray-600">Pending Review</p>
-								<p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
-							</div>
-							<Clock className="w-8 h-8 text-yellow-600" />
-						</div>
-					</CardContent>
-				</Card>
-
-				<Card className="bg-secondary-50 border-green-200">
-					<CardContent className="p-4">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="text-sm text-gray-600">Approved Today</p>
-								<p className="text-2xl font-bold text-green-600">{stats.approvedToday}</p>
-							</div>
-							<CheckCircle className="w-8 h-8 text-green-600" />
-						</div>
-					</CardContent>
-				</Card>
-
-				<Card className="bg-secondary-50 border-red-200">
-					<CardContent className="p-4">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="text-sm text-gray-600">Declined</p>
-								<p className="text-2xl font-bold text-red-600">{stats.declined}</p>
-							</div>
-							<XCircle className="w-8 h-8 text-red-600" />
-						</div>
-					</CardContent>
-				</Card>
-
-				<Card className="bg-secondary-50 border-blue-200">
-					<CardContent className="p-4">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="text-sm text-gray-600">Avg. Hours</p>
-								<p className="text-2xl font-bold text-blue-600">{stats.avgHours}</p>
-							</div>
-							<Calendar className="w-8 h-8 text-blue-600" />
-						</div>
-					</CardContent>
-				</Card>
+				<InstructorStatsCard
+					icon={Clock}
+					label="Pending Review"
+					value={stats.pending}
+					helperText="Awaiting approval"
+				/>
+				<InstructorStatsCard
+					icon={CheckCircle}
+					label="Approved Today"
+					value={stats.approvedToday}
+					helperText="Cleared logs today"
+					trend={
+						stats.approvedToday > 0
+							? { label: `${stats.approvedToday} processed`, variant: "positive" }
+							: undefined
+					}
+				/>
+				<InstructorStatsCard
+					icon={XCircle}
+					label="Declined"
+					value={stats.declined}
+					helperText="Requires follow-up"
+					trend={
+						stats.declined > 0 ? { label: "Action needed", variant: "negative" } : undefined
+					}
+				/>
+				<InstructorStatsCard
+					icon={Calendar}
+					label="Avg. Hours"
+					value={`${stats.avgHours}h`}
+					helperText="Per submission"
+					trend={{ label: "Weekly average", variant: "neutral" }}
+				/>
 			</div>
 
 			{/* Filters and Search */}

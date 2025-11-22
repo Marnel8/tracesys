@@ -24,8 +24,9 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, Building2, Save, X } from "lucide-react";
-import { useAgency, useUpdateAgency } from "@/hooks/agency";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ArrowLeft, Building2, Save, X, Plus, Trash2, Users } from "lucide-react";
+import { useAgency, useUpdateAgency, useSupervisors, useCreateSupervisor, useUpdateSupervisor, useDeleteSupervisor } from "@/hooks/agency";
 import { AgencyFormData } from "@/data/agencies";
 import { BRANCH_TYPE_OPTIONS } from "@/data/agencies";
 import { toast } from "sonner";
@@ -42,10 +43,29 @@ const agencySchema = z.object({
 	}),
 	openingTime: z.string().optional(),
 	closingTime: z.string().optional(),
+	operatingDays: z.string().optional(),
+	lunchStartTime: z.string().optional(),
+	lunchEndTime: z.string().optional(),
 	isActive: z.boolean().default(true),
-	latitude: z.number().min(-90, "Latitude must be between -90 and 90").max(90, "Latitude must be between -90 and 90").optional(),
-	longitude: z.number().min(-180, "Longitude must be between -180 and 180").max(180, "Longitude must be between -180 and 180").optional(),
+	latitude: z.preprocess(
+		(val) => (val === "" || val === null || val === undefined || isNaN(Number(val)) ? undefined : Number(val)),
+		z.number().min(-90, "Latitude must be between -90 and 90").max(90, "Latitude must be between -90 and 90").optional()
+	),
+	longitude: z.preprocess(
+		(val) => (val === "" || val === null || val === undefined || isNaN(Number(val)) ? undefined : Number(val)),
+		z.number().min(-180, "Longitude must be between -180 and 180").max(180, "Longitude must be between -180 and 180").optional()
+	),
 });
+
+const DAYS_OF_WEEK = [
+	{ value: "Monday", label: "Monday" },
+	{ value: "Tuesday", label: "Tuesday" },
+	{ value: "Wednesday", label: "Wednesday" },
+	{ value: "Thursday", label: "Thursday" },
+	{ value: "Friday", label: "Friday" },
+	{ value: "Saturday", label: "Saturday" },
+	{ value: "Sunday", label: "Sunday" },
+];
 
 type AgencyForm = z.infer<typeof agencySchema>;
 
@@ -55,8 +75,13 @@ export default function EditAgencyPage() {
 	const agencyId = params.id as string;
 	
 	const { data: agency, isLoading, error } = useAgency(agencyId);
+	const { data: supervisorsData } = useSupervisors(agencyId || "", {});
 	const updateAgencyMutation = useUpdateAgency();
+	const createSupervisorMutation = useCreateSupervisor();
+	const updateSupervisorMutation = useUpdateSupervisor();
+	const deleteSupervisorMutation = useDeleteSupervisor();
 	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [selectedDays, setSelectedDays] = useState<string[]>([]);
 
 	const {
 		register,
@@ -76,11 +101,20 @@ export default function EditAgencyPage() {
 			branchType: "Main",
 			openingTime: "",
 			closingTime: "",
+			operatingDays: "",
+			lunchStartTime: "",
+			lunchEndTime: "",
 			isActive: true,
 			latitude: undefined,
 			longitude: undefined,
 		},
 	});
+
+	const handleDayToggle = (day: string) => {
+		setSelectedDays((prev) =>
+			prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+		);
+	};
 
 	// Update form when agency data is loaded
 	useEffect(() => {
@@ -93,12 +127,18 @@ export default function EditAgencyPage() {
 				contactPhone: agency.contactPhone,
 				contactEmail: agency.contactEmail,
 				branchType: agency.branchType,
-			openingTime: agency.openingTime || "",
-			closingTime: agency.closingTime || "",
-			isActive: agency.isActive,
-			latitude: agency.latitude,
-			longitude: agency.longitude,
+				openingTime: agency.openingTime || "",
+				closingTime: agency.closingTime || "",
+				operatingDays: agency.operatingDays || "",
+				lunchStartTime: agency.lunchStartTime || "",
+				lunchEndTime: agency.lunchEndTime || "",
+				isActive: agency.isActive,
+				latitude: agency.latitude,
+				longitude: agency.longitude,
 			});
+			if (agency.operatingDays) {
+				setSelectedDays(agency.operatingDays.split(","));
+			}
 		}
 	}, [agency, reset]);
 
@@ -109,6 +149,9 @@ export default function EditAgencyPage() {
 				...data,
 				openingTime: data.openingTime || undefined,
 				closingTime: data.closingTime || undefined,
+				operatingDays: selectedDays.length > 0 ? selectedDays.join(",") : undefined,
+				lunchStartTime: data.lunchStartTime || undefined,
+				lunchEndTime: data.lunchEndTime || undefined,
 			};
 
 			await updateAgencyMutation.mutateAsync({
@@ -385,10 +428,30 @@ export default function EditAgencyPage() {
 					<CardHeader>
 						<CardTitle>Operating Hours</CardTitle>
 						<CardDescription>
-							Enter the agency's operating hours (optional)
+							Enter the agency's operating hours and days (optional)
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="space-y-4">
+						<div className="space-y-2">
+							<Label>Operating Days</Label>
+							<div className="flex flex-wrap gap-3">
+								{DAYS_OF_WEEK.map((day) => (
+									<div key={day.value} className="flex items-center space-x-2">
+										<Checkbox
+											id={`day-${day.value}`}
+											checked={selectedDays.includes(day.value)}
+											onCheckedChange={() => handleDayToggle(day.value)}
+										/>
+										<Label
+											htmlFor={`day-${day.value}`}
+											className="text-sm font-normal cursor-pointer"
+										>
+											{day.label}
+										</Label>
+									</div>
+								))}
+							</div>
+						</div>
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div className="space-y-2">
 								<Label htmlFor="openingTime">Opening Time</Label>
@@ -414,6 +477,31 @@ export default function EditAgencyPage() {
 								)}
 							</div>
 						</div>
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<div className="space-y-2">
+								<Label htmlFor="lunchStartTime">Lunch Start Time (for DTR)</Label>
+								<Input
+									id="lunchStartTime"
+									type="time"
+									{...register("lunchStartTime")}
+								/>
+								{errors.lunchStartTime && (
+									<p className="text-sm text-red-600">{errors.lunchStartTime.message}</p>
+								)}
+							</div>
+
+							<div className="space-y-2">
+								<Label htmlFor="lunchEndTime">Lunch End Time (for DTR)</Label>
+								<Input
+									id="lunchEndTime"
+									type="time"
+									{...register("lunchEndTime")}
+								/>
+								{errors.lunchEndTime && (
+									<p className="text-sm text-red-600">{errors.lunchEndTime.message}</p>
+								)}
+							</div>
+						</div>
 					</CardContent>
 				</Card>
 
@@ -433,7 +521,10 @@ export default function EditAgencyPage() {
 									id="latitude"
 									type="number"
 									step="any"
-									{...register("latitude", { valueAsNumber: true })}
+									{...register("latitude", { 
+										valueAsNumber: true,
+										setValueAs: (v: string) => v === "" || isNaN(Number(v)) ? undefined : Number(v)
+									})}
 									placeholder="e.g., 12.3601"
 								/>
 								{errors.latitude && (
@@ -450,7 +541,10 @@ export default function EditAgencyPage() {
 									id="longitude"
 									type="number"
 									step="any"
-									{...register("longitude", { valueAsNumber: true })}
+									{...register("longitude", { 
+										valueAsNumber: true,
+										setValueAs: (v: string) => v === "" || isNaN(Number(v)) ? undefined : Number(v)
+									})}
 									placeholder="e.g., 121.0444"
 								/>
 								{errors.longitude && (
@@ -465,6 +559,71 @@ export default function EditAgencyPage() {
 							<p className="text-sm text-blue-800">
 								<strong>Tip:</strong> You can find exact coordinates using Google Maps by right-clicking on the location and selecting "What's here?"
 							</p>
+						</div>
+					</CardContent>
+				</Card>
+
+				{/* Supervisors */}
+				<Card>
+					<CardHeader>
+						<CardTitle>Supervisors</CardTitle>
+						<CardDescription>
+							Manage supervisors for this agency
+						</CardDescription>
+					</CardHeader>
+					<CardContent className="space-y-4">
+						{supervisorsData?.supervisors && supervisorsData.supervisors.length > 0 && (
+							<div className="space-y-2">
+								<Label className="text-sm font-semibold">Existing Supervisors</Label>
+								{supervisorsData.supervisors.map((supervisor) => (
+									<div key={supervisor.id} className="p-3 border rounded-lg flex justify-between items-center">
+										<div>
+											<div className="font-medium">{supervisor.name}</div>
+											<div className="text-sm text-gray-500">{supervisor.email} • {supervisor.position}</div>
+										</div>
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											onClick={async () => {
+												if (!agencyId) {
+													toast.error("Agency ID is missing");
+													return;
+												}
+												if (confirm(`Delete supervisor ${supervisor.name}?`)) {
+													try {
+														await deleteSupervisorMutation.mutateAsync({
+															id: supervisor.id,
+															agencyId: agencyId,
+														});
+													} catch (error) {
+														// Error handled by mutation
+													}
+												}
+											}}
+										>
+											<Trash2 className="w-4 h-4 text-red-600" />
+										</Button>
+									</div>
+								))}
+							</div>
+						)}
+						<div className="pt-4 border-t">
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => {
+									if (agencyId) {
+										router.push(`/dashboard/instructor/agencies/supervisors?agency=${agencyId}`);
+									} else {
+										toast.error("Agency ID is missing");
+									}
+								}}
+								className="w-full"
+							>
+								<Users className="w-4 h-4 mr-2" />
+								Manage Supervisors
+							</Button>
 						</div>
 					</CardContent>
 				</Card>

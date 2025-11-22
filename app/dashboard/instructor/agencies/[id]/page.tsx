@@ -272,11 +272,11 @@ export default function AgencyDetailsPage() {
 							<div>
 								<label className="text-sm font-medium text-gray-500">Address</label>
 								<p className="text-sm">{agency.address}</p>
-								{agency.latitude && agency.longitude && (
+								{agency.latitude != null && agency.longitude != null && (
 									<div className="mt-2 space-y-1">
 										<div className="flex items-center gap-2 text-xs text-gray-500">
 											<Navigation className="h-3 w-3" />
-											<span>Coordinates: {agency.latitude.toFixed(6)}, {agency.longitude.toFixed(6)}</span>
+											<span>Coordinates: {Number(agency.latitude).toFixed(6)}, {Number(agency.longitude).toFixed(6)}</span>
 										</div>
 										<div className="flex items-center gap-2">
 											<Button
@@ -284,7 +284,9 @@ export default function AgencyDetailsPage() {
 												variant="outline"
 												className="h-6 px-2 text-xs"
 												onClick={() => {
-													const url = `https://www.google.com/maps?q=${agency.latitude},${agency.longitude}`;
+													const lat = Number(agency.latitude);
+													const lng = Number(agency.longitude);
+													const url = `https://www.google.com/maps?q=${lat},${lng}`;
 													window.open(url, '_blank');
 												}}
 											>
@@ -296,7 +298,9 @@ export default function AgencyDetailsPage() {
 												variant="outline"
 												className="h-6 px-2 text-xs"
 												onClick={() => {
-													navigator.clipboard.writeText(`${agency.latitude}, ${agency.longitude}`);
+													const lat = Number(agency.latitude);
+													const lng = Number(agency.longitude);
+													navigator.clipboard.writeText(`${lat}, ${lng}`);
 													toast.success("Coordinates copied to clipboard");
 												}}
 											>
@@ -316,6 +320,24 @@ export default function AgencyDetailsPage() {
 									<p className="text-sm">{formatTime(agency.closingTime)}</p>
 								</div>
 							</div>
+							{agency.operatingDays && (
+								<div>
+									<label className="text-sm font-medium text-gray-500">Operating Days</label>
+									<p className="text-sm">{agency.operatingDays}</p>
+								</div>
+							)}
+							{(agency.lunchStartTime || agency.lunchEndTime) && (
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div>
+										<label className="text-sm font-medium text-gray-500">Lunch Start Time</label>
+										<p className="text-sm">{formatTime(agency.lunchStartTime)}</p>
+									</div>
+									<div>
+										<label className="text-sm font-medium text-gray-500">Lunch End Time</label>
+										<p className="text-sm">{formatTime(agency.lunchEndTime)}</p>
+									</div>
+								</div>
+							)}
 							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 								<div>
 									<label className="text-sm font-medium text-gray-500">Status</label>
@@ -511,7 +533,18 @@ export default function AgencyDetailsPage() {
 									<TableRow key={practicum.id}>
 										<TableCell className="font-medium">{practicum.position}</TableCell>
 										<TableCell>
-											Student ID: {practicum.studentId}
+											{practicum.student ? (
+												<div>
+													<div className="font-medium">
+														{practicum.student.firstName} {practicum.student.lastName}
+													</div>
+													<div className="text-sm text-gray-500">
+														ID: {practicum.student.studentId}
+													</div>
+												</div>
+											) : (
+												`Student ID: ${practicum.studentId}`
+											)}
 										</TableCell>
 										<TableCell>{formatDate(practicum.startDate)}</TableCell>
 										<TableCell>{formatDate(practicum.endDate)}</TableCell>

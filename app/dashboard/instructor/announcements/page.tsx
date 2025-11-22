@@ -42,6 +42,7 @@ import {
 	Search,
 	X,
 } from "lucide-react";
+import { InstructorStatsCard } from "@/components/instructor-stats-card";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -951,61 +952,45 @@ export default function AnnouncementsPage() {
 
 			{/* Stats Cards */}
 			<div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-				<Card className="bg-secondary-50 border-primary-200">
-					<CardContent className="p-4">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="text-sm text-gray-600">Total Announcements</p>
-								<p className="text-2xl font-bold text-gray-900">
-									{isLoadingStats ? "..." : announcementStats?.totalAnnouncements || 0}
-								</p>
-							</div>
-							<MessageSquare className="w-8 h-8 text-primary-600" />
-						</div>
-					</CardContent>
-				</Card>
-
-				<Card className="bg-secondary-50 border-green-200">
-					<CardContent className="p-4">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="text-sm text-gray-600">Published</p>
-								<p className="text-2xl font-bold text-green-600">
-									{isLoadingStats ? "..." : announcementStats?.publishedAnnouncements || 0}
-								</p>
-							</div>
-							<Badge className="bg-green-100 text-green-800">Active</Badge>
-						</div>
-					</CardContent>
-				</Card>
-
-				<Card className="bg-secondary-50 border-yellow-200">
-					<CardContent className="p-4">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="text-sm text-gray-600">Drafts</p>
-								<p className="text-2xl font-bold text-yellow-600">
-									{isLoadingStats ? "..." : announcementStats?.draftAnnouncements || 0}
-								</p>
-							</div>
-							<Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>
-						</div>
-					</CardContent>
-				</Card>
-
-				<Card className="bg-secondary-50 border-blue-200">
-					<CardContent className="p-4">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="text-sm text-gray-600">Total Views</p>
-								<p className="text-2xl font-bold text-blue-600">
-									{isLoadingStats ? "..." : announcementStats?.totalViews || 0}
-								</p>
-							</div>
-							<Eye className="w-8 h-8 text-blue-600" />
-						</div>
-					</CardContent>
-				</Card>
+				<InstructorStatsCard
+					icon={MessageSquare}
+					label="Total Announcements"
+					value={announcementStats?.totalAnnouncements || 0}
+					helperText="All-time posts"
+					isLoading={isLoadingStats}
+				/>
+				<InstructorStatsCard
+					label="Published"
+					value={announcementStats?.publishedAnnouncements || 0}
+					helperText="Live to students"
+					trend={
+						announcementStats?.publishedAnnouncements
+							? {
+									label: `${announcementStats.publishedAnnouncements} active`,
+									variant: "positive",
+								}
+							: undefined
+					}
+					isLoading={isLoadingStats}
+				/>
+				<InstructorStatsCard
+					label="Drafts"
+					value={announcementStats?.draftAnnouncements || 0}
+					helperText="Waiting to publish"
+					trend={
+						announcementStats?.draftAnnouncements
+							? { label: "Pending review", variant: "neutral" }
+							: undefined
+					}
+					isLoading={isLoadingStats}
+				/>
+				<InstructorStatsCard
+					icon={Eye}
+					label="Total Views"
+					value={announcementStats?.totalViews || 0}
+					helperText="Engagement count"
+					isLoading={isLoadingStats}
+				/>
 			</div>
 
 			{/* Filters and Search */}

@@ -1,5 +1,6 @@
 import api from "@/lib/api";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { signIn as nextAuthSignIn, signOut as nextAuthSignOut } from "next-auth/react";
 
 export interface registerParams {
 	firstName: string;
@@ -146,12 +147,22 @@ export const useLogin = () => {
 
 
 const logout = async () => {
+	let responseData: any = null;
 	try {
 		const res = await api.get("/user/logout");
-		return res.data;
+		responseData = res.data;
 	} catch (error: any) {
+		// Still attempt to clear NextAuth session even if API logout fails
 		throw new Error("Error in logout request: " + error.message);
+	} finally {
+		try {
+			await nextAuthSignOut({ redirect: false });
+		} catch (signOutError) {
+			// Ignore NextAuth sign-out errors to avoid blocking logout flow
+			console.warn("NextAuth sign-out failed:", signOutError);
+		}
 	}
+	return responseData;
 };
 
 export const useLogout = () => {
@@ -181,6 +192,7 @@ interface User {
 	instructorId?: string;
 	isActive: boolean;
 	emailVerified: boolean;
+	allowLoginWithoutRequirements?: boolean;
 	lastLoginAt?: Date;
 	createdAt: Date;
 	updatedAt: Date;
@@ -399,5 +411,79 @@ const changePassword = async ({ currentPassword, newPassword }: ChangePasswordPa
 export const useChangePassword = () => {
 	return useMutation({
 		mutationFn: changePassword,
+	});
+};
+
+// NextAuth OAuth integration
+export const useOAuthSignIn = () => {
+	return useMutation({
+		mutationFn: async (provider: "google", options?: { callbackUrl?: string; invitationToken?: string }) => {
+			return await nextAuthSignIn(provider, {
+				callbackUrl: options?.callbackUrl || "/dashboard/student",
+				redirect: true,
+			}, {
+				invitationToken: options?.invitationToken,
+			} as any);
+		},
+	});
+};
+
+export const useOAuthSignOut = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async () => {
+			// Sign out from NextAuth
+			await nextAuthSignOut({ redirect: false });
+			// Also sign out from JWT if applicable
+			try {
+				await api.get("/user/logout");
+			} catch (error) {
+				// Ignore errors if JWT logout fails
+			}
+			// Clear query cache
+			queryClient.clear();
+		},
+	});
+};
+
+// Update allow login without requirements setting
+interface UpdateAllowLoginWithoutRequirementsParams {
+	allowLoginWithoutRequirements: boolean;
+}
+
+const updateAllowLoginWithoutRequirements = async ({
+	allowLoginWithoutRequirements,
+}: UpdateAllowLoginWithoutRequirementsParams) => {
+	try {
+		const res = await api.put("/user/allow-login-without-requirements", {
+			allowLoginWithoutRequirements,
+		});
+		return res.data;
+	} catch (error: any) {
+		if (error.response) {
+			throw new Error(
+				error.response.data.message || "Failed to update setting"
+			);
+		} else if (error.request) {
+			throw new Error("No response from server");
+		} else {
+			throw new Error("Error updating setting: " + error.message);
+		}
+	}
+};
+
+export const useUpdateAllowLoginWithoutRequirements = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: updateAllowLoginWithoutRequirements,
+		onSuccess: () => {
+			// Invalidate and refetch user data to ensure consistency
+			queryClient.invalidateQueries({ queryKey: ["user"] });
+			// Invalidate all student queries since instructor setting affects student data
+			// This ensures students see updated instructor settings immediately
+			queryClient.invalidateQueries({ queryKey: ["student"] });
+			queryClient.invalidateQueries({ queryKey: ["students"] });
+			queryClient.invalidateQueries({ queryKey: ["students-by-teacher"] });
+		},
 	});
 };

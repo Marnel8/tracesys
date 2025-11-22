@@ -15,6 +15,7 @@ import { Search, Download, Eye, CheckCircle, XCircle, Clock, MoreHorizontal, Fil
 import { useRequirements } from "@/hooks/requirement"
 import { useSections } from "@/hooks/section"
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
+import { InstructorStatsCard } from "@/components/instructor-stats-card"
 
 const humanizeBytes = (bytes?: number | null) => {
   if (!bytes && bytes !== 0) return "-"
@@ -175,53 +176,34 @@ export default function AllRequirementsPage() {
 
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-secondary-50 border-blue-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Submissions</p>
-                <p className="text-2xl font-bold text-blue-600">{totals.total}</p>
-              </div>
-              <FileText className="w-8 h-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-secondary-50 border-green-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Approved</p>
-                <p className="text-2xl font-bold text-green-600">{totals.approved}</p>
-              </div>
-              <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-secondary-50 border-yellow-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Pending</p>
-                <p className="text-2xl font-bold text-yellow-600">{totals.pending}</p>
-              </div>
-              <Clock className="w-8 h-8 text-yellow-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-secondary-50 border-red-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Rejected</p>
-                <p className="text-2xl font-bold text-red-600">{totals.rejected}</p>
-              </div>
-              <XCircle className="w-8 h-8 text-red-600" />
-            </div>
-          </CardContent>
-        </Card>
+        <InstructorStatsCard
+          icon={FileText}
+          label="Total Submissions"
+          value={totals.total}
+          helperText="Across all requirements"
+        />
+        <InstructorStatsCard
+          icon={CheckCircle}
+          label="Approved"
+          value={totals.approved}
+          helperText="Cleared requirements"
+          trend={
+            totals.approved > 0 ? { label: `${totals.approved} approved`, variant: "positive" } : undefined
+          }
+        />
+        <InstructorStatsCard
+          icon={Clock}
+          label="Pending"
+          value={totals.pending}
+          helperText="Awaiting review"
+        />
+        <InstructorStatsCard
+          icon={XCircle}
+          label="Rejected"
+          value={totals.rejected}
+          helperText="Needs revision"
+          trend={totals.rejected > 0 ? { label: "Follow up", variant: "negative" } : undefined}
+        />
       </div>
 
       {/* Requirement Types Overview */}

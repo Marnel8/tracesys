@@ -65,21 +65,40 @@ export const agencyKeys = {
 	},
 };
 
+interface UseAgenciesOptions {
+	enabled?: boolean;
+}
+
 // Get all agencies with filters
-export const useAgencies = (filters: AgencyFilters = {}) => {
+export const useAgencies = (filters: AgencyFilters = {}, options: UseAgenciesOptions = {}) => {
+	const { enabled = true } = options;
+
 	return useQuery({
 		queryKey: agencyKeys.list(filters),
 		queryFn: async (): Promise<AgencyResponse> => {
-			const params = new URLSearchParams();
-			
-			if (filters.search) params.append("search", filters.search);
-			if (filters.status && filters.status !== "all") params.append("status", filters.status);
-			if (filters.branchType && filters.branchType !== "all") params.append("branchType", filters.branchType);
-			
-			const response = await api.get(`${AGENCY_ENDPOINTS.agencies}?${params.toString()}`);
-			return response.data.data;
+			try {
+				const params = new URLSearchParams();
+				
+				if (filters.search) params.append("search", filters.search);
+				if (filters.status && filters.status !== "all") params.append("status", filters.status);
+				if (filters.branchType && filters.branchType !== "all") params.append("branchType", filters.branchType);
+				
+				const response = await api.get(`${AGENCY_ENDPOINTS.agencies}?${params.toString()}`);
+				
+				if (!response.data || !response.data.data) {
+					console.error("Invalid response structure:", response.data);
+					throw new Error("Invalid response from server");
+				}
+				
+				return response.data.data;
+			} catch (error: any) {
+				console.error("Error fetching agencies:", error);
+				throw error;
+			}
 		},
+		enabled,
 		placeholderData: (previousData) => previousData,
+		retry: 1,
 	});
 };
 

@@ -22,6 +22,7 @@ import {
   Area,
 } from "recharts"
 import { TrendingUp, TrendingDown, Users, Clock, CheckCircle, Award } from "lucide-react"
+import { InstructorStatsCard } from "@/components/instructor-stats-card"
 
 // Mock data for analytics
 const attendanceData = [
@@ -67,6 +68,37 @@ const weeklyProgress = [
   { week: "Week 8", hours: 325, reports: 40, requirements: 38 },
 ]
 
+const analyticsHighlights = [
+  {
+    label: "Total Students",
+    value: "42",
+    icon: Users,
+    helperText: "Current enrollment",
+    trend: { label: "+5% vs last month", variant: "positive" } as const,
+  },
+  {
+    label: "Avg. Attendance",
+    value: "92%",
+    icon: Clock,
+    helperText: "Semester to date",
+    trend: { label: "+2% vs last week", variant: "positive" } as const,
+  },
+  {
+    label: "Completion Rate",
+    value: "83%",
+    icon: CheckCircle,
+    helperText: "Requirements completed",
+    trend: { label: "-1% vs last week", variant: "negative" } as const,
+  },
+  {
+    label: "Avg. Rating",
+    value: "4.1",
+    icon: Award,
+    helperText: "Supervisor feedback",
+    trend: { label: "+0.2 vs last month", variant: "positive" } as const,
+  },
+]
+
 export default function AnalyticsPage() {
   return (
     <div className="space-y-6">
@@ -92,69 +124,16 @@ export default function AnalyticsPage() {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card className="bg-secondary-50 border-primary-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Students</p>
-                <p className="text-3xl font-bold text-gray-900">42</p>
-                <div className="flex items-center gap-1 mt-1">
-                  <TrendingUp className="w-4 h-4 text-green-600" />
-                  <span className="text-sm text-green-600">+5% from last month</span>
-                </div>
-              </div>
-              <Users className="w-8 h-8 text-primary-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-secondary-50 border-green-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Avg. Attendance</p>
-                <p className="text-3xl font-bold text-gray-900">92%</p>
-                <div className="flex items-center gap-1 mt-1">
-                  <TrendingUp className="w-4 h-4 text-green-600" />
-                  <span className="text-sm text-green-600">+2% from last week</span>
-                </div>
-              </div>
-              <Clock className="w-8 h-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-secondary-50 border-blue-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Completion Rate</p>
-                <p className="text-3xl font-bold text-gray-900">83%</p>
-                <div className="flex items-center gap-1 mt-1">
-                  <TrendingDown className="w-4 h-4 text-red-600" />
-                  <span className="text-sm text-red-600">-1% from last week</span>
-                </div>
-              </div>
-              <CheckCircle className="w-8 h-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-secondary-50 border-purple-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Avg. Rating</p>
-                <p className="text-3xl font-bold text-gray-900">4.1</p>
-                <div className="flex items-center gap-1 mt-1">
-                  <TrendingUp className="w-4 h-4 text-green-600" />
-                  <span className="text-sm text-green-600">+0.2 from last month</span>
-                </div>
-              </div>
-              <Award className="w-8 h-8 text-purple-600" />
-            </div>
-          </CardContent>
-        </Card>
+        {analyticsHighlights.map((metric) => (
+          <InstructorStatsCard
+            key={metric.label}
+            icon={metric.icon}
+            label={metric.label}
+            value={metric.value}
+            helperText={metric.helperText}
+            trend={metric.trend}
+          />
+        ))}
       </div>
 
       {/* Charts Row 1 */}

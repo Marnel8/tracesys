@@ -48,6 +48,7 @@ import {
   GraduationCap,
   BookOpen,
   Layers,
+  Mail,
 } from "lucide-react";
 import {
   Collapsible,
@@ -82,9 +83,13 @@ export function InstructorSidebar() {
           url: "/dashboard/instructor/students",
           // badge: badges.totalStudents.toString(),
         },
+        // {
+        //   title: "Add Student",
+        //   url: "/dashboard/instructor/students/add",
+        // },
         {
-          title: "Add Student",
-          url: "/dashboard/instructor/students/add",
+          title: "Invite Students",
+          url: "/dashboard/instructor/invitations",
         },
       ],
     },
@@ -157,10 +162,10 @@ export function InstructorSidebar() {
           title: "Add Agency",
           url: "/dashboard/instructor/agencies/add",
         },
-        {
-          title: "Manage Supervisors",
-          url: "/dashboard/instructor/agencies/supervisors",
-        },
+        // {
+        //   title: "Manage Supervisors",
+        //   url: "/dashboard/instructor/agencies/supervisors",
+        // },
       ],
     },
     // {

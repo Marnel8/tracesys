@@ -22,6 +22,8 @@ const config: Config = {
       colors: {
         // TracèSys Custom Colors
         primary: {
+          DEFAULT: "var(--primary)",
+          foreground: "var(--primary-foreground)",
           50: "#fdf4ff",
           100: "#fae8ff",
           200: "#f5d0fe",
@@ -35,6 +37,8 @@ const config: Config = {
           950: "#4a044e",
         },
         secondary: {
+          DEFAULT: "var(--secondary)",
+          foreground: "var(--secondary-foreground)",
           50: "#FCEBFF", // Card background shade
           100: "#f9e6ff",
           200: "#f3ccff",
@@ -47,6 +51,8 @@ const config: Config = {
           900: "#701a75",
         },
         accent: {
+          DEFAULT: "var(--accent)",
+          foreground: "var(--accent-foreground)",
           50: "#f0f9ff",
           100: "#e0f2fe",
           200: "#bae6fd",
@@ -58,26 +64,26 @@ const config: Config = {
           800: "#075985",
           900: "#0c4a6e",
         },
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
+        border: "var(--border)",
+        input: "var(--input)",
+        ring: "var(--ring)",
+        background: "var(--background)",
+        foreground: "var(--foreground)",
         destructive: {
-          DEFAULT: "hsl(var(--destructive))",
-          foreground: "hsl(var(--destructive-foreground))",
+          DEFAULT: "var(--destructive)",
+          foreground: "var(--destructive-foreground)",
         },
         muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
+          DEFAULT: "var(--muted)",
+          foreground: "var(--muted-foreground)",
         },
         popover: {
-          DEFAULT: "hsl(var(--popover))",
-          foreground: "hsl(var(--popover-foreground))",
+          DEFAULT: "var(--popover)",
+          foreground: "var(--popover-foreground)",
         },
         card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
+          DEFAULT: "var(--card)",
+          foreground: "var(--card-foreground)",
         },
       },
       borderRadius: {

@@ -9,6 +9,9 @@ export interface Agency {
 	branchType: "Main" | "Branch";
 	openingTime?: string;
 	closingTime?: string;
+	operatingDays?: string;
+	lunchStartTime?: string;
+	lunchEndTime?: string;
 	isActive: boolean;
 	latitude?: number;
 	longitude?: number;
@@ -45,6 +48,13 @@ export interface Practicum {
 	status: "active" | "completed" | "inactive";
 	createdAt: string;
 	updatedAt: string;
+	student?: {
+		id: string;
+		firstName: string;
+		lastName: string;
+		studentId: string;
+		email: string;
+	};
 }
 
 export interface AgencyFormData {
@@ -57,6 +67,9 @@ export interface AgencyFormData {
 	branchType: "Main" | "Branch";
 	openingTime?: string;
 	closingTime?: string;
+	operatingDays?: string;
+	lunchStartTime?: string;
+	lunchEndTime?: string;
 	isActive?: boolean;
 	latitude?: number;
 	longitude?: number;
