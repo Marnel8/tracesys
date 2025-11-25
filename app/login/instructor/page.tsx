@@ -63,28 +63,33 @@ export default function InstructorLoginPage() {
       });
       const userRole = res?.user?.role;
       const isActive = res?.user?.isActive;
-      
+
       if (userRole !== "instructor") {
         toast.error("This login is for instructors only.");
         try {
           await logoutMutation.mutateAsync();
         } catch {}
+        setIsLoading(false);
         return;
       }
-      
+
       if (isActive === false) {
-        toast.error("Your account has been deactivated. Please contact your administrator.");
+        toast.error(
+          "Your account has been deactivated. Please contact your administrator."
+        );
         try {
           await logoutMutation.mutateAsync();
         } catch {}
+        setIsLoading(false);
         return;
       }
-      
+
       toast.success("Signed in successfully");
-      router.push("/dashboard/instructor");
+      // Use window.location.href instead of router.push to ensure cookies are set
+      // before the middleware checks authentication
+      window.location.href = "/dashboard/instructor";
     } catch (error: any) {
       toast.error(error?.message || "Failed to sign in");
-    } finally {
       setIsLoading(false);
     }
   };

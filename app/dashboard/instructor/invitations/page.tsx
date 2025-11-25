@@ -118,7 +118,7 @@ export default function InvitationsPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <Button
             variant="secondary"
-            className="invitation-secondary-btn"
+            className="h-11 border border-primary-500 bg-primary-50 px-6 text-primary-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50 w-full sm:w-auto"
             onClick={() =>
               router.push("/dashboard/instructor/invitations/send")
             }

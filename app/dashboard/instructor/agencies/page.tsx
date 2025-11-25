@@ -161,7 +161,7 @@ export default function AgenciesPage() {
         </div>
         <div className="flex gap-2">
           <Button
-            className="bg-primary-500 hover:bg-primary-600"
+            className="h-11 border border-primary-500 bg-primary-50 px-6 text-primary-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50 w-full sm:w-auto"
             onClick={() => router.push("/dashboard/instructor/agencies/add")}
           >
             <Plus className="w-4 h-4 mr-2" />

@@ -31,8 +31,34 @@ export async function middleware(request: NextRequest) {
 		return NextResponse.next();
 	}
 
-	const sessionRole = (session?.user as any)?.role as string | undefined;
-	const needsOnboarding = (session as any)?.needsOnboarding === true;
+	let sessionRole = (session?.user as any)?.role as string | undefined;
+	let needsOnboarding = (session as any)?.needsOnboarding === true;
+
+	// If we have an access_token cookie but no NextAuth session, fetch user info from API
+	if (accessToken && !session) {
+		try {
+			const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+			// Construct cookie header from request cookies
+			const cookies = request.cookies.getAll();
+			const cookieHeader = cookies.map(cookie => `${cookie.name}=${cookie.value}`).join("; ");
+			
+			const userResponse = await fetch(`${apiUrl}/api/v1/user/me`, {
+				method: "GET",
+				headers: {
+					Cookie: cookieHeader,
+				},
+			});
+
+			if (userResponse.ok) {
+				const userData = await userResponse.json();
+				sessionRole = userData?.role;
+				// Note: needsOnboarding would need to be determined from user data if available
+			}
+		} catch (error) {
+			// If API call fails, continue with existing logic
+			console.error("Failed to fetch user info from API:", error);
+		}
+	}
 
 	// 1) Protect dashboards: require auth (either JWT token or NextAuth session) AND valid role
 	// Only consider authenticated if we have both token/session AND a valid role
