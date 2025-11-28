@@ -105,10 +105,10 @@ export default async function AuthErrorPage({
         <div className="px-6 pb-6 text-center text-xs text-slate-500">
           Need help? Email{" "}
           <a
-            href="mailto:tracesys.support@omsc.edu.ph"
+            href="mailto:tracesys2025@gmail.com"
             className="underline font-medium text-primary-600"
           >
-            tracesys.support@omsc.edu.ph
+            tracesys2025@gmail.com
           </a>
         </div>
       </Card>
