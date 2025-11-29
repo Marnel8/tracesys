@@ -103,8 +103,18 @@ export default function RequirementsPage() {
   const updateAllowLoginWithoutRequirements =
     useUpdateAllowLoginWithoutRequirements();
 
-  const allowLoginWithoutRequirements =
-    (user as any)?.allowLoginWithoutRequirements ?? false;
+  // Use state to prevent hydration mismatch - start with false and sync after mount
+  const [allowLoginWithoutRequirements, setAllowLoginWithoutRequirements] =
+    useState(false);
+
+  // Sync with user data after mount to prevent hydration mismatch
+  useEffect(() => {
+    if (user) {
+      setAllowLoginWithoutRequirements(
+        (user as any)?.allowLoginWithoutRequirements ?? false
+      );
+    }
+  }, [user]);
 
   useEffect(() => {
     const id = setTimeout(() => setDebouncedSearch(searchTerm), 300);
@@ -142,6 +152,12 @@ export default function RequirementsPage() {
     limit: 1,
     status: "rejected" as any,
   });
+  // Fetch all requirements to calculate per-student counts
+  const { data: allRequirementsData } = useRequirements({
+    page: 1,
+    limit: 10000, // High limit to get all requirements for counting
+    status: "all" as any,
+  });
   const items = data?.requirements ?? [];
   const pagination = data?.pagination;
   const currentPage = pagination?.currentPage ?? page;
@@ -168,6 +184,29 @@ export default function RequirementsPage() {
     });
   }, [items, searchTerm, selectedStatus]);
 
+  // Calculate approved/total requirements per student
+  const studentRequirementCounts = useMemo(() => {
+    const allRequirements = allRequirementsData?.requirements ?? [];
+    const countsMap = new Map<string, { approved: number; total: number }>();
+
+    allRequirements.forEach((req) => {
+      const studentId = req.studentId;
+      if (!studentId) return;
+
+      if (!countsMap.has(studentId)) {
+        countsMap.set(studentId, { approved: 0, total: 0 });
+      }
+
+      const counts = countsMap.get(studentId)!;
+      counts.total += 1;
+      if (req.status.toLowerCase() === "approved") {
+        counts.approved += 1;
+      }
+    });
+
+    return countsMap;
+  }, [allRequirementsData]);
+
   const approve = useApproveRequirement();
   const reject = useRejectRequirement();
 
@@ -193,6 +232,8 @@ export default function RequirementsPage() {
       await updateAllowLoginWithoutRequirements.mutateAsync({
         allowLoginWithoutRequirements: checked,
       });
+      // Update local state immediately for better UX
+      setAllowLoginWithoutRequirements(checked);
       toast.success(
         checked
           ? "Students can now login without completing requirements"
@@ -459,6 +500,7 @@ export default function RequirementsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Student</TableHead>
+                  <TableHead>Progress</TableHead>
                   <TableHead>Requirement</TableHead>
                   <TableHead>File</TableHead>
                   <TableHead>Submitted</TableHead>
@@ -483,6 +525,27 @@ export default function RequirementsPage() {
                           </div>
                         </div>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const studentId = req.studentId;
+                        const counts = studentId
+                          ? studentRequirementCounts.get(studentId)
+                          : null;
+                        if (!counts)
+                          return <span className="text-gray-400">-</span>;
+                        return (
+                          <div className="font-medium">
+                            <span className="text-green-600">
+                              {counts.approved}
+                            </span>
+                            <span className="text-gray-400">/</span>
+                            <span className="text-gray-600">
+                              {counts.total}
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell>
                       <div className="font-medium">{req.title}</div>
@@ -523,104 +586,63 @@ export default function RequirementsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex gap-2 justify-end">
-                        <Button variant="outline" size="sm">
-                          <Download className="w-4 h-4" />
-                        </Button>
-                        {req.fileName && canPreview(req.fileName) && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handlePreview(req)}
-                            title="Preview file"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                        )}
-                        {req.status.toLowerCase() === "submitted" && (
-                          <>
-                            <Button
-                              size="sm"
-                              className="bg-green-600 hover:bg-green-700"
-                              onClick={() => handleApprove(req.id)}
-                            >
-                              <CheckCircle className="w-4 h-4" />
+                      <div className="flex justify-end">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm">
+                              <MoreHorizontal className="w-4 h-4" />
                             </Button>
-                            <Dialog
-                              open={isReviewDialogOpen}
-                              onOpenChange={setIsReviewDialogOpen}
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => {
+                                const url = (req.fileUrl || "").startsWith(
+                                  "http"
+                                )
+                                  ? req.fileUrl
+                                  : `${process.env.NEXT_PUBLIC_API_URL || ""}${
+                                      req.fileUrl?.startsWith("/") ? "" : "/"
+                                    }${req.fileUrl || ""}`;
+                                window.open(url || undefined, "_blank");
+                              }}
                             >
-                              <DialogTrigger asChild>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  onClick={() => setSelectedRequirement(req)}
+                              <Download className="w-4 h-4 mr-2" />
+                              Download
+                            </DropdownMenuItem>
+                            {req.fileName && canPreview(req.fileName) && (
+                              <DropdownMenuItem
+                                onClick={() => handlePreview(req)}
+                              >
+                                <Eye className="w-4 h-4 mr-2" />
+                                Preview
+                              </DropdownMenuItem>
+                            )}
+                            {req.status.toLowerCase() === "submitted" && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => handleApprove(req.id)}
+                                  className="text-green-600"
                                 >
-                                  <XCircle className="w-4 h-4" />
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>Return Requirement</DialogTitle>
-                                  <DialogDescription>
-                                    Provide feedback for why this requirement is
-                                    being returned.
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <div className="space-y-4">
-                                  <div>
-                                    <Label>
-                                      Requirement: {selectedRequirement?.title}
-                                    </Label>
-                                    <p className="text-sm text-gray-600">
-                                      Student:{" "}
-                                      {`${
-                                        selectedRequirement?.student
-                                          ?.firstName ?? ""
-                                      } ${
-                                        selectedRequirement?.student
-                                          ?.lastName ?? ""
-                                      }`.trim()}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <Label htmlFor="comment">
-                                      Feedback Comment
-                                    </Label>
-                                    <Textarea
-                                      id="comment"
-                                      placeholder="Explain why this requirement needs to be resubmitted..."
-                                      value={reviewComment}
-                                      onChange={(e) =>
-                                        setReviewComment(e.target.value)
-                                      }
-                                      rows={4}
-                                    />
-                                  </div>
-                                </div>
-                                <DialogFooter>
-                                  <Button
-                                    variant="outline"
-                                    onClick={() => setIsReviewDialogOpen(false)}
-                                  >
-                                    Cancel
-                                  </Button>
-                                  <Button
-                                    variant="destructive"
-                                    onClick={() =>
-                                      handleReturn(
-                                        selectedRequirement?.id,
-                                        reviewComment
-                                      )
-                                    }
-                                  >
-                                    Return Requirement
-                                  </Button>
-                                </DialogFooter>
-                              </DialogContent>
-                            </Dialog>
-                          </>
-                        )}
+                                  <CheckCircle className="w-4 h-4 mr-2" />
+                                  Approve
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setSelectedRequirement(req);
+                                    setIsReviewDialogOpen(true);
+                                  }}
+                                  className="text-red-600"
+                                >
+                                  <XCircle className="w-4 h-4 mr-2" />
+                                  Return
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -713,6 +735,58 @@ export default function RequirementsPage() {
             >
               <Download className="w-4 h-4 mr-2" />
               Download
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Return Requirement Dialog */}
+      <Dialog open={isReviewDialogOpen} onOpenChange={setIsReviewDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Return Requirement</DialogTitle>
+            <DialogDescription>
+              Provide feedback for why this requirement is being returned.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Requirement: {selectedRequirement?.title}</Label>
+              <p className="text-sm text-gray-600">
+                Student:{" "}
+                {`${selectedRequirement?.student?.firstName ?? ""} ${
+                  selectedRequirement?.student?.lastName ?? ""
+                }`.trim()}
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="comment">Feedback Comment</Label>
+              <Textarea
+                id="comment"
+                placeholder="Explain why this requirement needs to be resubmitted..."
+                value={reviewComment}
+                onChange={(e) => setReviewComment(e.target.value)}
+                rows={4}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsReviewDialogOpen(false);
+                setReviewComment("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                handleReturn(selectedRequirement?.id, reviewComment);
+              }}
+            >
+              Return Requirement
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -62,6 +62,57 @@ const sectionPerformanceChartConfig: ChartConfig = {
   },
 };
 
+// Helper function to calculate expected attendance days
+function calculateExpectedAttendanceDays(
+  startDate: string | Date | null | undefined,
+  endDate: string | Date | null | undefined,
+  operatingDays: string | null | undefined
+): number {
+  if (!startDate || !endDate) return 0;
+
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const today = new Date();
+  const endDateToUse = end > today ? today : end; // Use today if practicum hasn't ended yet
+
+  if (start > endDateToUse) return 0;
+
+  // Parse operating days (e.g., "Monday,Tuesday,Wednesday" or "Monday, Tuesday, Wednesday")
+  const operatingDaysList = operatingDays
+    ? operatingDays.split(",").map((d) => d.trim())
+    : [];
+
+  // If no operating days specified, assume all weekdays (Monday-Friday)
+  const dayNames = [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+  ];
+  const validDays =
+    operatingDaysList.length > 0
+      ? operatingDaysList
+      : ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+
+  let count = 0;
+  const current = new Date(start);
+  current.setHours(0, 0, 0, 0);
+  endDateToUse.setHours(23, 59, 59, 999);
+
+  while (current <= endDateToUse) {
+    const dayName = dayNames[current.getDay()];
+    if (validDays.includes(dayName)) {
+      count++;
+    }
+    current.setDate(current.getDate() + 1);
+  }
+
+  return count;
+}
+
 export default function InstructorDashboard() {
   const router = useRouter();
   const { user, isLoading: isUserLoading } = useAuth();
@@ -171,14 +222,22 @@ export default function InstructorDashboard() {
       const bucket = map.get(sectionKey)!;
       bucket.totalStudents += 1;
 
-      // Attendance percentage for this student
+      // Attendance percentage for this student based on expected days
+      const practicum = student?.practicums?.[0];
+      const agency = practicum?.agency;
+      const expectedDays = calculateExpectedAttendanceDays(
+        practicum?.startDate,
+        practicum?.endDate,
+        agency?.operatingDays
+      );
       const records: any[] = student?.attendanceRecords ?? [];
-      const totalDays = records.length;
       const presentish = records.filter((r) =>
         ["present", "late", "excused"].includes(r.status)
       ).length;
-      if (totalDays > 0) {
-        bucket.attendancePctSum += Math.round((presentish / totalDays) * 100);
+      if (expectedDays > 0) {
+        bucket.attendancePctSum += Math.round(
+          (presentish / expectedDays) * 100
+        );
         bucket.attendancePctCount += 1;
       }
 
@@ -209,18 +268,33 @@ export default function InstructorDashboard() {
     const totalStudents = students.length;
     const sectionsCount = sectionsAgg.length;
 
-    // Overall attendance across all students
-    let totalRecords = 0;
-    let totalPresentish = 0;
+    // Overall attendance: calculate each student's rate, then average them
+    const studentAttendanceRates: number[] = [];
     for (const student of students) {
-      const records: any[] = student?.attendanceRecords ?? [];
-      totalRecords += records.length;
-      totalPresentish += records.filter((r) =>
-        ["present", "late", "excused"].includes(r.status)
-      ).length;
+      const practicum = student?.practicums?.[0];
+      const agency = practicum?.agency;
+      const expectedDays = calculateExpectedAttendanceDays(
+        practicum?.startDate,
+        practicum?.endDate,
+        agency?.operatingDays
+      );
+
+      if (expectedDays > 0) {
+        const records: any[] = student?.attendanceRecords ?? [];
+        const presentish = records.filter((r) =>
+          ["present", "late", "excused"].includes(r.status)
+        ).length;
+        const studentRate = Math.round((presentish / expectedDays) * 100);
+        studentAttendanceRates.push(studentRate);
+      }
     }
     const averageAttendance =
-      totalRecords > 0 ? Math.round((totalPresentish / totalRecords) * 100) : 0;
+      studentAttendanceRates.length > 0
+        ? Math.round(
+            studentAttendanceRates.reduce((sum, rate) => sum + rate, 0) /
+              studentAttendanceRates.length
+          )
+        : 0;
 
     // Overall requirement completion across all students
     let totalReqs = 0;
@@ -263,12 +337,55 @@ export default function InstructorDashboard() {
         ? Math.round((onTimeSubmissions / totalSubmissions) * 100)
         : 0;
 
+    // Calculate daily attendance: students who clocked in today
+    const today = new Date();
+    const todayDateStr = today.toISOString().split("T")[0]; // YYYY-MM-DD format
+
+    let studentsWithPracticum = 0;
+    let studentsPresentToday = 0;
+
+    for (const student of students) {
+      const practicum = student?.practicums?.[0];
+      // Only count students with valid practicums
+      if (practicum) {
+        studentsWithPracticum++;
+
+        // Check if student has attendance record for today
+        const records: any[] = student?.attendanceRecords ?? [];
+        const hasTodayRecord = records.some((record) => {
+          if (!record.date) return false;
+          const recordDate = new Date(record.date);
+          const recordDateStr = recordDate.toISOString().split("T")[0];
+          return (
+            recordDateStr === todayDateStr &&
+            ["present", "late", "excused"].includes(record.status)
+          );
+        });
+
+        if (hasTodayRecord) {
+          studentsPresentToday++;
+        }
+      }
+    }
+
+    const dailyAttendancePercentage =
+      studentsWithPracticum > 0
+        ? Math.round((studentsPresentToday / studentsWithPracticum) * 100)
+        : 0;
+
+    // Calculate students missing today (expected but haven't clocked in)
+    const studentsMissingToday = studentsWithPracticum - studentsPresentToday;
+
     return {
       totalStudents,
       sectionsCount,
       averageAttendance,
       averageCompletion,
       onTimeSubmissionRate,
+      dailyAttendancePercentage,
+      dailyAttendanceCount: studentsPresentToday,
+      dailyAttendanceTotal: studentsWithPracticum,
+      studentsMissingToday,
     };
   }, [students, sectionsAgg, allWeeklyReportsData]);
 
@@ -411,10 +528,16 @@ export default function InstructorDashboard() {
             isLoading={isUserLoading || isStudentsLoading}
           />
           <InstructorStatsCard
-            icon={Clock}
-            label="Attendance"
-            value={`${stats.averageAttendance}%`}
-            helperText="Average rate"
+            icon={AlertTriangle}
+            label="Students Missing"
+            value={stats.studentsMissingToday}
+            helperText={
+              stats.dailyAttendanceTotal > 0
+                ? stats.studentsMissingToday === 0
+                  ? "All students present"
+                  : "Expected but haven't clocked in today"
+                : "No students with practicums"
+            }
             isLoading={isUserLoading || isStudentsLoading}
           />
         </div>

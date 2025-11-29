@@ -18,9 +18,6 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { NotificationSystem } from "@/components/notification-system";
 
 // Function to generate breadcrumbs based on pathname
 function generateBreadcrumbs(pathname: string) {

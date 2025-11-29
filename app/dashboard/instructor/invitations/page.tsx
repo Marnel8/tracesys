@@ -30,6 +30,12 @@ import { Input } from "@/components/ui/input";
 import { useGetInvitations, useDeleteInvitation } from "@/hooks/invitation";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Inbox, Loader2, MailPlus, Search, Trash2 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { format } from "date-fns";
 import {
   AlertDialog,
@@ -222,16 +228,21 @@ export default function InvitationsPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          {!invitation.usedAt && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="invitation-delete-btn"
-                              onClick={() => handleDeleteClick(invitation)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="invitation-delete-btn"
+                                  onClick={() => handleDeleteClick(invitation)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Delete invitation</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -251,7 +262,7 @@ export default function InvitationsPage() {
                   instructors. You can track every status here afterwards.
                 </p>
                 <Button
-                  className="invitation-primary-btn"
+                  className="h-11 border border-primary-500 bg-primary-50 px-6 text-primary-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50 w-full sm:w-auto"
                   onClick={() =>
                     router.push("/dashboard/instructor/invitations/send")
                   }

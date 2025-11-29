@@ -305,7 +305,10 @@ export default function SectionsPage() {
         </div>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-primary-500 hover:bg-primary-600">
+            <Button
+              variant="outline"
+              className="h-11 border border-primary-500 bg-primary-50 px-6 text-primary-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50 w-full sm:w-auto"
+            >
               <Plus className="w-4 h-4 mr-2" />
               Add Section
             </Button>

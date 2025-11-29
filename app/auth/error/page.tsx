@@ -25,10 +25,7 @@ const errorDetails: Record<
     title: "Account Not Found",
     message:
       "We couldn't match your Google account with a TracèSys profile or invitation. Please ask your practicum coordinator to send you an invite before trying again.",
-    actions: [
-      { label: "Back to Sign-in Options", href: "/select-role" },
-      { label: "Request Instructor Access", href: "/signup/instructor" },
-    ],
+    actions: [{ label: "Back to Sign-in Options", href: "/select-role" }],
   },
   Configuration: {
     title: "Configuration Issue",

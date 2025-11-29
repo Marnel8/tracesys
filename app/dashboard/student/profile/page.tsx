@@ -975,8 +975,8 @@ export default function ProfilePage() {
             disabled={isEditing && editUserMutation.isPending}
             className={
               isEditing
-                ? "bg-green-500 hover:bg-green-600"
-                : "bg-primary-500 hover:bg-primary-600"
+                ? "bg-transparent hover:bg-green-600 w-full sm:w-auto h-11 border border-green-500 text-green-500 transition-all duration-300 hover:border-green-400 hover:bg-green-50/50 "
+                : "h-11 border border-primary-500 bg-primary-50 px-6 text-primary-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50 w-full sm:w-auto"
             }
           >
             {isEditing ? (
