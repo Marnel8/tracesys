@@ -3,7 +3,7 @@ import Google from "next-auth/providers/google";
 import { NextRequest } from "next/server";
 import { cookies } from "next/headers";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -36,6 +36,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           headers: {
             "Content-Type": "application/json",
           },
+          credentials: "include", // Include credentials for cross-domain cookie handling
           body: JSON.stringify({
             email: user.email,
             firstName: user.name?.split(" ")[0] || "",
@@ -74,19 +75,49 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const data = await response.json();
         const tokens = data?.data?.tokens;
 
-        if (tokens?.accessToken && tokens?.refreshToken) {
+        // Extract Set-Cookie headers from server response
+        // getSetCookie() is available in Node.js 18+ and Next.js
+        const setCookieHeaders = response.headers.getSetCookie?.() || [];
+        
+        // Check if server sent cookies via Set-Cookie headers
+        const serverSentCookies = setCookieHeaders.some(header => 
+          header.includes("access_token=") || header.includes("refresh_token=")
+        );
+        
+        // Only set cookies on client side if:
+        // 1. Server didn't send Set-Cookie headers (fallback for cross-domain scenarios)
+        // 2. OR we're in a cross-domain setup where server cookies won't be accessible
+        // The server should handle setting cookies via Set-Cookie headers in most cases
+        if (!serverSentCookies && tokens?.accessToken && tokens?.refreshToken) {
+          // Fallback: Set cookies if server didn't send Set-Cookie headers
+          // This is important for cross-domain scenarios where Set-Cookie headers
+          // from the server might not be accessible to the client
           const isProd = process.env.NODE_ENV === "production";
-          const baseCookieOptions = {
+          const cookieDomain = process.env.COOKIE_DOMAIN;
+          
+          const baseCookieOptions: {
+            httpOnly: boolean;
+            sameSite: "lax" | "none";
+            secure: boolean;
+            path: string;
+            maxAge: number;
+            domain?: string;
+          } = {
             httpOnly: true,
             sameSite: isProd ? "none" : "lax",
-            secure: isProd,
+            secure: isProd, // Must be true when sameSite is "none"
             path: "/",
-          } as const;
+            maxAge: 60 * 60, // 1 hour for access token
+          };
+          
+          // Set domain only if explicitly configured and not localhost
+          if (cookieDomain && cookieDomain !== "localhost" && !cookieDomain.startsWith("127.0.0.1")) {
+            baseCookieOptions.domain = cookieDomain;
+          }
 
-          cookieStore.set("access_token", tokens.accessToken, {
-            ...baseCookieOptions,
-            maxAge: 60 * 60, // 1 hour
-          });
+          cookieStore.set("access_token", tokens.accessToken, baseCookieOptions);
+          
+          // Refresh token with longer expiry
           cookieStore.set("refresh_token", tokens.refreshToken, {
             ...baseCookieOptions,
             maxAge: 3 * 24 * 60 * 60, // 3 days

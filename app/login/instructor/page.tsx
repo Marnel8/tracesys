@@ -85,8 +85,17 @@ export default function InstructorLoginPage() {
       }
 
       toast.success("Signed in successfully");
-      // Use window.location.href instead of router.push to ensure cookies are set
-      // before the middleware checks authentication
+      
+      // Wait for cookies to be set by the browser before redirect
+      // The server sets cookies via Set-Cookie headers in the login response.
+      // We need to give the browser time to process them before the middleware runs.
+      // Note: We can't check httpOnly cookies from JavaScript, but since the login
+      // was successful, the server has sent Set-Cookie headers. We just need to
+      // wait for the browser to process them.
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Use window.location.href for full page reload to ensure cookies are included
+      // This ensures a fresh request where cookies will be available to middleware
       window.location.href = "/dashboard/instructor";
     } catch (error: any) {
       toast.error(error?.message || "Failed to sign in");
