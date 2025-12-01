@@ -39,7 +39,10 @@ export const announcementKeys = {
 };
 
 // Get all announcements with filters
-export const useAnnouncements = (filters: AnnouncementFilters = {}) => {
+export const useAnnouncements = (
+	filters: AnnouncementFilters = {},
+	options?: { enabled?: boolean; refetchOnWindowFocus?: boolean; refetchInterval?: number }
+) => {
 	return useQuery({
 		queryKey: announcementKeys.list(filters),
 		queryFn: async (): Promise<AnnouncementResponse> => {
@@ -57,6 +60,9 @@ export const useAnnouncements = (filters: AnnouncementFilters = {}) => {
 			return response.data.data;
 		},
 		placeholderData: (previousData) => previousData,
+		enabled: options?.enabled !== false, // Default to true, but can be disabled
+		refetchOnWindowFocus: options?.refetchOnWindowFocus ?? false,
+		refetchInterval: options?.refetchInterval,
 	});
 };
 
@@ -116,7 +122,10 @@ export const useCreateAnnouncement = () => {
 			return response.data.data;
 		},
 		onSuccess: () => {
+			// Invalidate all announcement list queries (including student-specific ones)
 			queryClient.invalidateQueries({ queryKey: announcementKeys.lists() });
+			// Also invalidate all queries that start with announcements key to catch student notifications
+			queryClient.invalidateQueries({ queryKey: announcementKeys.all });
 			queryClient.invalidateQueries({ queryKey: announcementKeys.stats() });
 			toast.success("Announcement created successfully");
 		},

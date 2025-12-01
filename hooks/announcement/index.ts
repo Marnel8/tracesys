@@ -13,6 +13,8 @@ export {
 	announcementKeys,
 } from "./useAnnouncement";
 
+export { useStudentAnnouncementNotifications } from "./useStudentAnnouncementNotifications";
+
 export type {
 	Announcement,
 	AnnouncementFormData,

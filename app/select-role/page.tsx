@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GraduationCap, Users } from "lucide-react";
+import Link from "next/link";
 
 export default function SelectRolePage() {
   const router = useRouter();
@@ -44,13 +45,15 @@ export default function SelectRolePage() {
         <Card className="bg-secondary-50/95 backdrop-blur-md border-primary-200 shadow-2xl">
           <CardHeader className="text-center pb-4 sm:pb-8 px-4 sm:px-6">
             <div className="flex justify-center items-center gap-3 sm:gap-6 mb-4 sm:mb-6">
-              <Image
-                src="/images/tracesys-logo.png"
-                alt="TracèSys Logo"
-                width={60}
-                height={60}
-                className="w-12 h-12 sm:w-20 sm:h-20 object-contain"
-              />
+              <Link href="/" className="flex items-center justify-center">
+                <Image
+                  src="/images/tracesys-logo.png"
+                  alt="TracèSys Logo"
+                  width={60}
+                  height={60}
+                  className="w-12 h-12 sm:w-20 sm:h-20 object-contain"
+                />
+              </Link>
             </div>
             <CardTitle className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-800 mb-2">
               OCCIDENTAL MINDORO STATE COLLEGE

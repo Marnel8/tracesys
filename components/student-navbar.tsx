@@ -9,6 +9,7 @@ import { LogOut } from "lucide-react";
 import { useAuth, useLogout } from "@/hooks/auth/useAuth";
 import { useStudent } from "@/hooks/student/useStudent";
 import { useToast } from "@/hooks/use-toast";
+import { CombinedNotifications } from "@/components/student/combined-notifications";
 
 function getInitials(name?: string) {
   if (!name) return "ST";
@@ -112,6 +113,7 @@ export function StudentNavbar() {
               </>
             )}
           </div>
+          <CombinedNotifications studentId={studentId} />
           <Button
             variant="outline"
             size="sm"

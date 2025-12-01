@@ -81,7 +81,10 @@ const coerceAllowedFileTypes = (value: string | string[] | null | undefined): st
 };
 
 // Get all requirement templates with filters
-export const useRequirementTemplates = (filters: RequirementTemplateFilters = {}) => {
+export const useRequirementTemplates = (
+	filters: RequirementTemplateFilters = {},
+	options?: { enabled?: boolean; refetchOnWindowFocus?: boolean; refetchInterval?: number }
+) => {
 	return useQuery({
 		queryKey: requirementTemplateKeys.list(filters),
 		queryFn: async (): Promise<RequirementTemplateListResponse> => {
@@ -101,6 +104,9 @@ export const useRequirementTemplates = (filters: RequirementTemplateFilters = {}
 			return data;
 		},
 		placeholderData: (previousData) => previousData,
+		enabled: options?.enabled !== false,
+		refetchOnWindowFocus: options?.refetchOnWindowFocus ?? false,
+		refetchInterval: options?.refetchInterval,
 	});
 };
 
@@ -142,6 +148,8 @@ export const useCreateRequirementTemplate = () => {
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: requirementTemplateKeys.lists() });
+			// Explicitly invalidate active templates query for student notifications
+			queryClient.invalidateQueries({ queryKey: requirementTemplateKeys.list({ status: "active" }) });
 			toast.success("Requirement template created successfully");
 		},
 		onError: (error: any) => {
@@ -176,6 +184,8 @@ export const useUpdateRequirementTemplate = () => {
 		onSuccess: (data) => {
 			queryClient.invalidateQueries({ queryKey: requirementTemplateKeys.lists() });
 			queryClient.invalidateQueries({ queryKey: requirementTemplateKeys.detail(data.id) });
+			// Explicitly invalidate active templates query for student notifications
+			queryClient.invalidateQueries({ queryKey: requirementTemplateKeys.list({ status: "active" }) });
 			toast.success("Requirement template updated successfully");
 		},
 		onError: (error: any) => {
@@ -194,6 +204,8 @@ export const useDeleteRequirementTemplate = () => {
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: requirementTemplateKeys.lists() });
+			// Explicitly invalidate active templates query for student notifications
+			queryClient.invalidateQueries({ queryKey: requirementTemplateKeys.list({ status: "active" }) });
 			toast.success("Requirement template deleted successfully");
 		},
 		onError: (error: any) => {
@@ -214,6 +226,8 @@ export const useToggleRequirementTemplateStatus = () => {
 		onSuccess: (data) => {
 			queryClient.invalidateQueries({ queryKey: requirementTemplateKeys.lists() });
 			queryClient.invalidateQueries({ queryKey: requirementTemplateKeys.detail(data.id) });
+			// Explicitly invalidate active templates query for student notifications
+			queryClient.invalidateQueries({ queryKey: requirementTemplateKeys.list({ status: "active" }) });
 			toast.success(`Template ${data.isActive ? "activated" : "deactivated"} successfully`);
 		},
 		onError: (error: any) => {
