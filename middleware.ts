@@ -37,6 +37,7 @@ export async function middleware(request: NextRequest) {
   let needsOnboarding = (session as any)?.needsOnboarding === true;
 
   // If we have an access_token cookie but no NextAuth session, fetch user info from API
+  // This helps us determine the user's role and onboarding status
   if (accessToken && !session) {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
@@ -214,7 +215,8 @@ export async function middleware(request: NextRequest) {
           // Don't return here for non-protected routes, let normal flow handle it
         }
       } else if (userResponse.status === 401) {
-        // Authentication failed, clear invalid cookies
+        // Authentication failed after refresh attempt (or no refresh token available)
+        // Clear invalid cookies
         const response = NextResponse.next();
         response.cookies.delete("access_token");
         response.cookies.delete("refresh_token");
@@ -226,33 +228,28 @@ export async function middleware(request: NextRequest) {
             : "/login/student";
           const url = request.nextUrl.clone();
           url.pathname = loginTarget;
+          // Validate redirect path to prevent open redirects
+          const redirectPath = pathname.startsWith("/dashboard/")
+            ? pathname
+            : undefined;
+          if (redirectPath) {
+            url.searchParams.set("redirect", redirectPath);
+          }
           return NextResponse.redirect(url);
         }
-        // Don't return here for non-protected routes, let normal flow handle it
+        return response;
       }
     } catch (error) {
-      // If API call fails, log error but continue with existing logic
+      // If API call fails, log error but allow request to proceed
+      // We have an access token, so we should trust it
+      // Client-side code will handle authentication errors
       console.error("Failed to fetch user info from API in middleware:", error);
 
-      // Clear cookies only on authentication errors, not network errors
-      // Network errors might be temporary and shouldn't invalidate the session
-      if (error instanceof Error && !error.message.includes("fetch")) {
-        // Non-network error, might be auth-related, clear cookies
-        const response = NextResponse.next();
-        response.cookies.delete("access_token");
-        response.cookies.delete("refresh_token");
-
-        // If on protected route, redirect to login
-        if (isInstructorProtected || isStudentProtected) {
-          const loginTarget = isInstructorProtected
-            ? "/login/instructor"
-            : "/login/student";
-          const url = request.nextUrl.clone();
-          url.pathname = loginTarget;
-          return NextResponse.redirect(url);
-        }
-        // Don't return here for non-protected routes, let normal flow handle it
-      }
+      // Since we're inside "if (accessToken && !session)", accessToken is guaranteed to exist
+      // If the API call fails (network error, etc.), allow request to proceed
+      // Client-side code will handle the authentication check
+      // The token might still be valid even if the API call failed
+      return NextResponse.next();
     }
   }
 
@@ -309,7 +306,13 @@ export async function middleware(request: NextRequest) {
       : "/login/student";
     const url = request.nextUrl.clone();
     url.pathname = loginTarget;
-    url.searchParams.set("redirect", pathname);
+    // Validate redirect path to prevent open redirects
+    const redirectPath = pathname.startsWith("/dashboard/")
+      ? pathname
+      : undefined;
+    if (redirectPath) {
+      url.searchParams.set("redirect", redirectPath);
+    }
     return NextResponse.redirect(url);
   }
 
