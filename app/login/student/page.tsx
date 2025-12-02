@@ -10,17 +10,28 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { signIn } from "next-auth/react";
 import { ArrowLeft, GraduationCap, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
-export default function StudentLoginPage() {
+function StudentLoginContent() {
   const [googleSigningIn, setGoogleSigningIn] = useState(false);
+  const searchParams = useSearchParams();
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = () => {
     try {
       setGoogleSigningIn(true);
-      await signIn("google", { callbackUrl: "/dashboard/student" });
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
+      const redirectParam = searchParams.get("redirect");
+
+      let oauthUrl = `${apiUrl}/api/v1/auth/google?role=student`;
+
+      if (redirectParam) {
+        oauthUrl += `&redirect=${encodeURIComponent(redirectParam)}`;
+      }
+
+      // Redirect to server OAuth endpoint
+      window.location.href = oauthUrl;
     } catch (error) {
       console.error("Google sign-in failed", error);
       setGoogleSigningIn(false);
@@ -120,5 +131,22 @@ export default function StudentLoginPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function StudentLoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p className="text-gray-600">Loading...</p>
+          </div>
+        </div>
+      }
+    >
+      <StudentLoginContent />
+    </Suspense>
   );
 }

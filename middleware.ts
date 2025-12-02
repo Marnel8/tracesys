@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { auth } from "@/app/api/auth/[...nextauth]/route";
 
 // Define route groups
 const INSTRUCTOR_PROTECTED_PREFIX = "/dashboard/instructor";
@@ -41,9 +40,6 @@ export async function middleware(request: NextRequest) {
     });
   }
 
-  // Check NextAuth session
-  const session = await auth();
-
   const isInstructorProtected = pathname.startsWith(
     INSTRUCTOR_PROTECTED_PREFIX
   );
@@ -57,12 +53,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  let sessionRole = (session?.user as any)?.role as string | undefined;
-  let needsOnboarding = (session as any)?.needsOnboarding === true;
+  let sessionRole: string | undefined;
+  let needsOnboarding = false;
 
-  // If we have an access_token cookie but no NextAuth session, fetch user info from API
-  // This helps us determine the user's role and onboarding status
-  if (accessToken && !session) {
+  // If we have an access_token cookie, fetch user info from API to determine role
+  if (accessToken) {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
       const refreshToken = request.cookies.get("refresh_token")?.value;
@@ -461,12 +456,11 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // 1) Protect dashboards: require auth (either JWT token or NextAuth session) AND valid role
-  // Only consider authenticated if we have both token/session AND a valid role
-  const hasTokenOrSession = !!accessToken || !!session;
+  // 1) Protect dashboards: require auth (JWT token) AND valid role
+  // Only consider authenticated if we have both token AND a valid role
   const hasValidRole =
     sessionRole === "instructor" || sessionRole === "student";
-  const isAuthenticated = hasTokenOrSession && hasValidRole;
+  const isAuthenticated = !!accessToken && hasValidRole;
 
   // Handle onboarding routes
   if (isOnboardingRoute) {

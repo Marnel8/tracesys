@@ -19,7 +19,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useLogin, useLogout } from "@useAuth";
-import { signIn } from "next-auth/react";
 import { toast } from "sonner";
 
 const instructorLoginSchema = z.object({
@@ -62,10 +61,20 @@ function LoginForm() {
   const loginMutation = useLogin();
   const logoutMutation = useLogout();
   const [googleSigningIn, setGoogleSigningIn] = useState(false);
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = () => {
     try {
       setGoogleSigningIn(true);
-      await signIn("google", { callbackUrl: "/dashboard/instructor" });
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
+      const redirectParam = searchParams.get("redirect");
+      
+      let oauthUrl = `${apiUrl}/api/v1/auth/google?role=instructor`;
+      
+      if (redirectParam) {
+        oauthUrl += `&redirect=${encodeURIComponent(redirectParam)}`;
+      }
+      
+      // Redirect to server OAuth endpoint
+      window.location.href = oauthUrl;
     } catch (error: any) {
       toast.error("Google sign-in failed");
       setGoogleSigningIn(false);

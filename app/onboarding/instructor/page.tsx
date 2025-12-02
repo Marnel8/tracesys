@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -24,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import api from "@/lib/api";
+import { useAuth } from "@/hooks/auth/useAuth";
 import { toast } from "sonner";
 import {
   CheckCircle2,
@@ -40,16 +40,25 @@ type ProfileFormData = z.infer<typeof profileSchema>;
 
 export default function InstructorOnboardingPage() {
   const router = useRouter();
-  const { data: session } = useSession();
+  const { user, isLoading } = useAuth();
   const [loading, setLoading] = useState(false);
   const form = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
   });
 
+  useEffect(() => {
+    if (isLoading) return;
+    if (!user) {
+      router.replace("/login/instructor");
+    }
+  }, [isLoading, user, router]);
+
   const onSubmit = async (data: ProfileFormData) => {
+    if (!user?.id) return;
+
     setLoading(true);
     try {
-      await api.put(`/user/${(session?.user as any)?.id}`, {
+      await api.put(`/user/${user.id}`, {
         age: data.age,
         phone: data.phone,
         gender: data.gender,
@@ -66,9 +75,12 @@ export default function InstructorOnboardingPage() {
     }
   };
 
-  const firstName = session?.user?.name?.split(" ")[0] ?? "there";
+  const firstName =
+    (user as any)?.firstName ||
+    (user as any)?.name?.split(" ")[0] ||
+    "there";
 
-  if (!session) {
+  if (isLoading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin" />

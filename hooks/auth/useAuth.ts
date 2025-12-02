@@ -1,6 +1,5 @@
 import api from "@/lib/api";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
-import { signIn as nextAuthSignIn, signOut as nextAuthSignOut } from "next-auth/react";
 
 export interface registerParams {
 	firstName: string;
@@ -147,22 +146,12 @@ export const useLogin = () => {
 
 
 const logout = async () => {
-	let responseData: any = null;
 	try {
 		const res = await api.get("/user/logout");
-		responseData = res.data;
+		return res.data;
 	} catch (error: any) {
-		// Still attempt to clear NextAuth session even if API logout fails
 		throw new Error("Error in logout request: " + error.message);
-	} finally {
-		try {
-			await nextAuthSignOut({ redirect: false });
-		} catch (signOutError) {
-			// Ignore NextAuth sign-out errors to avoid blocking logout flow
-			console.warn("NextAuth sign-out failed:", signOutError);
-		}
 	}
-	return responseData;
 };
 
 export const useLogout = () => {
@@ -414,37 +403,6 @@ export const useChangePassword = () => {
 	});
 };
 
-// NextAuth OAuth integration
-export const useOAuthSignIn = () => {
-	return useMutation({
-		mutationFn: async (provider: "google", options?: { callbackUrl?: string; invitationToken?: string }) => {
-			return await nextAuthSignIn(provider, {
-				callbackUrl: options?.callbackUrl || "/dashboard/student",
-				redirect: true,
-			}, {
-				invitationToken: options?.invitationToken,
-			} as any);
-		},
-	});
-};
-
-export const useOAuthSignOut = () => {
-	const queryClient = useQueryClient();
-	return useMutation({
-		mutationFn: async () => {
-			// Sign out from NextAuth
-			await nextAuthSignOut({ redirect: false });
-			// Also sign out from JWT if applicable
-			try {
-				await api.get("/user/logout");
-			} catch (error) {
-				// Ignore errors if JWT logout fails
-			}
-			// Clear query cache
-			queryClient.clear();
-		},
-	});
-};
 
 // Update allow login without requirements setting
 interface UpdateAllowLoginWithoutRequirementsParams {

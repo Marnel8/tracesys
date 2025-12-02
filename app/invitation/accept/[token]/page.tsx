@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { signIn } from "next-auth/react";
 import {
   Card,
   CardContent,
@@ -12,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import api from "@/lib/api";
 
 export default function InvitationAcceptPage() {
@@ -44,28 +43,16 @@ export default function InvitationAcceptPage() {
     }
   };
 
-  const handleAcceptInvitation = async () => {
+  const handleAcceptInvitation = () => {
     setValidating(true);
     try {
-      // Persist the invitation token via API route (HTTP-only cookie)
-      const response = await fetch("/api/invitation/token", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ token }),
-      });
-
-      if (!response.ok) {
-        const result = await response.json();
-        throw new Error(result?.message || "Failed to store invitation token.");
-      }
-
-      // Sign in with Google
-      await signIn("google", {
-        callbackUrl: "/onboarding/student",
-        redirect: true,
-      });
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
+      const role = invitation?.role || "student";
+      
+      // Redirect to server OAuth endpoint with invitation token
+      const oauthUrl = `${apiUrl}/api/v1/auth/google?role=${role}&invitationToken=${encodeURIComponent(token)}`;
+      
+      window.location.href = oauthUrl;
     } catch (err) {
       console.error("Error signing in:", err);
       setError(

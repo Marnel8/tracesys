@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,7 +30,6 @@ import { useAnnouncements } from "@/hooks/announcement/useAnnouncement";
 
 export default function StudentDashboard() {
   const router = useRouter();
-  const { data: session, update: updateSession } = useSession();
   const { user, isLoading: isUserLoading } = useAuth();
   const studentId = (user as any)?.id as string | undefined;
 
@@ -46,24 +44,13 @@ export default function StudentDashboard() {
     );
   }, [user]);
 
-  // Check if user needs onboarding (from NextAuth session or user data)
+  // Check if user needs onboarding based on user data
   useEffect(() => {
     if (isUserLoading) return;
-
-    // If session still flags onboarding but profile is complete, sync session state
-    if (
-      (session as any)?.needsOnboarding &&
-      !userNeedsOnboarding &&
-      typeof updateSession === "function"
-    ) {
-      updateSession({ needsOnboarding: false }).catch(() => {});
-      return;
-    }
-
-    if ((session as any)?.needsOnboarding || userNeedsOnboarding) {
+    if (userNeedsOnboarding) {
       router.replace("/onboarding/student");
     }
-  }, [session, userNeedsOnboarding, router, isUserLoading, updateSession]);
+  }, [userNeedsOnboarding, router, isUserLoading]);
 
   const { data: studentData } = useStudent(studentId as string);
 

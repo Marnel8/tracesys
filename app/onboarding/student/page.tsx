@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -26,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAgencies } from "@/hooks/agency/useAgency";
+import { useAuth } from "@/hooks/auth/useAuth";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import {
@@ -63,8 +63,8 @@ type AgencyFormData = z.infer<typeof agencySchema>;
 
 export default function StudentOnboardingPage() {
   const router = useRouter();
-  const { data: session, status, update } = useSession();
-  const isAuthenticated = status === "authenticated";
+  const { user, isLoading: isUserLoading } = useAuth();
+  const isAuthenticated = !!user;
   const queryClient = useQueryClient();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -85,18 +85,17 @@ export default function StudentOnboardingPage() {
   );
 
   const completeOnboarding = async () => {
-    if (typeof update === "function") {
-      await update({ needsOnboarding: false });
-    }
     await queryClient.invalidateQueries({ queryKey: ["user"] });
     toast.success("Onboarding completed successfully!");
     router.push("/dashboard/student");
   };
 
   const onProfileSubmit = async (data: ProfileFormData) => {
+    if (!user?.id) return;
+
     setLoading(true);
     try {
-      await api.put(`/student/${(session?.user as any)?.id}`, {
+      await api.put(`/student/${user.id}`, {
         age: data.age,
         phone: data.phone,
         gender: data.gender,
@@ -157,9 +156,19 @@ export default function StudentOnboardingPage() {
     (a) => a.id === agencyForm.watch("agencyId")
   );
 
-  const firstName = session?.user?.name?.split(" ")[0] ?? "there";
+  useEffect(() => {
+    if (isUserLoading) return;
+    if (!user) {
+      router.replace("/login/student");
+    }
+  }, [isUserLoading, user, router]);
 
-  if (!session) {
+  const firstName =
+    (user as any)?.firstName ||
+    (user as any)?.name?.split(" ")[0] ||
+    "there";
+
+  if (isUserLoading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin" />
