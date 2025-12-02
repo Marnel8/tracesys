@@ -177,6 +177,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     signIn: "/select-role",
     error: "/auth/error",
   },
+  events: {
+    async signOut() {
+      // When NextAuth signOut is called, also clear JWT cookies
+      const cookieStore = await cookies();
+      cookieStore.delete("access_token");
+      cookieStore.delete("refresh_token");
+    },
+  },
 });
 
 export const { GET, POST } = handlers;

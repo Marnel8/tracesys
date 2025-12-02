@@ -542,7 +542,8 @@ export function InstructorSidebar() {
                       logout(undefined, {
                         onSuccess: () => {
                           toast({ title: "Signed out" });
-                          router.push("/login/instructor");
+                          // Use replace instead of push to prevent back navigation to protected route
+                          window.location.replace("/login/instructor");
                         },
                         onError: (error: any) => {
                           toast({
