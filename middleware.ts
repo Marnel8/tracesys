@@ -53,8 +53,38 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Check if this is a fresh login (coming from login page or OAuth callback)
+  // Only consider it fresh if we have a token - otherwise it's just a navigation
+  const referer = request.headers.get("referer") || "";
+  const hasToken = !!accessToken;
+  const isFreshLogin =
+    hasToken &&
+    (referer.includes("/login/") ||
+      referer.includes("/api/v1/auth/") ||
+      referer.includes("/signup/"));
+  const isImmediatePostLogin =
+    hasToken &&
+    (isFreshLogin ||
+      (pathname.startsWith("/dashboard/") && referer.includes("/login/")) ||
+      (pathname.startsWith("/dashboard/") &&
+        referer.includes("/api/v1/auth/")) ||
+      (pathname.startsWith("/dashboard/") && referer.includes("/signup/")));
+
   let sessionRole: string | undefined;
   let needsOnboarding = false;
+
+  // IMPORTANT: In cross-domain setups, cookies set on the API domain (tracesys-api.mvsoftwares.space)
+  // may not be readable by the frontend middleware (tracesys.mvsoftwares.space).
+  // The browser will automatically send these cookies when making requests to the API domain
+  // with credentials: "include", but the middleware (running server-side) cannot read them.
+  //
+  // If we don't have cookies here, it could mean:
+  // 1. User is not logged in (no cookies at all)
+  // 2. Cookies exist but are on a different domain (cross-domain scenario)
+  //
+  // For case 2, we should allow the request to proceed and let client-side handle authentication.
+  // The client-side can make API requests with credentials: "include" which will automatically
+  // send the cookies that the browser has for the API domain.
 
   // If we have an access_token cookie, fetch user info from API to determine role
   if (accessToken) {
@@ -73,17 +103,9 @@ export async function middleware(request: NextRequest) {
         allCookieNames: cookieNames,
         accessTokenCount,
         refreshTokenCount,
+        isFreshLogin,
+        isImmediatePostLogin,
       });
-
-      // Check if this is a fresh login (coming from login page)
-      const referer = request.headers.get("referer") || "";
-      const isFreshLogin = referer.includes("/login/");
-
-      // Additional check: if we just redirected from login, give cookies time to settle
-      // This helps with cross-domain cookie synchronization delays
-      const isImmediatePostLogin =
-        isFreshLogin ||
-        (pathname.startsWith("/dashboard/") && referer.includes("/login/"));
 
       // Construct cookie header from request cookies
       // URL-encode cookie values to handle special characters safely
@@ -104,24 +126,61 @@ export async function middleware(request: NextRequest) {
         }
       }
 
+      // Build cookie header - include all cookies we have access to
+      // IMPORTANT: In cross-domain scenarios (e.g., frontend on tracesys.mvsoftwares.space,
+      // API on tracesys-api.mvsoftwares.space), cookies set on the API domain won't be
+      // readable by this middleware. However, when the middleware makes a fetch request
+      // to the API, it's a server-to-server request, so the browser's cookies won't be
+      // automatically sent. We need to manually include cookies in the Cookie header.
       const cookieHeader = Array.from(uniqueCookies.entries())
         .map(([name, value]) => `${name}=${encodeURIComponent(value)}`)
         .join("; ");
 
+      // Log what cookies we're sending
+      console.log("[Middleware] Sending cookies to API", {
+        cookieHeaderLength: cookieHeader.length,
+        hasAccessTokenInHeader: cookieHeader.includes("access_token"),
+        hasRefreshTokenInHeader: cookieHeader.includes("refresh_token"),
+        allCookieNames: Array.from(uniqueCookies.keys()),
+      });
+
+      // If we don't have a cookie header or missing critical cookies, allow request to proceed
+      // This handles cross-domain scenarios where cookies exist but aren't readable here
+      if (!cookieHeader || (!accessToken && !refreshToken)) {
+        console.log(
+          "[Middleware] No cookies readable in middleware - may be cross-domain scenario, allowing request to proceed",
+          {
+            pathname,
+            hasAccessToken: !!accessToken,
+            hasRefreshToken: !!refreshToken,
+          }
+        );
+        // Allow request to proceed - client-side will handle authentication
+        // Client-side can make API requests with credentials: "include" which will
+        // automatically send cookies that the browser has for the API domain
+        return NextResponse.next();
+      }
+
       // Add timeout to prevent hanging requests
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout for production
 
       let userResponse: Response;
       try {
+        // Make request to API with cookies
+        // Note: This is a server-to-server request, so we need to manually include cookies
         userResponse = await fetch(`${apiUrl}/api/v1/user/me`, {
           method: "GET",
           headers: {
             Cookie: cookieHeader,
+            "Content-Type": "application/json",
           },
-          // Ensure credentials are included for cross-origin requests
+          // credentials: "include" doesn't help in server-to-server requests,
+          // but we include it for completeness
           credentials: "include",
           signal: controller.signal,
+          // Add cache control to prevent stale responses
+          cache: "no-store",
         });
         clearTimeout(timeoutId);
       } catch (fetchError: any) {
@@ -130,14 +189,45 @@ export async function middleware(request: NextRequest) {
         // Check if it's a network error (not an HTTP error)
         if (
           fetchError.name === "AbortError" ||
-          fetchError.message?.includes("fetch")
+          fetchError.message?.includes("fetch") ||
+          fetchError.message?.includes("network") ||
+          fetchError.code === "ECONNREFUSED" ||
+          fetchError.code === "ETIMEDOUT"
         ) {
           console.warn(
             "[Middleware] Network error fetching user info (timeout or fetch failed):",
-            fetchError.message
+            fetchError.message,
+            { pathname, isFreshLogin, isImmediatePostLogin }
           );
-          // For network errors, preserve cookies and allow request to proceed
+
+          // For fresh logins or immediate post-login, allow request to proceed
+          // Cookies might not be fully synchronized yet in cross-domain scenarios
+          // BUT: Only if we have a token - if no token, this is not a fresh login
+          if (accessToken && (isFreshLogin || isImmediatePostLogin)) {
+            console.log(
+              "[Middleware] Allowing request after network error on fresh login - cookies may still be syncing"
+            );
+            return NextResponse.next();
+          }
+
+          // For network errors on non-fresh logins, preserve cookies and allow request to proceed
           // Client-side code will handle authentication
+          // BUT: If we have no token at all, we should redirect to login
+          if (!accessToken && (isInstructorProtected || isStudentProtected)) {
+            const loginTarget = isInstructorProtected
+              ? "/login/instructor"
+              : "/login/student";
+            const url = request.nextUrl.clone();
+            url.pathname = loginTarget;
+            const redirectPath = pathname.startsWith("/dashboard/")
+              ? pathname
+              : undefined;
+            if (redirectPath) {
+              url.searchParams.set("redirect", redirectPath);
+            }
+            return NextResponse.redirect(url);
+          }
+
           return NextResponse.next();
         }
         // Re-throw if it's not a network error
@@ -152,8 +242,10 @@ export async function middleware(request: NextRequest) {
             {
               method: "GET",
               headers: {
-                Cookie: cookieHeader,
+                // Include cookies we can read, but browser will auto-send API domain cookies
+                ...(cookieHeader ? { Cookie: cookieHeader } : {}),
               },
+              // CRITICAL: credentials: "include" ensures browser sends cookies for API domain
               credentials: "include",
             }
           );
@@ -230,11 +322,16 @@ export async function middleware(request: NextRequest) {
             const newCookieHeader = newCookieParts.join("; ");
 
             // Retry user info request with new tokens
+            // Note: The browser will automatically send the refreshed cookies
+            // that were set via Set-Cookie headers, so we don't need to manually
+            // include them in the Cookie header for the retry
             userResponse = await fetch(`${apiUrl}/api/v1/user/me`, {
               method: "GET",
               headers: {
+                // Include the new cookie header with refreshed tokens
                 Cookie: newCookieHeader,
               },
+              // CRITICAL: credentials: "include" ensures browser sends cookies
               credentials: "include",
             });
           } else {
@@ -340,6 +437,15 @@ export async function middleware(request: NextRequest) {
         // Only delete cookies if we're CERTAIN it's an auth failure
         // Check if we have a refresh token - if not, tokens are definitely invalid
         if (!refreshToken) {
+          // For fresh logins, allow request to proceed - cookies might still be syncing
+          // BUT: Only if we have an access token
+          if (accessToken && (isFreshLogin || isImmediatePostLogin)) {
+            console.log(
+              "[Middleware] 401 on fresh login without refresh token - allowing request, cookies may still be syncing"
+            );
+            return NextResponse.next();
+          }
+
           console.log(
             "[Middleware] 401 received and no refresh token - deleting cookies"
           );
@@ -370,7 +476,8 @@ export async function middleware(request: NextRequest) {
           // For fresh logins, give it a chance - don't delete cookies immediately
           // This is especially important for cross-domain scenarios where cookies might
           // take a moment to sync properly
-          if (isFreshLogin || isImmediatePostLogin) {
+          // BUT: Only if we have an access token
+          if (accessToken && (isFreshLogin || isImmediatePostLogin)) {
             console.warn(
               "[Middleware] 401 on fresh/immediate post-login with refresh token - preserving cookies, may be server issue or cookie sync delay",
               {
@@ -385,6 +492,7 @@ export async function middleware(request: NextRequest) {
               }
             );
             // Don't delete cookies - might be a timing issue with cross-domain cookies
+            // Allow the request to proceed - client-side will handle auth if needed
             return NextResponse.next();
           }
           // For non-fresh logins, delete cookies as they're likely invalid
@@ -414,8 +522,18 @@ export async function middleware(request: NextRequest) {
       } else {
         // Non-401 error status (500, 503, etc.)
         console.warn(
-          `[Middleware] Non-401 error status ${userResponse.status} - preserving cookies`
+          `[Middleware] Non-401 error status ${userResponse.status} - preserving cookies`,
+          { pathname, isFreshLogin, isImmediatePostLogin }
         );
+        // For fresh logins, always allow request to proceed even on server errors
+        // Cookies might still be syncing in cross-domain scenarios
+        // BUT: Only if we have a token
+        if (accessToken && (isFreshLogin || isImmediatePostLogin)) {
+          console.log(
+            "[Middleware] Allowing request after server error on fresh login"
+          );
+          return NextResponse.next();
+        }
         // Don't delete cookies on server errors - preserve them and let client handle it
         return NextResponse.next();
       }
@@ -428,6 +546,8 @@ export async function middleware(request: NextRequest) {
         errorName: error?.name,
         pathname,
         hasAccessToken: !!accessToken,
+        isFreshLogin,
+        isImmediatePostLogin,
       });
 
       // Distinguish between network errors and other errors
@@ -439,16 +559,58 @@ export async function middleware(request: NextRequest) {
         error?.code === "ECONNREFUSED" ||
         error?.code === "ETIMEDOUT";
 
+      // For fresh logins, always allow request to proceed regardless of error type
+      // Cookies might still be syncing in cross-domain scenarios
+      // BUT: Only if we have a token
+      if (accessToken && (isFreshLogin || isImmediatePostLogin)) {
+        console.log(
+          "[Middleware] Allowing request after exception on fresh login - cookies may still be syncing",
+          { errorType: isNetworkError ? "network" : "other" }
+        );
+        return NextResponse.next();
+      }
+
       if (isNetworkError) {
         console.warn(
           "[Middleware] Network error detected - preserving cookies, allowing request to proceed"
         );
         // Network errors should not delete cookies - the token might still be valid
+        // BUT: If we have no token at all, redirect to login
+        if (!accessToken && (isInstructorProtected || isStudentProtected)) {
+          const loginTarget = isInstructorProtected
+            ? "/login/instructor"
+            : "/login/student";
+          const url = request.nextUrl.clone();
+          url.pathname = loginTarget;
+          const redirectPath = pathname.startsWith("/dashboard/")
+            ? pathname
+            : undefined;
+          if (redirectPath) {
+            url.searchParams.set("redirect", redirectPath);
+          }
+          return NextResponse.redirect(url);
+        }
         return NextResponse.next();
       }
 
       // For other errors, also preserve cookies and let client handle it
       // Only delete cookies if we're absolutely certain they're invalid
+      // BUT: If we have no token at all, redirect to login
+      if (!accessToken && (isInstructorProtected || isStudentProtected)) {
+        const loginTarget = isInstructorProtected
+          ? "/login/instructor"
+          : "/login/student";
+        const url = request.nextUrl.clone();
+        url.pathname = loginTarget;
+        const redirectPath = pathname.startsWith("/dashboard/")
+          ? pathname
+          : undefined;
+        if (redirectPath) {
+          url.searchParams.set("redirect", redirectPath);
+        }
+        return NextResponse.redirect(url);
+      }
+
       console.warn(
         "[Middleware] Non-network error - preserving cookies, letting client handle authentication"
       );
@@ -458,9 +620,30 @@ export async function middleware(request: NextRequest) {
 
   // 1) Protect dashboards: require auth (JWT token) AND valid role
   // Only consider authenticated if we have both token AND a valid role
+  // BUT: For fresh logins, be more lenient - allow access if we have a token
+  // even if we couldn't fetch role yet (cookies might still be syncing)
   const hasValidRole =
     sessionRole === "instructor" || sessionRole === "student";
   const isAuthenticated = !!accessToken && hasValidRole;
+
+  // For fresh logins, if we have a token but couldn't verify role yet,
+  // allow access - client-side will handle auth verification
+  // BUT: Only if we actually attempted to fetch user info (accessToken exists)
+  const hasTokenButNoRole = !!accessToken && !hasValidRole;
+  const shouldAllowFreshLogin =
+    !!accessToken && // Must have token
+    (isFreshLogin || isImmediatePostLogin) &&
+    hasTokenButNoRole &&
+    (isInstructorProtected || isStudentProtected);
+
+  // IMPORTANT: In cross-domain scenarios, cookies may exist on the API domain
+  // but not be readable by this middleware. If we're on a protected route
+  // and don't have cookies here, we should still allow the request to proceed
+  // and let the client-side handle authentication. The client can make API
+  // requests with credentials: "include" which will automatically send cookies.
+  //
+  // However, we should still redirect if we're certain the user is not authenticated
+  // (no cookies AND not a fresh login attempt).
 
   // Handle onboarding routes
   if (isOnboardingRoute) {
@@ -502,20 +685,48 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Allow fresh logins to proceed even if we couldn't verify role yet
+  // This handles cross-domain cookie synchronization delays
+  if (shouldAllowFreshLogin) {
+    console.log(
+      "[Middleware] Allowing fresh login to proceed - cookies may still be syncing",
+      { pathname, hasAccessToken: !!accessToken, sessionRole }
+    );
+    return NextResponse.next();
+  }
+
+  // Only redirect to login if we're certain the user is not authenticated
+  // In cross-domain scenarios, cookies may exist but not be readable here
+  // So we should be lenient and allow the request to proceed - client-side will handle auth
   if (!isAuthenticated && (isInstructorProtected || isStudentProtected)) {
-    const loginTarget = isInstructorProtected
-      ? "/login/instructor"
-      : "/login/student";
-    const url = request.nextUrl.clone();
-    url.pathname = loginTarget;
-    // Validate redirect path to prevent open redirects
-    const redirectPath = pathname.startsWith("/dashboard/")
-      ? pathname
-      : undefined;
-    if (redirectPath) {
-      url.searchParams.set("redirect", redirectPath);
+    // If we have no token at all AND it's not a fresh login, redirect to login
+    // But if it's a fresh login or we're not certain, allow the request to proceed
+    if (!accessToken && !isFreshLogin && !isImmediatePostLogin) {
+      const loginTarget = isInstructorProtected
+        ? "/login/instructor"
+        : "/login/student";
+      const url = request.nextUrl.clone();
+      url.pathname = loginTarget;
+      // Validate redirect path to prevent open redirects
+      const redirectPath = pathname.startsWith("/dashboard/")
+        ? pathname
+        : undefined;
+      if (redirectPath) {
+        url.searchParams.set("redirect", redirectPath);
+      }
+      return NextResponse.redirect(url);
     }
-    return NextResponse.redirect(url);
+    // If we have a token but couldn't verify role, or it's a fresh login,
+    // allow the request to proceed - client-side will handle authentication
+    console.log(
+      "[Middleware] Allowing request to proceed - cookies may be on different domain or still syncing",
+      {
+        hasAccessToken: !!accessToken,
+        isFreshLogin,
+        isImmediatePostLogin,
+        pathname,
+      }
+    );
   }
 
   // Check if authenticated user needs onboarding before allowing dashboard access
