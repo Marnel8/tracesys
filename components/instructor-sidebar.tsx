@@ -538,22 +538,32 @@ export function InstructorSidebar() {
                 <DropdownMenuContent side="top" className="w-56 mb-2">
                   <DropdownMenuItem
                     className="text-red-600 cursor-pointer"
-                    onClick={() =>
+                    onClick={() => {
                       logout(undefined, {
                         onSuccess: () => {
-                          toast({ title: "Signed out" });
+                          toast({ title: "Signed out successfully" });
+                          // Clear any client-side state
                           // Use replace instead of push to prevent back navigation to protected route
-                          window.location.replace("/login/instructor");
+                          // Add a small delay to ensure cookies are cleared by the server
+                          setTimeout(() => {
+                            window.location.replace("/login/instructor");
+                          }, 200);
                         },
                         onError: (error: any) => {
+                          console.error("Logout error:", error);
                           toast({
                             title: "Sign out failed",
                             description: error.message || "Please try again",
                             variant: "destructive",
                           });
+                          // Even if logout fails, try to redirect to login
+                          // The middleware will handle authentication
+                          setTimeout(() => {
+                            window.location.replace("/login/instructor");
+                          }, 1000);
                         },
-                      })
-                    }
+                      });
+                    }}
                     disabled={isLoggingOut}
                   >
                     <LogOut className="mr-2 h-4 w-4" />
