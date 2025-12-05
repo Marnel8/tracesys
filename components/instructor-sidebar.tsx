@@ -172,14 +172,14 @@ export function InstructorSidebar() {
       title: "Academic Management",
       icon: GraduationCap,
       items: [
-        // {
-        //   title: "Departments",
-        //   url: "/dashboard/instructor/departments",
-        // },
-        // {
-        //   title: "Courses",
-        //   url: "/dashboard/instructor/courses",
-        // },
+        {
+          title: "Departments",
+          url: "/dashboard/instructor/departments",
+        },
+        {
+          title: "Courses",
+          url: "/dashboard/instructor/courses",
+        },
         {
           title: "Sections",
           url: "/dashboard/instructor/sections",
