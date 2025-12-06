@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +12,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   User,
   Mail,
@@ -29,6 +39,7 @@ import {
   Search,
   Filter,
   Loader2,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth, useEditUser } from "@/hooks/auth/useAuth";
@@ -41,12 +52,40 @@ import { useAttendance } from "@/hooks/attendance";
 import { useStudentReports } from "@/hooks/student/useStudentReports";
 import { useRequirementStats } from "@/hooks/student/useStudentRequirements";
 import { useStudent } from "@/hooks/student/useStudent";
+import { useAgencies, useSupervisors } from "@/hooks/agency/useAgency";
+import api from "@/lib/api";
+import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+
+const practicumSchema = z
+  .object({
+    agencyId: z.string().min(1, "Agency is required"),
+    supervisorId: z.string().optional(),
+    startDate: z.string().min(1, "Start date is required"),
+    endDate: z.string().min(1, "End date is required"),
+    position: z.string().min(1, "Position is required"),
+  })
+  .refine(
+    (data) => {
+      const start = new Date(data.startDate);
+      const end = new Date(data.endDate);
+      return end >= start;
+    },
+    {
+      message: "End date must be after start date",
+      path: ["endDate"],
+    }
+  );
+
+type PracticumFormData = z.infer<typeof practicumSchema>;
 
 export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
+  const [isEditingPracticum, setIsEditingPracticum] = useState(false);
   const { user, isLoading: isUserLoading, error, refetch } = useAuth();
   const editUserMutation = useEditUser();
-  const { toast } = useToast();
+  const { toast: toastHook } = useToast();
+  const queryClient = useQueryClient();
 
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string>("");
@@ -166,6 +205,76 @@ export default function ProfilePage() {
   const practicum = studentRecord?.practicums?.[0];
   const agency = practicum?.agency;
   const supervisor = practicum?.supervisor;
+
+  // Fetch agencies for practicum form
+  const { data: agenciesData } = useAgencies(
+    { status: "active" },
+    { enabled: isEditingPracticum }
+  );
+
+  // Practicum form setup
+  const practicumForm = useForm<PracticumFormData>({
+    resolver: zodResolver(practicumSchema),
+    defaultValues: {
+      agencyId: practicum?.agencyId || "",
+      supervisorId: practicum?.supervisorId || "",
+      startDate: practicum?.startDate
+        ? new Date(practicum.startDate).toISOString().split("T")[0]
+        : "",
+      endDate: practicum?.endDate
+        ? new Date(practicum.endDate).toISOString().split("T")[0]
+        : "",
+      position: practicum?.position || "Student Intern",
+    },
+  });
+
+  // Watch agency selection to fetch supervisors
+  const selectedAgencyId = practicumForm.watch("agencyId");
+  const { data: supervisorsData } = useSupervisors(
+    selectedAgencyId && isEditingPracticum ? selectedAgencyId : "",
+    {}
+  );
+
+  // Update form when practicum data changes
+  useEffect(() => {
+    if (practicum && !isEditingPracticum) {
+      practicumForm.reset({
+        agencyId: practicum.agencyId || "",
+        supervisorId: practicum.supervisorId || "",
+        startDate: practicum.startDate
+          ? new Date(practicum.startDate).toISOString().split("T")[0]
+          : "",
+        endDate: practicum.endDate
+          ? new Date(practicum.endDate).toISOString().split("T")[0]
+          : "",
+        position: practicum.position || "Student Intern",
+      });
+    }
+  }, [practicum, isEditingPracticum]);
+
+  // Update practicum mutation
+  const updatePracticum = async (data: PracticumFormData) => {
+    try {
+      await api.post("/practicum/", {
+        agencyId: data.agencyId,
+        ...(data.supervisorId && { supervisorId: data.supervisorId }),
+        startDate: data.startDate,
+        endDate: data.endDate,
+        position: data.position,
+        totalHours: practicum?.totalHours || 400,
+        workSetup: practicum?.workSetup || "On-site",
+      });
+      toast.success("Practicum details updated successfully!");
+      queryClient.invalidateQueries({ queryKey: ["student", user?.id] });
+      setIsEditingPracticum(false);
+    } catch (error: any) {
+      toast.error(
+        error.response?.data?.error?.message ||
+          error.response?.data?.message ||
+          "Failed to update practicum details"
+      );
+    }
+  };
 
   const computedStudentId = studentRecord?.studentId || profileData.studentId;
   const computedCourse = course?.name || course?.code || profileData.course;
@@ -395,10 +504,10 @@ export default function ProfilePage() {
         bio: profileData.bio,
         ...(avatarFile ? { avatar: avatarFile } : {}),
       });
-      toast({ title: "Profile updated" });
+      toastHook({ title: "Profile updated" });
       setIsEditing(false);
     } catch (e: any) {
-      toast({
+      toastHook({
         title: "Update failed",
         description: e.message || "Please try again.",
         variant: "destructive",
@@ -1201,34 +1310,198 @@ export default function ProfilePage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Building className="w-5 h-5" />
-                  Practicum Details
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Building className="w-5 h-5" />
+                    Practicum Details
+                  </CardTitle>
+                  {!isEditingPracticum && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsEditingPracticum(true)}
+                    >
+                      <Edit className="w-4 h-4 mr-2" />
+                      {practicum ? "Edit" : "Add Practicum"}
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Company</Label>
-                  <Input value={computedCompany} disabled />
-                </div>
-                <div className="space-y-2">
-                  <Label>Position</Label>
-                  <Input value={computedPosition} disabled />
-                </div>
-                <div className="space-y-2">
-                  <Label>Supervisor</Label>
-                  <Input value={computedSupervisor} disabled />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Start Date</Label>
-                    <Input value={displayStartDate} disabled />
+                {isEditingPracticum ? (
+                  <form
+                    onSubmit={practicumForm.handleSubmit(updatePracticum)}
+                    className="space-y-4"
+                  >
+                    <div className="space-y-2">
+                      <Label htmlFor="agencyId">Agency *</Label>
+                      <Select
+                        value={practicumForm.watch("agencyId") || ""}
+                        onValueChange={(value) =>
+                          practicumForm.setValue("agencyId", value)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select agency" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {agenciesData?.agencies?.map((agency) => (
+                            <SelectItem key={agency.id} value={agency.id}>
+                              {agency.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {practicumForm.formState.errors.agencyId && (
+                        <p className="text-sm text-red-600">
+                          {practicumForm.formState.errors.agencyId.message}
+                        </p>
+                      )}
+                    </div>
+
+                    {selectedAgencyId && (
+                      <div className="space-y-2">
+                        <Label htmlFor="supervisorId">Supervisor (Optional)</Label>
+                        <Select
+                          value={practicumForm.watch("supervisorId") || ""}
+                          onValueChange={(value) =>
+                            practicumForm.setValue("supervisorId", value)
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select supervisor (optional)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {supervisorsData?.supervisors &&
+                            supervisorsData.supervisors.length > 0 ? (
+                              supervisorsData.supervisors.map((sup) => (
+                                <SelectItem key={sup.id} value={sup.id}>
+                                  {sup.name} • {sup.position}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="none" disabled>
+                                No supervisors available
+                              </SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                        {practicumForm.formState.errors.supervisorId && (
+                          <p className="text-sm text-red-600">
+                            {practicumForm.formState.errors.supervisorId.message}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <Label htmlFor="position">Position *</Label>
+                      <Input
+                        id="position"
+                        {...practicumForm.register("position")}
+                      />
+                      {practicumForm.formState.errors.position && (
+                        <p className="text-sm text-red-600">
+                          {practicumForm.formState.errors.position.message}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="startDate">Start Date *</Label>
+                        <Input
+                          id="startDate"
+                          type="date"
+                          {...practicumForm.register("startDate")}
+                        />
+                        {practicumForm.formState.errors.startDate && (
+                          <p className="text-sm text-red-600">
+                            {practicumForm.formState.errors.startDate.message}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="endDate">End Date *</Label>
+                        <Input
+                          id="endDate"
+                          type="date"
+                          {...practicumForm.register("endDate")}
+                        />
+                        {practicumForm.formState.errors.endDate && (
+                          <p className="text-sm text-red-600">
+                            {practicumForm.formState.errors.endDate.message}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        type="submit"
+                        disabled={practicumForm.formState.isSubmitting}
+                        className="flex-1"
+                      >
+                        {practicumForm.formState.isSubmitting ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-4 h-4 mr-2" />
+                            Save Changes
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setIsEditingPracticum(false);
+                          practicumForm.reset();
+                        }}
+                        disabled={practicumForm.formState.isSubmitting}
+                      >
+                        <X className="w-4 h-4 mr-2" />
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                ) : practicum ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Company</Label>
+                      <Input value={computedCompany} disabled />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Position</Label>
+                      <Input value={computedPosition} disabled />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Supervisor</Label>
+                      <Input value={computedSupervisor} disabled />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Start Date</Label>
+                        <Input value={displayStartDate} disabled />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>End Date</Label>
+                        <Input value={displayEndDate} disabled />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Building className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                    <p className="text-sm">
+                      No practicum details found. Click "Add Practicum" to set up
+                      your practicum information.
+                    </p>
                   </div>
-                  <div className="space-y-2">
-                    <Label>End Date</Label>
-                    <Input value={displayEndDate} disabled />
-                  </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           </div>
