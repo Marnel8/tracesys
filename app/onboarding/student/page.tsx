@@ -46,24 +46,17 @@ const agencySchema = z
   })
   .refine(
     (data) => {
-      // If any agency field is provided, all must be provided
-      if (
-        data.agencyId ||
-        data.supervisorId ||
-        data.startDate ||
-        data.endDate
-      ) {
-        return !!(
-          data.agencyId &&
-          data.supervisorId &&
-          data.startDate &&
-          data.endDate
-        );
+      // If any required agency field (agencyId, startDate, endDate) is provided,
+      // all required fields must be provided. Supervisor is always optional.
+      const hasRequiredFields = data.agencyId || data.startDate || data.endDate;
+      if (hasRequiredFields) {
+        return !!(data.agencyId && data.startDate && data.endDate);
       }
       return true;
     },
     {
-      message: "Please fill in all agency fields or leave them all empty",
+      message:
+        "Please fill in agency, start date, and end date, or leave them all empty",
       path: ["agencyId"],
     }
   );
@@ -135,16 +128,11 @@ function StudentOnboardingContent() {
   const onAgencySubmit = async (data: AgencyFormData) => {
     setLoading(true);
     try {
-      // Only create practicum if all fields are provided
-      if (
-        data.agencyId &&
-        data.supervisorId &&
-        data.startDate &&
-        data.endDate
-      ) {
+      // Only create practicum if required fields are provided (supervisor is optional)
+      if (data.agencyId && data.startDate && data.endDate) {
         await api.post("/practicum/", {
           agencyId: data.agencyId,
-          supervisorId: data.supervisorId,
+          ...(data.supervisorId && { supervisorId: data.supervisorId }),
           startDate: data.startDate,
           endDate: data.endDate,
           position: "Student Intern",
