@@ -652,23 +652,9 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next();
     }
 
-    // If authenticated and needs onboarding, allow access to onboarding
-    if (needsOnboarding) {
-      return NextResponse.next();
-    }
-
-    // If authenticated and doesn't need onboarding, redirect to appropriate dashboard
-    if (sessionRole === "instructor") {
-      const url = request.nextUrl.clone();
-      url.pathname = INSTRUCTOR_PROTECTED_PREFIX;
-      return NextResponse.redirect(url);
-    } else if (sessionRole === "student") {
-      const url = request.nextUrl.clone();
-      url.pathname = STUDENT_PROTECTED_PREFIX;
-      return NextResponse.redirect(url);
-    }
-
-    // If role is unknown, allow access
+    // Allow authenticated users to access onboarding routes even if profile is complete
+    // This allows users to complete optional steps (e.g., agency placement for students)
+    // The client-side code will handle the flow and redirect when onboarding is truly complete
     return NextResponse.next();
   }
 
