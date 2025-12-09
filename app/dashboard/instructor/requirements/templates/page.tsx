@@ -104,6 +104,16 @@ export default function RequirementTemplatesPage() {
     (data?.requirementTemplates as RequirementTemplate[] | undefined) || [];
   const pagination = data?.pagination;
 
+  // Fetch all templates for accurate stats calculation
+  const { data: allTemplatesData } = useRequirementTemplates({
+    page: 1,
+    limit: 1000,
+  });
+  const allTemplates =
+    (allTemplatesData?.requirementTemplates as
+      | RequirementTemplate[]
+      | undefined) || [];
+
   const createTemplate = useCreateRequirementTemplate();
   const updateTemplate = useUpdateRequirementTemplate();
   const deleteTemplate = useDeleteRequirementTemplate();
@@ -228,8 +238,11 @@ export default function RequirementTemplatesPage() {
   const currentPage = pagination?.currentPage ?? page;
   const itemsPerPage = pagination?.itemsPerPage ?? limit;
   const totalItems = pagination?.totalItems ?? templates.length;
-  const activeTemplatesCount = templates.filter((t) => t.isActive).length;
-  const requiredTemplatesCount = templates.filter((t) => t.isRequired).length;
+  // Use all templates for accurate stats, not just current page
+  const activeTemplatesCount = allTemplates.filter((t) => t.isActive).length;
+  const requiredTemplatesCount = allTemplates.filter(
+    (t) => t.isRequired
+  ).length;
 
   const startIndex =
     totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;

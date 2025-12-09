@@ -1,5 +1,6 @@
 import api from "@/lib/api";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { requirementKeys } from "../requirement/useRequirement";
 
 // Student data interfaces
 export interface Student {
@@ -465,6 +466,8 @@ export const useDeleteStudent = () => {
 			// Invalidate students query to refresh the list
 			queryClient.invalidateQueries({ queryKey: ["students"] });
 			queryClient.invalidateQueries({ queryKey: ["students-by-teacher"] });
+			// Invalidate requirement queries since deleting a student also deletes their requirements
+			queryClient.invalidateQueries({ queryKey: requirementKeys.all });
 		},
 		onError: (error: any) => {
 			console.error("Delete student mutation error:", error);

@@ -76,7 +76,9 @@ export const useRequirements = (filters: {
 			const res = await api.get(`${ENDPOINTS.list}?${params.toString()}`);
 			return res.data.data as RequirementListResponse;
 		},
-		placeholderData: (prev) => prev,
+		staleTime: 0,
+		refetchOnMount: true,
+		refetchOnWindowFocus: false,
 	});
 };
 
@@ -99,7 +101,7 @@ export const useCreateRequirementFromTemplate = () => {
 			return res.data.data as Requirement;
 		},
 		onSuccess: () => {
-			qc.invalidateQueries({ queryKey: requirementKeys.lists() });
+			qc.invalidateQueries({ queryKey: requirementKeys.all });
 			toast.success("Requirement assigned");
 		},
 		onError: (err: any) => {
@@ -121,7 +123,7 @@ export const useSubmitRequirement = () => {
 		},
 		onSuccess: (data) => {
 			qc.invalidateQueries({ queryKey: requirementKeys.detail(data.id) });
-			qc.invalidateQueries({ queryKey: requirementKeys.lists() });
+			qc.invalidateQueries({ queryKey: requirementKeys.all });
 			toast.success("Requirement submitted");
 		},
 		onError: (err: any) => {
@@ -139,7 +141,7 @@ export const useApproveRequirement = () => {
 		},
 		onSuccess: (data) => {
 			qc.invalidateQueries({ queryKey: requirementKeys.detail(data.id) });
-			qc.invalidateQueries({ queryKey: requirementKeys.lists() });
+			qc.invalidateQueries({ queryKey: requirementKeys.all });
 			toast.success("Requirement approved");
 		},
 		onError: (err: any) => {
@@ -157,7 +159,7 @@ export const useRejectRequirement = () => {
 		},
 		onSuccess: (data) => {
 			qc.invalidateQueries({ queryKey: requirementKeys.detail(data.id) });
-			qc.invalidateQueries({ queryKey: requirementKeys.lists() });
+			qc.invalidateQueries({ queryKey: requirementKeys.all });
 			toast.success("Requirement rejected");
 		},
 		onError: (err: any) => {

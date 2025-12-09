@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -66,6 +67,7 @@ import {
   useRejectRequirement,
   useRequirements,
 } from "@/hooks/requirement";
+import { useRequirementTemplates } from "@/hooks/requirement-template/useRequirementTemplate";
 import {
   Pagination,
   PaginationContent,
@@ -87,9 +89,19 @@ const humanizeBytes = (bytes?: number | null) => {
   return `${mb.toFixed(1)} MB`;
 };
 
+const resolveFileUrl = (url?: string | null) => {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  const base =
+    process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ||
+    (typeof window !== "undefined" ? window.location.origin : "");
+  const path = url.startsWith("/") ? url : `/${url}`;
+  return `${base}${path}`;
+};
+
 export default function RequirementsPage() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState("all");
+  const [selectedStatus, setSelectedStatus] = useState("submitted");
   const [selectedRequirement, setSelectedRequirement] = useState<any>(null);
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
   const [reviewComment, setReviewComment] = useState("");
@@ -98,6 +110,7 @@ export default function RequirementsPage() {
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const queryClient = useQueryClient();
 
   const { user } = useAuth();
   const updateAllowLoginWithoutRequirements =
@@ -125,12 +138,30 @@ export default function RequirementsPage() {
     setPage(1);
   }, [selectedStatus, debouncedSearch]);
 
-  const { data } = useRequirements({
+  const { data, refetch } = useRequirements({
     page,
     limit,
     status: selectedStatus as any,
     search: debouncedSearch || undefined,
   });
+
+  // Refetch requirements when page becomes visible (e.g., after submitting from another tab)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        queryClient.invalidateQueries({ queryKey: ["requirements"] });
+        refetch();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [queryClient, refetch]);
+
+  // Also refetch when component mounts to ensure fresh data
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
   // Stats: fetch counts by status using minimal payload (limit=1)
   const { data: allStats } = useRequirements({
     page: 1,
@@ -152,37 +183,46 @@ export default function RequirementsPage() {
     limit: 1,
     status: "rejected" as any,
   });
+  const { data: inProgressStats } = useRequirements({
+    page: 1,
+    limit: 1,
+    status: "in-progress" as any,
+  });
+  const { data: templatesResp } = useRequirementTemplates({
+    page: 1,
+    limit: 1000,
+    status: "active",
+  });
   // Fetch all requirements to calculate per-student counts
   const { data: allRequirementsData } = useRequirements({
     page: 1,
     limit: 10000, // High limit to get all requirements for counting
     status: "all" as any,
   });
+  const templatesCount = templatesResp?.requirementTemplates?.length ?? 0;
+  const submittedCount = submittedStats?.pagination.totalItems ?? 0;
+  const approvedCount = approvedStats?.pagination.totalItems ?? 0;
+  const rejectedCount = rejectedStats?.pagination.totalItems ?? 0;
+  const inProgressCount = inProgressStats?.pagination.totalItems ?? 0;
+  // Treat "total submissions" as items that moved beyond initial pending state
+  const totalSubmissionsCount =
+    submittedCount + approvedCount + rejectedCount + inProgressCount;
   const items = data?.requirements ?? [];
   const pagination = data?.pagination;
   const currentPage = pagination?.currentPage ?? page;
   const totalPages = pagination?.totalPages ?? 1;
   const itemsPerPage = pagination?.itemsPerPage ?? limit;
-  const totalItems = pagination?.totalItems ?? items.length;
+
+  const reviewableStatuses = useMemo(() => ["submitted", "in-progress"], []);
+
+  // Backend now filters by files when status is "all" for instructors
+  // So we can use items directly without additional filtering
+  const filteredItems = items;
+
+  const totalItems = filteredItems.length;
   const startIndex =
     totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
-  const endIndex = totalItems === 0 ? 0 : startIndex + items.length - 1;
-
-  const filteredRequirements = useMemo(() => {
-    return items.filter((r) => {
-      const studentName = `${r.student?.firstName ?? ""} ${
-        r.student?.lastName ?? ""
-      }`.trim();
-      const studentId = r.student?.id ?? "";
-      const matchesSearch =
-        r.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        studentId.includes(searchTerm);
-      const matchesStatus =
-        selectedStatus === "all" || r.status.toLowerCase() === selectedStatus;
-      return matchesSearch && matchesStatus;
-    });
-  }, [items, searchTerm, selectedStatus]);
+  const endIndex = totalItems === 0 ? 0 : startIndex + filteredItems.length - 1;
 
   // Calculate approved/total requirements per student
   const studentRequirementCounts = useMemo(() => {
@@ -198,14 +238,20 @@ export default function RequirementsPage() {
       }
 
       const counts = countsMap.get(studentId)!;
-      counts.total += 1;
-      if (req.status.toLowerCase() === "approved") {
-        counts.approved += 1;
-      }
+      const isApproved = req.status?.toLowerCase() === "approved";
+      if (isApproved) counts.approved += 1;
     });
 
+    // Apply template-based denominator
+    for (const [studentId, counts] of countsMap.entries()) {
+      const denom = templatesCount > 0 ? templatesCount : counts.approved;
+      counts.total = denom;
+      counts.approved = Math.min(counts.approved, denom);
+      countsMap.set(studentId, counts);
+    }
+
     return countsMap;
-  }, [allRequirementsData]);
+  }, [allRequirementsData, templatesCount]);
 
   const approve = useApproveRequirement();
   const reject = useRejectRequirement();
@@ -215,7 +261,11 @@ export default function RequirementsPage() {
   };
 
   const handleReturn = (id: string, comment: string) => {
-    reject.mutate({ id, reason: comment });
+    if (!comment?.trim()) {
+      toast.error("Please provide a rejection reason.");
+      return;
+    }
+    reject.mutate({ id, reason: comment.trim() });
     setIsReviewDialogOpen(false);
     setReviewComment("");
   };
@@ -280,16 +330,6 @@ export default function RequirementsPage() {
     if (!previewFile) return null;
 
     const extension = previewFile.fileName.split(".").pop()?.toLowerCase();
-
-    const resolveFileUrl = (url?: string) => {
-      if (!url) return "";
-      if (url.startsWith("http://") || url.startsWith("https://")) return url;
-      const base = process.env.NEXT_PUBLIC_API_URL || "";
-      // Ensure exactly one slash between base and path
-      if (url.startsWith("/")) return `${base}${url}`;
-      return `${base}/${url}`;
-    };
-
     const fileUrl = resolveFileUrl(previewFile.fileUrl);
 
     switch (extension) {
@@ -367,6 +407,8 @@ export default function RequirementsPage() {
         return "bg-red-100 text-red-800 capitalize";
       case "submitted":
         return "bg-blue-100 text-blue-800 capitalize";
+      case "in-progress":
+        return "bg-purple-100 text-purple-800 capitalize";
       default:
         return "bg-gray-100 text-gray-800 capitalize";
     }
@@ -380,6 +422,8 @@ export default function RequirementsPage() {
         return "bg-yellow-100 text-yellow-800 capitalize";
       case "low":
         return "bg-green-100 text-green-800 capitalize";
+      case "urgent":
+        return "bg-rose-100 text-rose-800 capitalize";
       default:
         return "bg-gray-100 text-gray-800 capitalize";
     }
@@ -445,7 +489,7 @@ export default function RequirementsPage() {
         />
         <InstructorStatsCard
           icon={XCircle}
-          label="Returned"
+          label="Rejected"
           value={rejectedStats?.pagination.totalItems ?? 0}
           helperText="Needs revision"
           trend={
@@ -457,8 +501,8 @@ export default function RequirementsPage() {
         <InstructorStatsCard
           icon={FileText}
           label="Total Submissions"
-          value={allStats?.pagination.totalItems ?? 0}
-          helperText="Across all statuses"
+          value={totalSubmissionsCount}
+          helperText="Submitted, in-progress, approved, or rejected"
         />
       </div>
 
@@ -487,9 +531,10 @@ export default function RequirementsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="submitted">Submitted</SelectItem>
+                <SelectItem value="in-progress">In Progress</SelectItem>
                 <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="returned">Returned</SelectItem>
+                <SelectItem value="rejected">Rejected</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -510,151 +555,154 @@ export default function RequirementsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRequirements.map((req) => (
-                  <TableRow key={req.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div>
-                          <div className="font-medium text-gray-900">
-                            {`${req.student?.firstName ?? ""} ${
-                              req.student?.lastName ?? ""
-                            }`.trim()}
-                          </div>
-                          <div className="text-sm text-gray-600">
-                            {req.student?.email ?? req.student?.id}
+                {filteredItems.map((req) => {
+                  const normalizedStatus = (req.status || "").toLowerCase();
+                  const canReview =
+                    reviewableStatuses.includes(normalizedStatus);
+                  return (
+                    <TableRow key={req.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div>
+                            <div className="font-medium text-gray-900">
+                              {`${req.student?.firstName ?? ""} ${
+                                req.student?.lastName ?? ""
+                              }`.trim()}
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              {req.student?.email ?? req.student?.id}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {(() => {
-                        const studentId = req.studentId;
-                        const counts = studentId
-                          ? studentRequirementCounts.get(studentId)
-                          : null;
-                        if (!counts)
-                          return <span className="text-gray-400">-</span>;
-                        return (
-                          <div className="font-medium">
-                            <span className="text-green-600">
-                              {counts.approved}
-                            </span>
-                            <span className="text-gray-400">/</span>
-                            <span className="text-gray-600">
-                              {counts.total}
-                            </span>
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const studentId = req.studentId;
+                          const counts = studentId
+                            ? studentRequirementCounts.get(studentId)
+                            : null;
+                          if (!counts)
+                            return <span className="text-gray-400">-</span>;
+                          return (
+                            <div className="font-medium">
+                              <span className="text-green-600">
+                                {counts.approved}
+                              </span>
+                              <span className="text-gray-400">/</span>
+                              <span className="text-gray-600">
+                                {counts.total}
+                              </span>
+                            </div>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">{req.title}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="max-w-[220px]">
+                          <div
+                            className="text-sm font-medium truncate"
+                            title={req.fileName ?? undefined}
+                          >
+                            {req.fileName}
                           </div>
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-medium">{req.title}</div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="max-w-[220px]">
-                        <div
-                          className="text-sm font-medium truncate"
-                          title={req.fileName ?? undefined}
+                          <div className="text-xs text-gray-500">
+                            {humanizeBytes(req.fileSize)}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 text-sm text-gray-600">
+                          <Calendar className="w-4 h-4" />
+                          {formatDate(req.submittedDate || req.createdAt)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={getPriorityColor(req.priority)}
                         >
-                          {req.fileName}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {humanizeBytes(req.fileSize)}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1 text-sm text-gray-600">
-                        <Calendar className="w-4 h-4" />
-                        {formatDate(req.submittedDate || req.createdAt)}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={getPriorityColor(req.priority)}
-                      >
-                        {req.priority}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={getStatusColor(req.status)}
-                      >
-                        {req.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm">
-                              <MoreHorizontal className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => {
-                                const url = (req.fileUrl || "").startsWith(
-                                  "http"
-                                )
-                                  ? req.fileUrl
-                                  : `${process.env.NEXT_PUBLIC_API_URL || ""}${
-                                      req.fileUrl?.startsWith("/") ? "" : "/"
-                                    }${req.fileUrl || ""}`;
-                                window.open(url || undefined, "_blank");
-                              }}
-                            >
-                              <Download className="w-4 h-4 mr-2" />
-                              Download
-                            </DropdownMenuItem>
-                            {req.fileName && canPreview(req.fileName) && (
+                          {req.priority}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={getStatusColor(req.status)}
+                        >
+                          {req.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="sm">
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                onClick={() => handlePreview(req)}
+                                onClick={() => {
+                                  const url = resolveFileUrl(req.fileUrl);
+                                  if (!url) {
+                                    toast.error("File URL not available");
+                                    return;
+                                  }
+                                  window.open(url, "_blank");
+                                }}
                               >
-                                <Eye className="w-4 h-4 mr-2" />
-                                Preview
+                                <Download className="w-4 h-4 mr-2" />
+                                Download
                               </DropdownMenuItem>
-                            )}
-                            {req.status.toLowerCase() === "submitted" && (
-                              <>
-                                <DropdownMenuSeparator />
+                              {req.fileName && canPreview(req.fileName) && (
                                 <DropdownMenuItem
-                                  onClick={() => handleApprove(req.id)}
-                                  className="text-green-600"
+                                  onClick={() => handlePreview(req)}
                                 >
-                                  <CheckCircle className="w-4 h-4 mr-2" />
-                                  Approve
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  Preview
                                 </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    setSelectedRequirement(req);
-                                    setIsReviewDialogOpen(true);
-                                  }}
-                                  className="text-red-600"
-                                >
-                                  <XCircle className="w-4 h-4 mr-2" />
-                                  Return
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                              )}
+                              {canReview && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => handleApprove(req.id)}
+                                    className="text-green-600"
+                                  >
+                                    <CheckCircle className="w-4 h-4 mr-2" />
+                                    Approve
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setSelectedRequirement(req);
+                                      setIsReviewDialogOpen(true);
+                                    }}
+                                    className="text-red-600"
+                                  >
+                                    <XCircle className="w-4 h-4 mr-2" />
+                                    Return
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
 
-          {filteredRequirements.length === 0 && (
+          {filteredItems.length === 0 && (
             <div className="text-center py-8">
               <p className="text-gray-500">
-                No requirements found matching your criteria.
+                No submitted requirements found for review.
               </p>
             </div>
           )}
@@ -725,12 +773,12 @@ export default function RequirementsPage() {
             </Button>
             <Button
               onClick={() => {
-                const url = (previewFile?.fileUrl || "").startsWith("http")
-                  ? previewFile?.fileUrl
-                  : `${process.env.NEXT_PUBLIC_API_URL || ""}${
-                      previewFile?.fileUrl?.startsWith("/") ? "" : "/"
-                    }${previewFile?.fileUrl || ""}`;
-                window.open(url || undefined, "_blank");
+                const url = resolveFileUrl(previewFile?.fileUrl);
+                if (!url) {
+                  toast.error("File URL not available");
+                  return;
+                }
+                window.open(url, "_blank");
               }}
             >
               <Download className="w-4 h-4 mr-2" />

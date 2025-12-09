@@ -15,52 +15,32 @@ import { useAuth } from "@/hooks/auth/useAuth";
 import { useStudentsByTeacher } from "@/hooks/student/useStudent";
 import { useAttendance } from "@/hooks/attendance/useAttendance";
 import { useRequirements } from "@/hooks/requirement/useRequirement";
+import { useRequirementTemplates } from "@/hooks/requirement-template/useRequirementTemplate";
 import { useReports } from "@/hooks/report/useReport";
 import {
   Users,
   FileCheck,
   Clock,
-  Plus,
   MessageSquare,
   Settings,
   AlertTriangle,
   CheckCircle,
   MailPlus,
+  Info,
 } from "lucide-react";
 import { InstructorStatsCard } from "@/components/instructor-stats-card";
 import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  ChartLegend,
-  ChartLegendContent,
-  type ChartConfig,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  BarChart,
-  Bar,
-} from "@/components/ui/chart";
-
-const weeklyAttendanceChartConfig: ChartConfig = {
-  attendance: {
-    label: "Attendance %",
-    color: "#c026d3",
-  },
-  submissions: {
-    label: "Submissions",
-    color: "#0ea5e9",
-  },
-};
-
-const sectionPerformanceChartConfig: ChartConfig = {
-  completion: {
-    label: "Completion Rate %",
-    color: "#c026d3",
-  },
-};
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Progress } from "@/components/ui/progress";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 // Helper function to calculate expected attendance days
 function calculateExpectedAttendanceDays(
@@ -123,6 +103,11 @@ export default function InstructorDashboard() {
       page: 1,
       limit: 1000,
     });
+  const { data: templatesResp } = useRequirementTemplates({
+    page: 1,
+    limit: 1000,
+    status: "active",
+  });
 
   const students: any[] = useMemo(
     () => studentsResp?.data?.students ?? [],
@@ -187,6 +172,8 @@ export default function InstructorDashboard() {
     };
   }, [attendanceData, requirementsData, reportsData, students]);
 
+  const templatesCount = templatesResp?.requirementTemplates?.length ?? 0;
+
   const sectionsAgg = useMemo(() => {
     const map = new Map<
       string,
@@ -242,9 +229,17 @@ export default function InstructorDashboard() {
       }
 
       // Requirement completion for this student
+      // Only count requirements that have been submitted (have files)
       const reqs: any[] = student?.requirements ?? [];
-      bucket.totalReqs += reqs.length;
-      bucket.approvedReqs += reqs.filter((r) => r.status === "approved").length;
+      const submittedReqs = reqs.filter((r) => !!(r.fileUrl || r.fileName));
+      const approved = submittedReqs.filter(
+        (r) => r.status?.toLowerCase() === "approved"
+      ).length;
+      // Use templatesCount as denominator if available, otherwise use submitted requirements count
+      const denom =
+        templatesCount > 0 ? templatesCount : submittedReqs.length || 1;
+      bucket.totalReqs += denom;
+      bucket.approvedReqs += Math.min(approved, denom);
     }
 
     return Array.from(map.values()).map((b) => {
@@ -262,7 +257,7 @@ export default function InstructorDashboard() {
         completionRate,
       };
     });
-  }, [students]);
+  }, [students, templatesCount]);
 
   const stats = useMemo(() => {
     const totalStudents = students.length;
@@ -297,12 +292,20 @@ export default function InstructorDashboard() {
         : 0;
 
     // Overall requirement completion across all students
+    // Only count requirements that have been submitted (have files)
     let totalReqs = 0;
     let approvedReqs = 0;
     for (const student of students) {
       const reqs: any[] = student?.requirements ?? [];
-      totalReqs += reqs.length;
-      approvedReqs += reqs.filter((r) => r.status === "approved").length;
+      const submittedReqs = reqs.filter((r) => !!(r.fileUrl || r.fileName));
+      const approved = submittedReqs.filter(
+        (r) => r.status?.toLowerCase() === "approved"
+      ).length;
+      // Use templatesCount as denominator if available, otherwise use submitted requirements count
+      const denom =
+        templatesCount > 0 ? templatesCount : submittedReqs.length || 1;
+      totalReqs += denom;
+      approvedReqs += Math.min(approved, denom);
     }
     const averageCompletion =
       totalReqs > 0 ? Math.round((approvedReqs / totalReqs) * 100) : 0;
@@ -376,6 +379,37 @@ export default function InstructorDashboard() {
     // Calculate students missing today (expected but haven't clocked in)
     const studentsMissingToday = studentsWithPracticum - studentsPresentToday;
 
+    // Calculate requirement breakdown for detailed view
+    let totalRequirements = 0;
+    let approvedRequirements = 0;
+    let submittedRequirements = 0;
+    let pendingRequirements = 0;
+    let rejectedRequirements = 0;
+
+    for (const student of students) {
+      const reqs: any[] = student?.requirements ?? [];
+      const submittedReqs = reqs.filter((r) => !!(r.fileUrl || r.fileName));
+
+      // Count by status (only requirements with files)
+      approvedRequirements += submittedReqs.filter(
+        (r) => r.status?.toLowerCase() === "approved"
+      ).length;
+      submittedRequirements += submittedReqs.filter(
+        (r) => r.status?.toLowerCase() === "submitted"
+      ).length;
+      pendingRequirements += submittedReqs.filter(
+        (r) => r.status?.toLowerCase() === "pending"
+      ).length;
+      rejectedRequirements += submittedReqs.filter(
+        (r) => r.status?.toLowerCase() === "rejected"
+      ).length;
+
+      // Count total expected requirements (templates count per student)
+      const denom =
+        templatesCount > 0 ? templatesCount : submittedReqs.length || 1;
+      totalRequirements += denom;
+    }
+
     return {
       totalStudents,
       sectionsCount,
@@ -386,68 +420,91 @@ export default function InstructorDashboard() {
       dailyAttendanceCount: studentsPresentToday,
       dailyAttendanceTotal: studentsWithPracticum,
       studentsMissingToday,
+      requirementBreakdown: {
+        total: totalRequirements,
+        approved: approvedRequirements,
+        submitted: submittedRequirements,
+        pending: pendingRequirements,
+        rejected: rejectedRequirements,
+        templatesCount,
+      },
     };
-  }, [students, sectionsAgg, allWeeklyReportsData]);
+  }, [students, sectionsAgg, allWeeklyReportsData, templatesCount]);
 
-  const weeklyAttendanceData = useMemo(() => {
-    // Build last 8 weeks series from attendance record dates
-    const now = new Date();
-    const weeks: {
-      weekStart: string;
-      attendance: number;
-      submissions: number;
-    }[] = [];
+  // Students needing attention
+  const studentsNeedingAttention = useMemo(() => {
+    const issues: Array<{
+      studentId: string;
+      studentName: string;
+      sectionName: string;
+      issues: string[];
+      attendanceRate: number;
+      missingRequirements: number;
+    }> = [];
 
-    function startOfWeek(d: Date) {
-      const date = new Date(
-        Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
-      );
-      const day = date.getUTCDay() || 7; // Monday-start ISO-ish
-      if (day !== 1) date.setUTCDate(date.getUTCDate() - (day - 1));
-      date.setUTCHours(0, 0, 0, 0);
-      return date;
-    }
-
-    // Pre-index attendance per weekStart (ISO)
-    const perWeek = new Map<string, { total: number; presentish: number }>();
     for (const student of students) {
-      const records: any[] = student?.attendanceRecords ?? [];
-      for (const r of records) {
-        const dt = new Date(r.date);
-        const wk = startOfWeek(dt).toISOString().slice(0, 10);
-        if (!perWeek.has(wk)) perWeek.set(wk, { total: 0, presentish: 0 });
-        const b = perWeek.get(wk)!;
-        b.total += 1;
-        if (["present", "late", "excused"].includes(r.status))
-          b.presentish += 1;
+      const enrollment = student?.enrollments?.[0];
+      const section = enrollment?.section;
+      const sectionName = section?.name || "No Section";
+      const studentIssues: string[] = [];
+
+      // Check attendance
+      const practicum = student?.practicums?.[0];
+      const agency = practicum?.agency;
+      const expectedDays = calculateExpectedAttendanceDays(
+        practicum?.startDate,
+        practicum?.endDate,
+        agency?.operatingDays
+      );
+
+      let attendanceRate = 0;
+      if (expectedDays > 0) {
+        const records: any[] = student?.attendanceRecords ?? [];
+        const presentish = records.filter((r) =>
+          ["present", "late", "excused"].includes(r.status)
+        ).length;
+        attendanceRate = Math.round((presentish / expectedDays) * 100);
+      }
+
+      if (attendanceRate < 80 && expectedDays > 0) {
+        studentIssues.push(`Low attendance (${attendanceRate}%)`);
+      }
+
+      // Check missing requirements
+      const reqs: any[] = student?.requirements ?? [];
+      const submittedReqs = reqs.filter((r) => !!(r.fileUrl || r.fileName));
+      const expectedReqs =
+        templatesCount > 0 ? templatesCount : submittedReqs.length || 0;
+      const missingReqs = expectedReqs - submittedReqs.length;
+
+      if (missingReqs > 0) {
+        studentIssues.push(
+          `${missingReqs} missing requirement${missingReqs > 1 ? "s" : ""}`
+        );
+      }
+
+      if (studentIssues.length > 0) {
+        issues.push({
+          studentId: student.id,
+          studentName:
+            `${student.firstName || ""} ${student.lastName || ""}`.trim() ||
+            "Unknown",
+          sectionName,
+          issues: studentIssues,
+          attendanceRate,
+          missingRequirements: missingReqs,
+        });
       }
     }
 
-    for (let i = 7; i >= 0; i--) {
-      const d = new Date(now);
-      d.setUTCDate(d.getUTCDate() - i * 7);
-      const wk = startOfWeek(d).toISOString().slice(0, 10);
-      const agg = perWeek.get(wk);
-      const attendance =
-        agg && agg.total > 0
-          ? Math.round((agg.presentish / agg.total) * 100)
-          : 0;
-      weeks.push({ weekStart: wk, attendance, submissions: 0 });
-    }
-
-    return weeks.map((w, idx) => ({
-      week: `W${idx + 1}`,
-      attendance: w.attendance,
-      submissions: w.submissions,
-    }));
-  }, [students]);
-
-  const sectionPerformanceData = useMemo(() => {
-    return sectionsAgg.map((s) => ({
-      section: s.name,
-      completion: s.completionRate,
-    }));
-  }, [sectionsAgg]);
+    // Sort by priority: first by number of issues, then by attendance rate
+    return issues.sort((a, b) => {
+      if (b.issues.length !== a.issues.length) {
+        return b.issues.length - a.issues.length;
+      }
+      return a.attendanceRate - b.attendanceRate;
+    });
+  }, [students, templatesCount]);
 
   const handleQuickAction = (action: string) => {
     switch (action) {
@@ -542,71 +599,665 @@ export default function InstructorDashboard() {
           />
         </div>
 
-        {/* Analytics Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Actionable Content Cards */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Requirement Status Overview */}
           <Card className="border border-primary-200 shadow-sm">
             <CardHeader>
-              <CardTitle>Weekly Attendance Trends</CardTitle>
+              <CardTitle>Requirement Status</CardTitle>
               <CardDescription>
-                Attendance rates and submission counts over the past 8 weeks
+                Overview of requirement submissions and approvals
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <ChartContainer
-                config={weeklyAttendanceChartConfig}
-                className="h-[300px] w-full"
+            <CardContent className="space-y-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">Approved</span>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button className="text-muted-foreground hover:text-foreground">
+                          <Info className="h-4 w-4" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-80">
+                        <div className="space-y-2 text-sm">
+                          <p className="font-semibold">
+                            How is this calculated?
+                          </p>
+                          <p className="text-muted-foreground">
+                            Approved percentage = (Number of approved
+                            requirements / Total expected requirements) × 100%
+                          </p>
+                          <p className="text-muted-foreground">
+                            Only requirements with submitted files are counted.
+                            Total expected ={" "}
+                            {stats.requirementBreakdown?.templatesCount || 0}{" "}
+                            templates × {stats.totalStudents} students ={" "}
+                            {stats.requirementBreakdown?.total || 0}{" "}
+                            requirements.
+                          </p>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-semibold">
+                      {stats.requirementBreakdown?.approved || 0}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {stats.requirementBreakdown?.total
+                        ? Math.round(
+                            (stats.requirementBreakdown.approved /
+                              stats.requirementBreakdown.total) *
+                              100 || 0
+                          )
+                        : 0}
+                      %
+                    </div>
+                  </div>
+                </div>
+                <Progress
+                  value={
+                    stats.requirementBreakdown?.total
+                      ? (stats.requirementBreakdown.approved /
+                          stats.requirementBreakdown.total) *
+                          100 || 0
+                      : 0
+                  }
+                  className="h-2"
+                />
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">Pending</span>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button className="text-muted-foreground hover:text-foreground">
+                          <Info className="h-4 w-4" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-80">
+                        <div className="space-y-2 text-sm">
+                          <p className="font-semibold">
+                            How is this calculated?
+                          </p>
+                          <p className="text-muted-foreground">
+                            Pending percentage = (Number of pending requirements
+                            / Total expected requirements) × 100%
+                          </p>
+                          <p className="text-muted-foreground">
+                            Only requirements with submitted files that are
+                            awaiting approval are counted. Total expected ={" "}
+                            {stats.requirementBreakdown?.templatesCount || 0}{" "}
+                            templates × {stats.totalStudents} students ={" "}
+                            {stats.requirementBreakdown?.total || 0}{" "}
+                            requirements.
+                          </p>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-semibold">
+                      {stats.requirementBreakdown?.pending || 0}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {stats.requirementBreakdown?.total
+                        ? Math.round(
+                            (stats.requirementBreakdown.pending /
+                              stats.requirementBreakdown.total) *
+                              100 || 0
+                          )
+                        : 0}
+                      %
+                    </div>
+                  </div>
+                </div>
+                <Progress
+                  value={
+                    stats.requirementBreakdown?.total
+                      ? (stats.requirementBreakdown.pending /
+                          stats.requirementBreakdown.total) *
+                          100 || 0
+                      : 0
+                  }
+                  className="h-2"
+                />
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">Submitted</span>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button className="text-muted-foreground hover:text-foreground">
+                          <Info className="h-4 w-4" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-80">
+                        <div className="space-y-2 text-sm">
+                          <p className="font-semibold">
+                            How is this calculated?
+                          </p>
+                          <p className="text-muted-foreground">
+                            Submitted percentage = (Number of submitted
+                            requirements / Total expected requirements) × 100%
+                          </p>
+                          <p className="text-muted-foreground">
+                            Only requirements with submitted files are counted.
+                            Total expected ={" "}
+                            {stats.requirementBreakdown?.templatesCount || 0}{" "}
+                            templates × {stats.totalStudents} students ={" "}
+                            {stats.requirementBreakdown?.total || 0}{" "}
+                            requirements.
+                          </p>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-semibold">
+                      {stats.requirementBreakdown?.submitted || 0}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {stats.requirementBreakdown?.total
+                        ? Math.round(
+                            (stats.requirementBreakdown.submitted /
+                              stats.requirementBreakdown.total) *
+                              100 || 0
+                          )
+                        : 0}
+                      %
+                    </div>
+                  </div>
+                </div>
+                <Progress
+                  value={
+                    stats.requirementBreakdown?.total
+                      ? (stats.requirementBreakdown.submitted /
+                          stats.requirementBreakdown.total) *
+                          100 || 0
+                      : 0
+                  }
+                  className="h-2"
+                />
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">Rejected</span>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button className="text-muted-foreground hover:text-foreground">
+                          <Info className="h-4 w-4" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-80">
+                        <div className="space-y-2 text-sm">
+                          <p className="font-semibold">
+                            How is this calculated?
+                          </p>
+                          <p className="text-muted-foreground">
+                            Rejected percentage = (Number of rejected
+                            requirements / Total expected requirements) × 100%
+                          </p>
+                          <p className="text-muted-foreground">
+                            Only requirements with submitted files that were
+                            rejected are counted. Total expected ={" "}
+                            {stats.requirementBreakdown?.templatesCount || 0}{" "}
+                            templates × {stats.totalStudents} students ={" "}
+                            {stats.requirementBreakdown?.total || 0}{" "}
+                            requirements.
+                          </p>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-semibold">
+                      {stats.requirementBreakdown?.rejected || 0}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {stats.requirementBreakdown?.total
+                        ? Math.round(
+                            (stats.requirementBreakdown.rejected /
+                              stats.requirementBreakdown.total) *
+                              100 || 0
+                          )
+                        : 0}
+                      %
+                    </div>
+                  </div>
+                </div>
+                <Progress
+                  value={
+                    stats.requirementBreakdown?.total
+                      ? (stats.requirementBreakdown.rejected /
+                          stats.requirementBreakdown.total) *
+                          100 || 0
+                      : 0
+                  }
+                  className="h-2"
+                />
+              </div>
+              <Button
+                variant="outline"
+                className="w-full border border-gray-300 text-gray-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50"
+                onClick={() =>
+                  router.push("/dashboard/instructor/requirements")
+                }
               >
-                <LineChart data={weeklyAttendanceData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="week" />
-                  <YAxis />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <ChartLegend content={<ChartLegendContent />} />
-                  <Line
-                    type="monotone"
-                    dataKey="attendance"
-                    stroke="var(--color-attendance)"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="submissions"
-                    stroke="var(--color-submissions)"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                </LineChart>
-              </ChartContainer>
+                View All Requirements
+              </Button>
             </CardContent>
           </Card>
 
+          {/* Students Needing Attention */}
           <Card className="border border-primary-200 shadow-sm">
             <CardHeader>
-              <CardTitle>Section Performance</CardTitle>
-              <CardDescription>Completion rates by section</CardDescription>
+              <CardTitle>Students Needing Attention</CardTitle>
+              <CardDescription>
+                Students with low attendance or missing requirements
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <ChartContainer
-                config={sectionPerformanceChartConfig}
-                className="h-[300px] w-full"
-              >
-                <BarChart data={sectionPerformanceData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="section" />
-                  <YAxis />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <ChartLegend content={<ChartLegendContent />} />
-                  <Bar
-                    dataKey="completion"
-                    fill="var(--color-completion)"
-                    radius={[6, 6, 0, 0]}
+              {studentsNeedingAttention.length === 0 ? (
+                <div className="py-8 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    All students are on track!
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                  {studentsNeedingAttention.slice(0, 5).map((student) => (
+                    <div
+                      key={student.studentId}
+                      className="border border-primary-200 rounded-lg p-3 hover:bg-primary-50/50 transition-colors"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <p className="font-medium text-sm">
+                            {student.studentName}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {student.sectionName}
+                          </p>
+                        </div>
+                        <Badge
+                          variant="secondary"
+                          className="bg-yellow-50 text-yellow-700"
+                        >
+                          {student.issues.length} issue
+                          {student.issues.length > 1 ? "s" : ""}
+                        </Badge>
+                      </div>
+                      <ul className="space-y-1">
+                        {student.issues.map((issue, idx) => {
+                          const isAttendanceIssue =
+                            issue.includes("attendance");
+                          const isRequirementIssue =
+                            issue.includes("requirement");
+                          return (
+                            <li
+                              key={idx}
+                              className="text-xs text-muted-foreground flex items-center gap-1"
+                            >
+                              <span className="h-1 w-1 rounded-full bg-primary-600" />
+                              <span>{issue}</span>
+                              {(isAttendanceIssue || isRequirementIssue) && (
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <button className="text-muted-foreground hover:text-foreground ml-1">
+                                      <Info className="h-3 w-3" />
+                                    </button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-80">
+                                    <div className="space-y-2 text-sm">
+                                      <p className="font-semibold">
+                                        How is this calculated?
+                                      </p>
+                                      {isAttendanceIssue && (
+                                        <>
+                                          <p className="text-muted-foreground">
+                                            Attendance Rate = (Present days /
+                                            Expected days) × 100%
+                                          </p>
+                                          <p className="text-muted-foreground">
+                                            Present days include: Present, Late,
+                                            and Excused statuses. Expected days
+                                            are calculated based on the
+                                            practicum start/end dates and agency
+                                            operating days.
+                                          </p>
+                                        </>
+                                      )}
+                                      {isRequirementIssue && (
+                                        <>
+                                          <p className="text-muted-foreground">
+                                            Missing Requirements = Expected
+                                            requirements - Submitted
+                                            requirements
+                                          </p>
+                                          <p className="text-muted-foreground">
+                                            Expected requirements = Number of
+                                            active requirement templates (
+                                            {templatesCount}). Only requirements
+                                            with submitted files are counted.
+                                          </p>
+                                        </>
+                                      )}
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="mt-2 h-7 text-xs w-full"
+                        onClick={() =>
+                          router.push(
+                            `/dashboard/instructor/students?search=${encodeURIComponent(
+                              student.studentName
+                            )}`
+                          )
+                        }
+                      >
+                        View Details
+                      </Button>
+                    </div>
+                  ))}
+                  {studentsNeedingAttention.length > 5 && (
+                    <Button
+                      variant="outline"
+                      className="w-full border border-gray-300 text-gray-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50"
+                      onClick={() =>
+                        router.push("/dashboard/instructor/students")
+                      }
+                    >
+                      View All ({studentsNeedingAttention.length} students)
+                    </Button>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Quick Insights */}
+          <Card className="border border-primary-200 shadow-sm">
+            <CardHeader>
+              <CardTitle>Quick Insights</CardTitle>
+              <CardDescription>Key metrics at a glance</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-4">
+                <div className="border border-primary-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">
+                        Today's Attendance
+                      </span>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button className="text-muted-foreground hover:text-foreground">
+                            <Info className="h-4 w-4" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80">
+                          <div className="space-y-2 text-sm">
+                            <p className="font-semibold">
+                              How is this calculated?
+                            </p>
+                            <p className="text-muted-foreground">
+                              Today's Attendance = (Students present today /
+                              Students with practicums) × 100%
+                            </p>
+                            <p className="text-muted-foreground">
+                              Only students with active practicums are counted.
+                              A student is considered present if they have an
+                              attendance record for today with status: Present,
+                              Late, or Excused.
+                            </p>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <Badge
+                      variant="secondary"
+                      className={
+                        stats.dailyAttendancePercentage >= 80
+                          ? "bg-green-50 text-green-700"
+                          : stats.dailyAttendancePercentage >= 60
+                          ? "bg-yellow-50 text-yellow-700"
+                          : "bg-red-50 text-red-700"
+                      }
+                    >
+                      {stats.dailyAttendancePercentage}%
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {stats.dailyAttendanceCount} of {stats.dailyAttendanceTotal}{" "}
+                    students present
+                  </p>
+                  <Progress
+                    value={stats.dailyAttendancePercentage}
+                    className="mt-2 h-2"
                   />
-                </BarChart>
-              </ChartContainer>
+                </div>
+
+                <div className="border border-primary-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">
+                        On-Time Submissions
+                      </span>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button className="text-muted-foreground hover:text-foreground">
+                            <Info className="h-4 w-4" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80">
+                          <div className="space-y-2 text-sm">
+                            <p className="font-semibold">
+                              How is this calculated?
+                            </p>
+                            <p className="text-muted-foreground">
+                              On-Time Submission Rate = (Reports submitted on or
+                              before due date / Total weekly reports) × 100%
+                            </p>
+                            <p className="text-muted-foreground">
+                              Only weekly reports from your students are
+                              counted. A report is considered on-time if the
+                              submitted date is on or before the due date.
+                            </p>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <Badge
+                      variant="secondary"
+                      className={
+                        stats.onTimeSubmissionRate >= 80
+                          ? "bg-green-50 text-green-700"
+                          : stats.onTimeSubmissionRate >= 60
+                          ? "bg-yellow-50 text-yellow-700"
+                          : "bg-red-50 text-red-700"
+                      }
+                    >
+                      {stats.onTimeSubmissionRate}%
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Weekly reports submitted on time
+                  </p>
+                  <Progress
+                    value={stats.onTimeSubmissionRate}
+                    className="mt-2 h-2"
+                  />
+                </div>
+
+                <div className="border border-primary-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">
+                        Overall Completion
+                      </span>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button className="text-muted-foreground hover:text-foreground">
+                            <Info className="h-4 w-4" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80">
+                          <div className="space-y-2 text-sm">
+                            <p className="font-semibold">
+                              How is this calculated?
+                            </p>
+                            <p className="text-muted-foreground">
+                              Overall Completion = (Total approved requirements
+                              / Total expected requirements) × 100%
+                            </p>
+                            <p className="text-muted-foreground">
+                              Total expected ={" "}
+                              {stats.requirementBreakdown?.templatesCount || 0}{" "}
+                              templates × {stats.totalStudents} students ={" "}
+                              {stats.requirementBreakdown?.total || 0}{" "}
+                              requirements. Only requirements with submitted
+                              files are counted.
+                            </p>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <Badge
+                      variant="secondary"
+                      className={
+                        stats.averageCompletion >= 80
+                          ? "bg-green-50 text-green-700"
+                          : stats.averageCompletion >= 60
+                          ? "bg-yellow-50 text-yellow-700"
+                          : "bg-red-50 text-red-700"
+                      }
+                    >
+                      {stats.averageCompletion}%
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Requirements completion rate
+                  </p>
+                  <Progress
+                    value={stats.averageCompletion}
+                    className="mt-2 h-2"
+                  />
+                </div>
+
+                <div className="border border-primary-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">
+                        Average Attendance
+                      </span>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button className="text-muted-foreground hover:text-foreground">
+                            <Info className="h-4 w-4" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80">
+                          <div className="space-y-2 text-sm">
+                            <p className="font-semibold">
+                              How is this calculated?
+                            </p>
+                            <p className="text-muted-foreground">
+                              Average Attendance = Average of all individual
+                              student attendance rates
+                            </p>
+                            <p className="text-muted-foreground">
+                              Each student's attendance rate = (Present days /
+                              Expected days) × 100%. Present days include:
+                              Present, Late, and Excused statuses. Expected days
+                              are calculated based on practicum start/end dates
+                              and agency operating days.
+                            </p>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <Badge
+                      variant="secondary"
+                      className={
+                        stats.averageAttendance >= 80
+                          ? "bg-green-50 text-green-700"
+                          : stats.averageAttendance >= 60
+                          ? "bg-yellow-50 text-yellow-700"
+                          : "bg-red-50 text-red-700"
+                      }
+                    >
+                      {stats.averageAttendance}%
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Across all students
+                  </p>
+                  <Progress
+                    value={stats.averageAttendance}
+                    className="mt-2 h-2"
+                  />
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
+
+        {/* Requirements Breakdown - Collapsible */}
+        <Card className="border border-primary-200 shadow-sm">
+          <Accordion type="single" collapsible className="w-full">
+            <AccordionItem
+              value="requirements-breakdown"
+              className="border-none"
+            >
+              <AccordionTrigger className="px-6 py-4 hover:no-underline">
+                <div className="flex items-center gap-2">
+                  <Info className="h-5 w-5 text-primary-600" />
+                  <CardTitle className="text-lg">
+                    How is the completion rate calculated?
+                  </CardTitle>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6">
+                <div className="space-y-2 text-sm text-gray-700">
+                  <div>
+                    <strong>Formula:</strong> Completion Rate = (Total Approved
+                    Requirements / Total Expected Requirements) × 100%
+                  </div>
+                  <div>
+                    <strong>Total Expected:</strong> Each student must complete
+                    all {stats.requirementBreakdown?.templatesCount || 0}{" "}
+                    requirement templates. With {stats.totalStudents}{" "}
+                    student(s), total expected ={" "}
+                    {stats.requirementBreakdown?.templatesCount || 0} templates
+                    × {stats.totalStudents} students ={" "}
+                    {stats.requirementBreakdown?.total || 0} requirements
+                  </div>
+                  <div>
+                    <strong>Total Approved:</strong> Sum of all approved
+                    requirements across all students ={" "}
+                    {stats.requirementBreakdown?.approved || 0} requirements
+                  </div>
+                  <div>
+                    <strong>Calculation:</strong> (
+                    {stats.requirementBreakdown?.approved || 0} /{" "}
+                    {stats.requirementBreakdown?.total || 1}) × 100% ={" "}
+                    <strong>{stats.averageCompletion}%</strong>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </Card>
 
         {/* Quick Actions */}
         <Card className="border border-primary-200 shadow-sm">
@@ -617,15 +1268,7 @@ export default function InstructorDashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <Button
-                variant="outline"
-                className="h-20 flex-col gap-2 border border-primary-500 bg-primary-50 text-primary-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50"
-                onClick={() => handleQuickAction("add-student")}
-              >
-                <Plus className="w-6 h-6" />
-                <span>Add Student</span>
-              </Button>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-2">
               <Button
                 variant="outline"
                 className="h-20 flex-col gap-2 border border-gray-300 text-gray-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50"

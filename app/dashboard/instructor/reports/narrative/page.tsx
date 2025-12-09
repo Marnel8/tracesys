@@ -579,14 +579,6 @@ export default function NarrativeReportsPage() {
               </TableBody>
             </Table>
           </div>
-
-          {!isLoading && narrativeReports.length === 0 && (
-            <div className="text-center py-8">
-              <p className="text-gray-500">
-                No narrative reports found matching your criteria.
-              </p>
-            </div>
-          )}
         </CardContent>
       </Card>
     </div>

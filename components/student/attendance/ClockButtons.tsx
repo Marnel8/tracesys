@@ -11,6 +11,8 @@ type Props = {
 	disableClockOut: boolean;
 	isClockingOut: boolean;
 	currentSession?: "morning" | "afternoon" | null;
+	clockInSession?: "morning" | "afternoon" | null;
+	clockOutSession?: "morning" | "afternoon" | null;
 };
 
 const ClockButtons = ({
@@ -20,8 +22,16 @@ const ClockButtons = ({
 	disableClockOut,
 	isClockingOut,
 	currentSession,
+	clockInSession,
+	clockOutSession,
 }: Props) => {
-	const sessionLabel = currentSession === "morning" ? "Morning" : currentSession === "afternoon" ? "Afternoon" : "";
+	// Use separate session labels for clock-in and clock-out
+	const clockInLabel = clockInSession === "morning" ? "Morning" : clockInSession === "afternoon" ? "Afternoon" : "";
+	const clockOutLabel = clockOutSession === "morning" ? "Morning" : clockOutSession === "afternoon" ? "Afternoon" : "";
+	// Fallback to currentSession if specific session not provided (for backward compatibility)
+	const fallbackLabel = currentSession === "morning" ? "Morning" : currentSession === "afternoon" ? "Afternoon" : "";
+	const finalClockInLabel = clockInLabel || fallbackLabel;
+	const finalClockOutLabel = clockOutLabel || fallbackLabel;
 	
 	return (
 		<div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -31,7 +41,7 @@ const ClockButtons = ({
 				className="bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm h-10 sm:h-11"
 			>
 				<LogIn className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-				Clock In {sessionLabel ? `(${sessionLabel})` : ""}
+				Clock In {finalClockInLabel ? `(${finalClockInLabel})` : ""}
 			</Button>
 
 			<Button
@@ -47,7 +57,7 @@ const ClockButtons = ({
 				) : (
 					<>
 						<LogOut className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-						Clock Out {sessionLabel ? `(${sessionLabel})` : ""}
+						Clock Out {finalClockOutLabel ? `(${finalClockOutLabel})` : ""}
 					</>
 				)}
 			</Button>

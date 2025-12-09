@@ -68,6 +68,8 @@ export default function AttendancePage() {
   const [isFaceModelLoaded, setIsFaceModelLoaded] = useState(false);
   const [isLoadingFaceModels, setIsLoadingFaceModels] = useState(false);
   const [isFaceDetected, setIsFaceDetected] = useState(false);
+  const [wasCapturedWithFaceDetection, setWasCapturedWithFaceDetection] =
+    useState(false);
   const detectionIntervalRef = useRef<number | null>(null);
   const detectionRafRef = useRef<number | null>(null);
   const [showClockOutConfirm, setShowClockOutConfirm] = useState(false);
@@ -211,6 +213,83 @@ export default function AttendancePage() {
     agencyClosingTime,
     currentTime,
   ]);
+
+  // Compute available session for clock-in based on completed sessions
+  const availableSessionForClockIn = useMemo(() => {
+    const morningComplete =
+      todayAttendance?.morningTimeIn && todayAttendance?.morningTimeOut;
+    const afternoonComplete =
+      todayAttendance?.afternoonTimeIn && todayAttendance?.afternoonTimeOut;
+    const morningInProgress =
+      todayAttendance?.morningTimeIn && !todayAttendance?.morningTimeOut;
+    const afternoonInProgress =
+      todayAttendance?.afternoonTimeIn && !todayAttendance?.afternoonTimeOut;
+    const morningStarted = !!todayAttendance?.morningTimeIn;
+    const afternoonStarted = !!todayAttendance?.afternoonTimeIn;
+
+    // If both sessions are complete, no session available for clock-in
+    if (morningComplete && afternoonComplete) {
+      return null;
+    }
+
+    // If morning is complete and afternoon hasn't started, allow afternoon clock-in
+    if (morningComplete && !afternoonStarted) {
+      return "afternoon";
+    }
+
+    // If afternoon is complete and morning hasn't started, allow morning clock-in
+    if (afternoonComplete && !morningStarted) {
+      return "morning";
+    }
+
+    // If morning is in progress but afternoon hasn't started, allow afternoon clock-in
+    if (morningInProgress && !afternoonStarted) {
+      return "afternoon";
+    }
+
+    // If afternoon is in progress but morning hasn't started, allow morning clock-in
+    if (afternoonInProgress && !morningStarted) {
+      return "morning";
+    }
+
+    // If both sessions are in progress or one is complete and the other is in progress, no clock-in available
+    if (
+      (morningInProgress && afternoonInProgress) ||
+      (morningComplete && afternoonInProgress) ||
+      (afternoonComplete && morningInProgress)
+    ) {
+      return null;
+    }
+
+    // If neither session has started, use the time-based current session
+    if (!morningStarted && !afternoonStarted) {
+      return currentSession;
+    }
+
+    // Default: no session available
+    return null;
+  }, [todayAttendance, currentSession]);
+
+  // Compute available session for clock-out based on in-progress sessions
+  const availableSessionForClockOut = useMemo(() => {
+    const morningInProgress =
+      todayAttendance?.morningTimeIn && !todayAttendance?.morningTimeOut;
+    const afternoonInProgress =
+      todayAttendance?.afternoonTimeIn && !todayAttendance?.afternoonTimeOut;
+
+    // If afternoon is in progress, allow afternoon clock-out
+    if (afternoonInProgress) {
+      return "afternoon";
+    }
+
+    // If morning is in progress, allow morning clock-out
+    if (morningInProgress) {
+      return "morning";
+    }
+
+    // No session in progress
+    return null;
+  }, [todayAttendance]);
 
   // Attendance hooks
   const clockInMutation = useClockIn();
@@ -590,9 +669,11 @@ export default function AttendancePage() {
 
     stopFaceDetection();
     if (!faceApiModule) return;
+    // Increased scoreThreshold from 0.3 to 0.5 for more strict face detection
+    // This helps prevent false positives when face is covered or partially obscured
     const options = new faceApiModule.TinyFaceDetectorOptions({
       inputSize: 320,
-      scoreThreshold: 0.3,
+      scoreThreshold: 0.5, // More strict threshold to reduce false positives
     });
 
     const tick = async () => {
@@ -602,7 +683,26 @@ export default function AttendancePage() {
         if (video.readyState >= 2) {
           const result = await faceApiModule!.detectSingleFace(video, options);
           if (result) {
+            // Additional validation: check detection score/confidence
+            // Higher score means more confident detection
+            const detectionScore = result.score || 0;
+            // Require minimum confidence score of 0.5 (already filtered by threshold, but double-check)
+            if (detectionScore < 0.5) {
+              setIsFaceDetected(false);
+              return;
+            }
+
             const box = result.box;
+            // Validate face size - ensure it's not too small (likely a false positive)
+            const faceArea = box.width * box.height;
+            const videoArea = video.videoWidth * video.videoHeight;
+            const faceAreaRatio = faceArea / videoArea;
+            // Require face to be at least 5% of video area to be considered valid
+            if (faceAreaRatio < 0.05) {
+              setIsFaceDetected(false);
+              return;
+            }
+
             const container = containerRef.current;
             const circleEl = overlayCircleRef.current;
             if (container && circleEl) {
@@ -627,6 +727,7 @@ export default function AttendancePage() {
                 faceCenterY - circleCenterY
               );
 
+              // Face must be properly centered and within the circle
               const inside = centerDist + faceHalfDiag <= radius;
               setIsFaceDetected(inside);
             } else {
@@ -712,6 +813,28 @@ export default function AttendancePage() {
   };
 
   const capturePhoto = () => {
+    // Validate that face is detected before allowing capture
+    if (!isFaceDetected) {
+      toast({
+        variant: "destructive",
+        title: "Face not detected",
+        description:
+          "Face must be detected before capturing. Please position your face properly inside the circle.",
+      });
+      return;
+    }
+
+    // Additional validation: ensure face model is loaded and detection is active
+    if (!isFaceModelLoaded || isLoadingFaceModels) {
+      toast({
+        variant: "destructive",
+        title: "Face detection not ready",
+        description:
+          "Face detection model is still loading. Please wait and try again.",
+      });
+      return;
+    }
+
     if (videoRef.current && canvasRef.current) {
       const canvas = canvasRef.current;
       const video = videoRef.current;
@@ -724,6 +847,8 @@ export default function AttendancePage() {
         context.drawImage(video, 0, 0);
         const imageData = canvas.toDataURL("image/png");
         setCapturedImage(imageData);
+        // Mark that this image was captured with face detection active
+        setWasCapturedWithFaceDetection(isFaceDetected && isFaceModelLoaded);
 
         // Stop camera
         const stream = video.srcObject as MediaStream;
@@ -768,9 +893,19 @@ export default function AttendancePage() {
       return;
     }
 
-    // Check if already clocked in for this session
+    // Check if already clocked in for the available session
+    if (!availableSessionForClockIn) {
+      toast({
+        variant: "destructive",
+        title: "No session available",
+        description:
+          "All sessions for today have been completed or are not available.",
+      });
+      return;
+    }
+
     if (
-      currentSession === "morning" &&
+      availableSessionForClockIn === "morning" &&
       todayAttendance?.morningTimeIn &&
       !todayAttendance?.morningTimeOut
     ) {
@@ -784,7 +919,7 @@ export default function AttendancePage() {
     }
 
     if (
-      currentSession === "afternoon" &&
+      availableSessionForClockIn === "afternoon" &&
       todayAttendance?.afternoonTimeIn &&
       !todayAttendance?.afternoonTimeOut
     ) {
@@ -809,6 +944,20 @@ export default function AttendancePage() {
         title: "Selfie required",
         description: "Take a selfie to complete clock in.",
       });
+      return;
+    }
+
+    // Safety check: ensure image was captured with face detection active
+    if (!wasCapturedWithFaceDetection) {
+      toast({
+        variant: "destructive",
+        title: "Invalid capture",
+        description:
+          "The photo was not captured with face detection active. Please retake the photo with your face properly detected.",
+      });
+      // Reset captured image to force retake
+      setCapturedImage(null);
+      setWasCapturedWithFaceDetection(false);
       return;
     }
 
@@ -838,7 +987,7 @@ export default function AttendancePage() {
 
       // Determine session type and if late
       const now = new Date();
-      const sessionType = currentSession || "morning";
+      const sessionType = availableSessionForClockIn || "morning";
 
       // Check if late based on opening time or lunch end time
       let isLate = false;
@@ -872,6 +1021,7 @@ export default function AttendancePage() {
 
       // Reset camera state
       setCapturedImage(null);
+      setWasCapturedWithFaceDetection(false);
       setShowCamera(false);
       setIsClockingIn(false);
     } catch (error) {
@@ -911,6 +1061,7 @@ export default function AttendancePage() {
     stopFaceDetection();
 
     setCapturedImage(null);
+    setWasCapturedWithFaceDetection(false);
     setIsCapturing(false);
     setShowCamera(false);
     setIsClockingIn(false);
@@ -935,7 +1086,17 @@ export default function AttendancePage() {
     }
 
     // Determine which session to clock out from
-    const sessionType = currentSession || "morning";
+    const sessionType = availableSessionForClockOut;
+
+    if (!sessionType) {
+      toast({
+        variant: "destructive",
+        title: "No session to clock out",
+        description: "There is no active session to clock out from.",
+      });
+      return;
+    }
+
     const hasMorningClockIn =
       todayAttendance?.morningTimeIn && !todayAttendance?.morningTimeOut;
     const hasAfternoonClockIn =
@@ -1004,7 +1165,7 @@ export default function AttendancePage() {
 
       // Determine session type and if early departure
       const now = new Date();
-      const sessionType = currentSession || "morning";
+      const sessionType = availableSessionForClockOut || "morning";
 
       // Check if early departure
       let isEarlyDeparture = false;
@@ -1227,6 +1388,7 @@ export default function AttendancePage() {
                 onSubmit={submitClockIn}
                 onRetake={async () => {
                   setCapturedImage(null);
+                  setWasCapturedWithFaceDetection(false);
                   await startCamera();
                 }}
                 onRestartCamera={restartCamera}
@@ -1237,6 +1399,8 @@ export default function AttendancePage() {
                   onClockIn={handleClockIn}
                   onClockOut={handleClockOut}
                   currentSession={currentSession}
+                  clockInSession={availableSessionForClockIn}
+                  clockOutSession={availableSessionForClockOut}
                   disableClockIn={
                     !!(
                       hasBlockingRequired ||
@@ -1245,15 +1409,13 @@ export default function AttendancePage() {
                       isClockingIn ||
                       clockInMutation.isPending ||
                       !isOperatingDay ||
-                      (currentSession === "morning" &&
-                        todayAttendance?.morningTimeIn &&
-                        !todayAttendance?.morningTimeOut) ||
-                      (currentSession === "afternoon" &&
-                        todayAttendance?.afternoonTimeIn &&
-                        !todayAttendance?.afternoonTimeOut) ||
-                      (!currentSession &&
-                        (todayAttendance?.morningTimeIn ||
-                          todayAttendance?.afternoonTimeIn))
+                      // Disable if no session is available for clock-in
+                      !availableSessionForClockIn ||
+                      // Disable if already clocked in for the available session
+                      (availableSessionForClockIn === "morning" &&
+                        todayAttendance?.morningTimeIn) ||
+                      (availableSessionForClockIn === "afternoon" &&
+                        todayAttendance?.afternoonTimeIn)
                     )
                   }
                   disableClockOut={
@@ -1264,13 +1426,15 @@ export default function AttendancePage() {
                       isClockingOut ||
                       clockOutMutation.isPending ||
                       !isOperatingDay ||
-                      (currentSession === "morning" &&
+                      // Disable if no session is available for clock-out
+                      !availableSessionForClockOut ||
+                      // Disable if already clocked out for the available session
+                      (availableSessionForClockOut === "morning" &&
                         (!todayAttendance?.morningTimeIn ||
                           todayAttendance?.morningTimeOut)) ||
-                      (currentSession === "afternoon" &&
+                      (availableSessionForClockOut === "afternoon" &&
                         (!todayAttendance?.afternoonTimeIn ||
-                          todayAttendance?.afternoonTimeOut)) ||
-                      (!currentSession && !todayAttendance?.timeIn)
+                          todayAttendance?.afternoonTimeOut))
                     )
                   }
                   isClockingOut={isClockingOut || clockOutMutation.isPending}
