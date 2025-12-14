@@ -18,6 +18,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { InstructorNotifications } from "@/components/instructor-notifications";
 
 // Function to generate breadcrumbs based on pathname
 function generateBreadcrumbs(pathname: string) {
@@ -123,17 +124,9 @@ export default function InstructorLayout({
             </Breadcrumb>
 
             {/* Header Actions */}
-            {/* <div className="flex items-center gap-4">
-							<div className="relative hidden md:block">
-								<Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-								<Input
-									placeholder="Search students, reports..."
-									className="pl-10 w-64 border-gray-300 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-all"
-								/>
-							</div>
-
-							<NotificationSystem />
-						</div> */}
+            <div className="flex items-center gap-2">
+              <InstructorNotifications />
+            </div>
           </header>
         </Suspense>
 

@@ -16,6 +16,7 @@ import {
   Camera,
   Upload,
   User,
+  Building2,
 } from "lucide-react";
 import { useMemo } from "react";
 import { useAuth } from "@/hooks/auth/useAuth";
@@ -150,7 +151,6 @@ export default function StudentDashboard() {
 
   // Announcements (latest published for this user)
   const { data: announcementsData } = useAnnouncements({
-    status: "Published",
     userId: studentId,
     page: 1,
     limit: 2,
@@ -176,6 +176,8 @@ export default function StudentDashboard() {
     const student: any = (studentData as any)?.data ?? (studentData as any);
     const practicum = student?.practicums?.[0];
     const total = Number(practicum?.totalHours ?? 0);
+    // Work setup is always "On-site" for all practicums
+    const workSetup = practicum?.workSetup || "On-site";
 
     // Calculate completed hours from attendance records
     const records: any[] =
@@ -198,7 +200,12 @@ export default function StudentDashboard() {
 
     const percent =
       total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
-    return { completed: Math.round(completed * 100) / 100, total, percent };
+    return {
+      completed: Math.round(completed * 100) / 100,
+      total,
+      percent,
+      workSetup,
+    };
   }, [studentData, allAttendanceData]);
 
   return (
@@ -211,6 +218,115 @@ export default function StudentDashboard() {
         <p className="text-gray-600">
           Welcome back! Track your practicum progress and submissions.
         </p>
+      </div>
+
+      {/* Announcements & Deadlines - Highly Emphasized */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <Card className="border-2 border-primary-400 shadow-lg bg-gradient-to-br from-primary-50 to-white">
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xl font-bold flex items-center gap-3">
+                <div className="p-2 bg-primary-100 rounded-lg">
+                  <AlertCircle className="w-6 h-6 text-primary-700" />
+                </div>
+                Recent Announcements
+              </CardTitle>
+              <Link href="/dashboard/student/announcements">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-primary-700 hover:text-primary-800 hover:bg-primary-100 font-medium"
+                >
+                  View All
+                </Button>
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {announcements.length === 0 && (
+              <div className="text-sm text-gray-500 py-4">
+                No announcements.
+              </div>
+            )}
+            {announcements.map((a: any) => (
+              <div
+                key={a.id}
+                className="border-l-4 border-primary-600 pl-4 py-3 bg-white rounded-r-lg shadow-sm hover:shadow-md transition-shadow"
+              >
+                <h4 className="font-semibold text-gray-900 text-base mb-1">
+                  {a.title}
+                </h4>
+                <p className="text-sm text-gray-700 line-clamp-2 mb-2">
+                  {a.content}
+                </p>
+                <p className="text-xs text-gray-500 font-medium">
+                  {new Date(a.createdAt).toLocaleString()}
+                </p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card className="border-2 border-primary-400 shadow-lg bg-gradient-to-br from-primary-50 to-white">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-xl font-bold flex items-center gap-3">
+              <div className="p-2 bg-primary-100 rounded-lg">
+                <Calendar className="w-6 h-6 text-primary-700" />
+              </div>
+              Upcoming Deadlines
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {upcomingDeadlines.length === 0 && (
+              <div className="text-sm text-gray-500 py-4">
+                No upcoming deadlines.
+              </div>
+            )}
+            {upcomingDeadlines.map((d, idx) => {
+              const daysLeft = Math.ceil(
+                (new Date(d.date!).getTime() - Date.now()) /
+                  (1000 * 60 * 60 * 24)
+              );
+              const urgent = daysLeft <= 3;
+              return (
+                <div
+                  key={idx}
+                  className={`flex items-center justify-between p-4 rounded-lg shadow-sm transition-all ${
+                    urgent
+                      ? "bg-red-50 border-2 border-red-200"
+                      : "bg-white border border-primary-200"
+                  }`}
+                >
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-gray-900 text-base mb-1">
+                      {d.title}
+                    </h4>
+                    <p
+                      className={`text-sm font-medium ${
+                        urgent ? "text-red-700" : "text-gray-700"
+                      }`}
+                    >
+                      Due{" "}
+                      {isNaN(daysLeft)
+                        ? "soon"
+                        : `in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`}
+                    </p>
+                  </div>
+                  <Badge
+                    variant={urgent ? "destructive" : "secondary"}
+                    className={`font-semibold ${
+                      urgent
+                        ? "bg-red-600 text-white"
+                        : "bg-primary-100 text-primary-700"
+                    }`}
+                  >
+                    {urgent ? "Urgent" : "Pending"}
+                  </Badge>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Progress Overview */}
@@ -231,10 +347,21 @@ export default function StudentDashboard() {
                 </span>
               </div>
               <Progress value={hoursProgress.percent} className="h-2" />
-              <p className="text-xs text-gray-600">
-                {Math.max(0, hoursProgress.total - hoursProgress.completed)}{" "}
-                hours remaining
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-gray-600">
+                  {Math.max(0, hoursProgress.total - hoursProgress.completed)}{" "}
+                  hours remaining
+                </p>
+                {hoursProgress.workSetup && (
+                  <Badge
+                    variant="outline"
+                    className="text-xs flex items-center gap-1 bg-primary-50 text-primary-700 border-primary-200"
+                  >
+                    <Building2 className="w-3 h-3" />
+                    {hoursProgress.workSetup}
+                  </Badge>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -344,84 +471,6 @@ export default function StudentDashboard() {
             <span>Profile</span>
           </Button>
         </Link>
-      </div>
-
-      {/* Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="border border-primary-200 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-primary-600" />
-              Recent Announcements
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {announcements.length === 0 && (
-              <div className="text-sm text-gray-500">No announcements.</div>
-            )}
-            {announcements.map((a: any) => (
-              <div
-                key={a.id}
-                className="border-l-4 border-primary-500 pl-4 py-2"
-              >
-                <h4 className="font-medium text-gray-900">{a.title}</h4>
-                <p className="text-sm text-gray-600 line-clamp-2">
-                  {a.content}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {new Date(a.createdAt).toLocaleString()}
-                </p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card className="border border-primary-200 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-primary-600" />
-              Upcoming Deadlines
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {upcomingDeadlines.length === 0 && (
-              <div className="text-sm text-gray-500">
-                No upcoming deadlines.
-              </div>
-            )}
-            {upcomingDeadlines.map((d, idx) => {
-              const daysLeft = Math.ceil(
-                (new Date(d.date!).getTime() - Date.now()) /
-                  (1000 * 60 * 60 * 24)
-              );
-              const urgent = daysLeft <= 3;
-              return (
-                <div
-                  key={idx}
-                  className={`flex items-center justify-between p-3 rounded-lg ${
-                    urgent ? "bg-primary-50" : "bg-primary-50/50"
-                  }`}
-                >
-                  <div>
-                    <h4 className="font-medium text-gray-900">{d.title}</h4>
-                    <p className="text-sm text-gray-600">
-                      Due{" "}
-                      {isNaN(daysLeft)
-                        ? "soon"
-                        : `in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`}
-                    </p>
-                  </div>
-                  <Badge
-                    variant="secondary"
-                    className="bg-primary-50 text-primary-700"
-                  >
-                    {urgent ? "Urgent" : "Pending"}
-                  </Badge>
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

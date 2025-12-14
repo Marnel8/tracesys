@@ -74,9 +74,11 @@ import { SectionFormData } from "@/data/departments";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { InstructorStatsCard } from "@/components/instructor-stats-card";
+import { useAuth } from "@/hooks/auth/useAuth";
 
 export default function SectionsPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -103,6 +105,9 @@ export default function SectionsPage() {
     isActive: true,
   });
 
+  // Get instructor's departmentId
+  const instructorDepartmentId = (user as any)?.departmentId;
+
   // Fetch sections and courses data
   const {
     data: sectionsData,
@@ -115,8 +120,23 @@ export default function SectionsPage() {
   const deleteSectionMutation = useDeleteSection();
   const toggleStatusMutation = useToggleSectionStatus();
 
-  const sections = sectionsData?.sections || [];
-  const courses = coursesData?.courses || [];
+  // Filter courses to only show the instructor's department courses
+  const filteredCourses = instructorDepartmentId
+    ? coursesData?.courses.filter(
+        (course) => course.departmentId === instructorDepartmentId
+      ) || []
+    : coursesData?.courses || [];
+
+  // Filter sections to only show those from courses in the instructor's department
+  const filteredSections = instructorDepartmentId
+    ? (sectionsData?.sections || []).filter(
+        (section) =>
+          section.course?.departmentId === instructorDepartmentId
+      )
+    : sectionsData?.sections || [];
+
+  const sections = filteredSections;
+  const courses = filteredCourses;
 
   const handleCreateSection = async () => {
     if (
@@ -259,8 +279,9 @@ export default function SectionsPage() {
         No sections yet
       </h3>
       <p className="text-gray-500 mb-6 max-w-md mx-auto">
-        Get started by creating your first section. Sections help you organize
-        students and track their progress.
+        {instructorDepartmentId
+          ? "No sections found in your department. Get started by creating your first section."
+          : "Get started by creating your first section. Sections help you organize students and track their progress."}
       </p>
       <Button
         onClick={() => setIsCreateDialogOpen(true)}
@@ -868,7 +889,11 @@ export default function SectionsPage() {
                     <TableCell colSpan={7} className="text-center py-12">
                       <div className="flex flex-col items-center">
                         <BookOpen className="w-8 h-8 text-gray-400 mb-2" />
-                        <p className="text-gray-500 mb-2">No sections found</p>
+                        <p className="text-gray-500 mb-2">
+                          {instructorDepartmentId
+                            ? "No sections found in your department"
+                            : "No sections found"}
+                        </p>
                         <Button
                           onClick={() => setIsCreateDialogOpen(true)}
                           size="sm"

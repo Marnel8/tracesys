@@ -62,6 +62,8 @@ export interface AttendanceRecord {
   morningTimeOut?: string | null;
   afternoonTimeIn?: string | null;
   afternoonTimeOut?: string | null;
+  overtimeTimeIn?: string | null;
+  overtimeTimeOut?: string | null;
   hours?: number | null;
   status: AttendanceStatus;
   latitude?: number | null;
@@ -110,6 +112,13 @@ export interface AttendanceRecord {
   updatedAt: string;
   student?: any;
   practicum?: any;
+  // detailed logs for session-specific photos
+  detailedLogs?: Array<{
+    id: string;
+    sessionType?: "morning" | "afternoon" | "overtime" | null;
+    photoIn?: string | null;
+    photoOut?: string | null;
+  }>;
 }
 
 export interface AttendanceListResponse {
@@ -202,7 +211,7 @@ export const useClockIn = () => {
       macAddress?: string | null;
       remarks?: "Normal" | "Late" | "Early";
       photo?: File | null;
-      sessionType?: "morning" | "afternoon";
+      sessionType?: "morning" | "afternoon" | "overtime";
     }) => {
       const hasFile = !!data.photo;
       if (hasFile) {
@@ -256,7 +265,7 @@ export const useClockOut = () => {
       macAddress?: string | null;
       remarks?: "Normal" | "Early Departure" | "Overtime";
       photo?: File | null;
-      sessionType?: "morning" | "afternoon";
+      sessionType?: "morning" | "afternoon" | "overtime";
     }) => {
       const hasFile = !!data.photo;
       if (hasFile) {

@@ -20,9 +20,11 @@ import {
 } from "lucide-react";
 import { useStudentAnnouncementNotifications } from "@/hooks/announcement/useStudentAnnouncementNotifications";
 import { useStudentTemplateNotifications } from "@/hooks/requirement-template/useStudentTemplateNotifications";
+import { useStudentRequirementCommentNotifications } from "@/hooks/requirement/useStudentRequirementCommentNotifications";
 import { useAuth } from "@/hooks/auth/useAuth";
 import type { Announcement } from "@/data/announcements";
 import type { RequirementTemplate } from "@/hooks/requirement-template/useRequirementTemplate";
+import type { RequirementComment } from "@/hooks/requirement/useRequirement";
 
 function getAnnouncementPriorityColor(priority: Announcement["priority"]) {
   switch (priority) {
@@ -37,20 +39,6 @@ function getAnnouncementPriorityColor(priority: Announcement["priority"]) {
   }
 }
 
-function getTemplatePriorityColor(priority: RequirementTemplate["priority"]) {
-  switch (priority.toLowerCase()) {
-    case "urgent":
-      return "bg-red-100 text-red-800";
-    case "high":
-      return "bg-red-100 text-red-800";
-    case "medium":
-      return "bg-yellow-100 text-yellow-800";
-    case "low":
-      return "bg-green-100 text-green-800";
-    default:
-      return "bg-gray-100 text-gray-800";
-  }
-}
 
 function formatTimestamp(timestamp: string) {
   const date = new Date(timestamp);
@@ -82,6 +70,7 @@ export function CombinedNotifications({
 
   // Announcement notifications
   const {
+    announcements,
     unreadAnnouncements,
     unreadCount: announcementUnreadCount,
     isLoading: isLoadingAnnouncements,
@@ -92,6 +81,7 @@ export function CombinedNotifications({
 
   // Template notifications
   const {
+    templates,
     unreadTemplates,
     unreadCount: templateUnreadCount,
     isLoading: isLoadingTemplates,
@@ -100,8 +90,24 @@ export function CombinedNotifications({
     markAllAsRead: markAllTemplatesAsRead,
   } = useStudentTemplateNotifications(effectiveStudentId);
 
+  // Comment notifications
+  const {
+    comments,
+    unreadComments,
+    unreadCount: commentUnreadCount,
+    isLoading: isLoadingComments,
+    error: commentError,
+    markAsRead: markCommentAsRead,
+    markAllAsRead: markAllCommentsAsRead,
+  } = useStudentRequirementCommentNotifications(effectiveStudentId);
+
+  // Create sets of unread IDs for quick lookup
+  const unreadAnnouncementIds = new Set(unreadAnnouncements.map(a => a.id));
+  const unreadTemplateIds = new Set(unreadTemplates.map(t => t.id));
+  const unreadCommentIds = new Set(unreadComments.map(c => c.id));
+
   // Combined unread count
-  const totalUnreadCount = announcementUnreadCount + templateUnreadCount;
+  const totalUnreadCount = announcementUnreadCount + templateUnreadCount + commentUnreadCount;
 
   const handleAnnouncementClick = (announcement: Announcement) => {
     markAnnouncementAsRead(announcement.id);
@@ -125,6 +131,17 @@ export function CombinedNotifications({
     router.push("/dashboard/student/requirements");
   };
 
+  const handleCommentClick = (comment: RequirementComment) => {
+    markCommentAsRead(comment.id);
+    setIsOpen(false);
+    router.push("/dashboard/student/requirements");
+  };
+
+  const handleViewAllComments = () => {
+    setIsOpen(false);
+    router.push("/dashboard/student/requirements");
+  };
+
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
@@ -142,23 +159,31 @@ export function CombinedNotifications({
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80">
+      <DropdownMenuContent align="end" className="w-[90vw] sm:w-[400px] md:w-[450px] max-w-[90vw]">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <div className="p-3 border-b">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="announcements" className="text-xs">
-                Announcements
+            <TabsList className="grid w-full grid-cols-3 gap-1">
+              <TabsTrigger value="announcements" className="text-[10px] sm:text-xs px-1 sm:px-2">
+                <span className="truncate">Announcements</span>
                 {announcementUnreadCount > 0 && (
-                  <Badge className="ml-1 h-4 px-1.5 text-xs bg-red-500">
+                  <Badge className="ml-1 h-4 px-1 sm:px-1.5 text-[10px] sm:text-xs bg-red-500">
                     {announcementUnreadCount}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="templates" className="text-xs">
-                Templates
+              <TabsTrigger value="templates" className="text-[10px] sm:text-xs px-1 sm:px-2">
+                <span className="truncate">Templates</span>
                 {templateUnreadCount > 0 && (
-                  <Badge className="ml-1 h-4 px-1.5 text-xs bg-red-500">
+                  <Badge className="ml-1 h-4 px-1 sm:px-1.5 text-[10px] sm:text-xs bg-red-500">
                     {templateUnreadCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="comments" className="text-[10px] sm:text-xs px-1 sm:px-2">
+                <span className="truncate">Comments</span>
+                {commentUnreadCount > 0 && (
+                  <Badge className="ml-1 h-4 px-1 sm:px-1.5 text-[10px] sm:text-xs bg-red-500">
+                    {commentUnreadCount}
                   </Badge>
                 )}
               </TabsTrigger>
@@ -201,17 +226,23 @@ export function CombinedNotifications({
                     <div className="h-4 bg-gray-200 rounded w-1/2 mx-auto" />
                   </div>
                 </div>
-              ) : unreadAnnouncements.length === 0 ? (
+              ) : announcements.length === 0 ? (
                 <div className="p-4 text-center text-gray-500">
                   <Bell className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                  <p className="text-sm">No new announcements</p>
+                  <p className="text-sm">No announcements</p>
                 </div>
               ) : (
                 <div className="space-y-1">
-                  {unreadAnnouncements.map((announcement) => (
+                  {announcements.map((announcement) => {
+                    const isUnread = unreadAnnouncementIds.has(announcement.id);
+                    return (
                     <div
                       key={announcement.id}
-                      className="p-3 hover:bg-gray-50 cursor-pointer border-l-2 border-primary-500 bg-primary-50/30"
+                      className={`p-3 hover:bg-gray-50 cursor-pointer border-l-2 ${
+                        isUnread 
+                          ? "border-primary-500 bg-primary-50/30" 
+                          : "border-transparent bg-gray-50/50"
+                      }`}
                       onClick={() => handleAnnouncementClick(announcement)}
                     >
                       <div className="flex items-start gap-3">
@@ -249,12 +280,13 @@ export function CombinedNotifications({
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </ScrollArea>
 
-            {unreadAnnouncements.length > 0 && (
+            {announcements.length > 0 && (
               <div className="p-3 border-t">
                 <Button
                   variant="outline"
@@ -305,17 +337,23 @@ export function CombinedNotifications({
                     <div className="h-4 bg-gray-200 rounded w-1/2 mx-auto" />
                   </div>
                 </div>
-              ) : unreadTemplates.length === 0 ? (
+              ) : templates.length === 0 ? (
                 <div className="p-4 text-center text-gray-500">
                   <FileText className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                  <p className="text-sm">No new templates</p>
+                  <p className="text-sm">No templates</p>
                 </div>
               ) : (
                 <div className="space-y-1">
-                  {unreadTemplates.map((template) => (
+                  {templates.map((template) => {
+                    const isUnread = unreadTemplateIds.has(template.id);
+                    return (
                     <div
                       key={template.id}
-                      className="p-3 hover:bg-gray-50 cursor-pointer border-l-2 border-blue-500 bg-blue-50/30"
+                      className={`p-3 hover:bg-gray-50 cursor-pointer border-l-2 ${
+                        isUnread 
+                          ? "border-blue-500 bg-blue-50/30" 
+                          : "border-transparent bg-gray-50/50"
+                      }`}
                       onClick={() => handleTemplateClick(template)}
                     >
                       <div className="flex items-start gap-3">
@@ -327,12 +365,6 @@ export function CombinedNotifications({
                             <p className="text-sm font-medium text-gray-900 truncate">
                               {template.title}
                             </p>
-                            <Badge
-                              variant="secondary"
-                              className={`text-xs ${getTemplatePriorityColor(template.priority)}`}
-                            >
-                              {template.priority}
-                            </Badge>
                           </div>
                           <div className="flex items-center gap-2 mb-2">
                             <Badge
@@ -361,12 +393,13 @@ export function CombinedNotifications({
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </ScrollArea>
 
-            {unreadTemplates.length > 0 && (
+            {templates.length > 0 && (
               <div className="p-3 border-t">
                 <Button
                   variant="outline"
@@ -376,6 +409,106 @@ export function CombinedNotifications({
                 >
                   <Eye className="w-4 h-4 mr-2" />
                   View All Templates
+                </Button>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="comments" className="mt-0">
+            <div className="flex items-center justify-between p-3 border-b">
+              <h3 className="font-semibold text-sm">Comments</h3>
+              {commentUnreadCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={markAllCommentsAsRead}
+                  className="h-7 text-xs"
+                >
+                  <Check className="w-3 h-3 mr-1" />
+                  Mark all read
+                </Button>
+              )}
+            </div>
+
+            <ScrollArea className="h-96">
+              {commentError ? (
+                <div className="p-4 text-center text-red-500">
+                  <MessageSquare className="w-8 h-8 mx-auto mb-2 text-red-300" />
+                  <p className="text-sm font-medium mb-2">
+                    Failed to load comments
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {(commentError as any)?.response?.data?.message ||
+                      (commentError as any)?.message ||
+                      "Please try again later"}
+                  </p>
+                </div>
+              ) : isLoadingComments ? (
+                <div className="p-4 text-center text-gray-500">
+                  <div className="animate-pulse space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-3/4 mx-auto" />
+                    <div className="h-4 bg-gray-200 rounded w-1/2 mx-auto" />
+                  </div>
+                </div>
+              ) : comments.length === 0 ? (
+                <div className="p-4 text-center text-gray-500">
+                  <MessageSquare className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                  <p className="text-sm">No comments</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {comments.map((comment) => {
+                    const isUnread = unreadCommentIds.has(comment.id);
+                    return (
+                    <div
+                      key={comment.id}
+                      className={`p-3 hover:bg-gray-50 cursor-pointer border-l-2 ${
+                        isUnread 
+                          ? "border-green-500 bg-green-50/30" 
+                          : "border-transparent bg-gray-50/50"
+                      }`}
+                      onClick={() => handleCommentClick(comment)}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex-shrink-0 mt-0.5">
+                          <MessageSquare className="w-4 h-4 text-green-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {comment.requirement?.title || "Requirement"}
+                            </p>
+                            <span className="text-xs text-gray-500">
+                              {comment.user?.firstName} {comment.user?.lastName}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-700 mb-2 line-clamp-2">
+                            {comment.content}
+                          </p>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-400">
+                              {formatTimestamp(comment.createdAt)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    );
+                  })}
+                </div>
+              )}
+            </ScrollArea>
+
+            {comments.length > 0 && (
+              <div className="p-3 border-t">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  size="sm"
+                  onClick={handleViewAllComments}
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  View All Comments
                 </Button>
               </div>
             )}

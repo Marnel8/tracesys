@@ -136,6 +136,10 @@ export function InstructorSidebar() {
       icon: ClipboardList,
       items: [
         {
+          title: "Summary of Requirements",
+          url: "/dashboard/instructor/reports/summary",
+        },
+        {
           title: "Weekly Reports",
           url: "/dashboard/instructor/reports/weekly",
           // badge: badges.pendingWeeklyReports.toString(),

@@ -69,9 +69,11 @@ import { useDepartments } from "@/hooks/department";
 import { toast } from "sonner";
 import { Course, CourseFilters } from "@/data/departments";
 import { InstructorStatsCard } from "@/components/instructor-stats-card";
+import { useAuth } from "@/hooks/auth/useAuth";
 
 export default function CoursesPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<
@@ -87,22 +89,32 @@ export default function CoursesPage() {
     description: "",
   });
 
+  // Get instructor's departmentId
+  const instructorDepartmentId = (user as any)?.departmentId;
+
   // Fetch data
   const { data: departmentsData } = useDepartments({ status: "active" });
   const { data: coursesData, isLoading } = useCourses({
     search: searchTerm || undefined,
     status: statusFilter,
-    departmentId: departmentFilter !== "all" ? departmentFilter : undefined,
+    departmentId: instructorDepartmentId || undefined,
   });
+
+  // Filter courses to only show the instructor's department courses
+  const filteredCourses = instructorDepartmentId
+    ? coursesData?.courses.filter(
+        (course) => course.departmentId === instructorDepartmentId
+      ) || []
+    : coursesData?.courses || [];
 
   const deleteCourse = useDeleteCourse();
   const toggleStatus = useToggleCourseStatus();
   const createCourse = useCreateCourse();
-  const totalCourses = coursesData?.pagination.totalItems || 0;
+  const totalCourses = filteredCourses.length;
   const activeCourses =
-    coursesData?.courses.filter((c) => c.isActive).length || 0;
+    filteredCourses.filter((c) => c.isActive).length || 0;
   const totalSections =
-    coursesData?.courses.reduce(
+    filteredCourses.reduce(
       (total, course) => total + (course.sections?.length || 0),
       0
     ) || 0;
@@ -193,7 +205,7 @@ export default function CoursesPage() {
             Manage your academic courses and track their progress
           </p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        {/* <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button
               variant="outline"
@@ -282,7 +294,7 @@ export default function CoursesPage() {
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
+        </Dialog> */}
       </div>
 
       {/* Overview Stats */}
@@ -317,7 +329,7 @@ export default function CoursesPage() {
 
       {/* Courses Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {coursesData?.courses.map((course) => (
+        {filteredCourses.map((course) => (
           <Card key={course.id} className="hover:shadow-lg transition-shadow">
             <CardHeader className="pb-3">
               <div className="flex justify-between items-start">
@@ -405,17 +417,21 @@ export default function CoursesPage() {
             <div className="flex items-center justify-center py-8">
               <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : coursesData?.courses.length === 0 ? (
+          ) : filteredCourses.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-gray-500">No courses found</p>
-              <Button
+              <p className="text-gray-500">
+                {instructorDepartmentId
+                  ? "No courses found in your department"
+                  : "No courses found"}
+              </p>
+              {/* <Button
                 variant="outline"
                 onClick={() => setIsCreateDialogOpen(true)}
                 className="mt-4"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Add First Course
-              </Button>
+              </Button> */}
             </div>
           ) : (
             <div className="rounded-md border">
@@ -431,7 +447,7 @@ export default function CoursesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {coursesData?.courses.map((course) => (
+                  {filteredCourses.map((course) => (
                     <TableRow key={course.id}>
                       <TableCell>
                         <div className="font-medium">{course.name}</div>

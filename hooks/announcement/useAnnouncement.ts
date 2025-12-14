@@ -49,8 +49,6 @@ export const useAnnouncements = (
 			const params = new URLSearchParams();
 			
 			if (filters.search) params.append("search", filters.search);
-			if (filters.status && filters.status !== "all") params.append("status", filters.status);
-			if (filters.priority && filters.priority !== "all") params.append("priority", filters.priority);
 			if (filters.authorId) params.append("authorId", filters.authorId);
 			if (filters.userId) params.append("userId", filters.userId);
 			if (filters.page) params.append("page", filters.page.toString());
@@ -74,7 +72,6 @@ export const usePublicAnnouncements = (filters: Omit<AnnouncementFilters, "statu
 			const params = new URLSearchParams();
 			
 			if (filters.search) params.append("search", filters.search);
-			if (filters.priority && filters.priority !== "all") params.append("priority", filters.priority);
 			if (filters.page) params.append("page", filters.page.toString());
 			if (filters.limit) params.append("limit", filters.limit.toString());
 			

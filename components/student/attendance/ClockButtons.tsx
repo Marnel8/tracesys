@@ -10,9 +10,9 @@ type Props = {
 	disableClockIn: boolean;
 	disableClockOut: boolean;
 	isClockingOut: boolean;
-	currentSession?: "morning" | "afternoon" | null;
-	clockInSession?: "morning" | "afternoon" | null;
-	clockOutSession?: "morning" | "afternoon" | null;
+	currentSession?: "morning" | "afternoon" | "overtime" | null;
+	clockInSession?: "morning" | "afternoon" | "overtime" | null;
+	clockOutSession?: "morning" | "afternoon" | "overtime" | null;
 };
 
 const ClockButtons = ({
@@ -26,10 +26,10 @@ const ClockButtons = ({
 	clockOutSession,
 }: Props) => {
 	// Use separate session labels for clock-in and clock-out
-	const clockInLabel = clockInSession === "morning" ? "Morning" : clockInSession === "afternoon" ? "Afternoon" : "";
-	const clockOutLabel = clockOutSession === "morning" ? "Morning" : clockOutSession === "afternoon" ? "Afternoon" : "";
+	const clockInLabel = clockInSession === "morning" ? "Morning" : clockInSession === "afternoon" ? "Afternoon" : clockInSession === "overtime" ? "Overtime" : "";
+	const clockOutLabel = clockOutSession === "morning" ? "Morning" : clockOutSession === "afternoon" ? "Afternoon" : clockOutSession === "overtime" ? "Overtime" : "";
 	// Fallback to currentSession if specific session not provided (for backward compatibility)
-	const fallbackLabel = currentSession === "morning" ? "Morning" : currentSession === "afternoon" ? "Afternoon" : "";
+	const fallbackLabel = currentSession === "morning" ? "Morning" : currentSession === "afternoon" ? "Afternoon" : currentSession === "overtime" ? "Overtime" : "";
 	const finalClockInLabel = clockInLabel || fallbackLabel;
 	const finalClockOutLabel = clockOutLabel || fallbackLabel;
 	

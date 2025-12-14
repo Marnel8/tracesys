@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { useAuth } from "@/hooks/auth/useAuth";
 import {
   Card,
   CardContent,
@@ -50,19 +51,48 @@ interface Recipient {
 
 export default function SendInvitationPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [isBulk, setIsBulk] = useState(false);
   const [recipientError, setRecipientError] = useState<string | null>(null);
+
+  // Get instructor's department and program
+  const instructorDepartmentId = user ? (user as any)?.departmentId : undefined;
+  const instructorProgram = user ? (user as any)?.program : undefined;
 
   const form = useForm<InvitationFormData>({
     resolver: zodResolver(invitationSchema),
     defaultValues: {
       role: "student",
+      departmentId: instructorDepartmentId,
+      program: instructorProgram,
     },
   });
 
+  // Auto-populate department and program from instructor's data
+  useEffect(() => {
+    if (user) {
+      const deptId = (user as any)?.departmentId;
+      const prog = (user as any)?.program;
+
+      if (deptId) {
+        form.setValue("departmentId", deptId, {
+          shouldValidate: false,
+          shouldDirty: false,
+        });
+      }
+      if (prog) {
+        form.setValue("program", prog, {
+          shouldValidate: false,
+          shouldDirty: false,
+        });
+      }
+    }
+  }, [user, form]);
+
   const { data: departmentsData } = useDepartments({ status: "active" });
   const selectedDepartmentId = form.watch("departmentId");
+  const selectedProgram = form.watch("program");
   const { data: sectionsData } = useSections({
     courseId: undefined,
     status: "active",
@@ -71,6 +101,14 @@ export default function SendInvitationPage() {
     status: "active",
     departmentId: selectedDepartmentId || undefined,
   });
+
+  // Find the selected department and program names for display
+  const selectedDepartment = departmentsData?.departments?.find(
+    (dept: any) => dept.id === selectedDepartmentId
+  );
+  const selectedCourse = coursesData?.courses?.find(
+    (course: any) => course.code === selectedProgram
+  );
 
   const createInvitation = useCreateInvitation();
   const createBulkInvitations = useCreateBulkInvitations();
@@ -104,21 +142,25 @@ export default function SendInvitationPage() {
       return;
     }
 
+    // Always use instructor's department and program
+    const instructorDepartmentId = (user as any)?.departmentId;
+    const instructorProgram = (user as any)?.program;
+
     if (recipients.length === 1 && !isBulk) {
       await createInvitation.mutateAsync({
         email: recipients[0].email,
         role: data.role,
-        departmentId: data.departmentId,
+        departmentId: instructorDepartmentId || data.departmentId,
         sectionId: data.sectionId,
-        program: data.program,
+        program: instructorProgram || data.program,
       });
     } else {
       await createBulkInvitations.mutateAsync({
         emails: recipients.map((r) => r.email),
         role: data.role,
-        departmentId: data.departmentId,
+        departmentId: instructorDepartmentId || data.departmentId,
         sectionId: data.sectionId,
-        program: data.program,
+        program: instructorProgram || data.program,
       });
     }
 
@@ -213,30 +255,28 @@ export default function SendInvitationPage() {
 
                   {role === "student" && (
                     <div className="space-y-2">
-                      <Label htmlFor="departmentId">
-                        Department (optional)
-                      </Label>
-                      <Select
-                        value={form.watch("departmentId") ?? undefined}
-                        onValueChange={(value) =>
-                          form.setValue(
-                            "departmentId",
-                            value === "__none" ? undefined : value
-                          )
-                        }
-                      >
-                        <SelectTrigger className="invitation-select-trigger">
-                          <SelectValue placeholder="Select department" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none">None</SelectItem>
-                          {departmentsData?.departments?.map((dept: any) => (
-                            <SelectItem key={dept.id} value={dept.id}>
-                              {dept.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="departmentId">Department</Label>
+                      {selectedDepartmentId && selectedDepartment ? (
+                        <Select value={selectedDepartmentId} disabled={true}>
+                          <SelectTrigger className="invitation-select-trigger">
+                            <SelectValue>{selectedDepartment.name}</SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {departmentsData?.departments?.map((dept: any) => (
+                              <SelectItem key={dept.id} value={dept.id}>
+                                {dept.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <div className="invitation-select-trigger flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground">
+                          No department assigned
+                        </div>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        Set to your department and cannot be changed.
+                      </p>
                     </div>
                   )}
                 </div>
@@ -276,28 +316,30 @@ export default function SendInvitationPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="program">Program (optional)</Label>
-                      <Select
-                        value={form.watch("program") ?? undefined}
-                        onValueChange={(value) =>
-                          form.setValue(
-                            "program",
-                            value === "__none" ? undefined : value
-                          )
-                        }
-                      >
-                        <SelectTrigger className="invitation-select-trigger">
-                          <SelectValue placeholder="Select program" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none">None</SelectItem>
-                          {coursesData?.courses?.map((course: any) => (
-                            <SelectItem key={course.id} value={course.code}>
-                              {course.code} - {course.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="program">Program</Label>
+                      {selectedProgram && selectedCourse ? (
+                        <Select value={selectedProgram} disabled={true}>
+                          <SelectTrigger className="invitation-select-trigger">
+                            <SelectValue>
+                              {selectedCourse.code} - {selectedCourse.name}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {coursesData?.courses?.map((course: any) => (
+                              <SelectItem key={course.id} value={course.code}>
+                                {course.code} - {course.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <div className="invitation-select-trigger flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground">
+                          No program assigned
+                        </div>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        Set to your program and cannot be changed.
+                      </p>
                     </div>
                   </>
                 )}

@@ -253,6 +253,7 @@ export default function ProfilePage() {
   }, [practicum, isEditingPracticum]);
 
   // Update practicum mutation
+  // Note: Work setup is always "On-site" for all practicums
   const updatePracticum = async (data: PracticumFormData) => {
     try {
       await api.post("/practicum/", {
@@ -262,7 +263,7 @@ export default function ProfilePage() {
         endDate: data.endDate,
         position: data.position,
         totalHours: practicum?.totalHours || 400,
-        workSetup: practicum?.workSetup || "On-site",
+        workSetup: "On-site", // Always "On-site" - no other options allowed
       });
       toast.success("Practicum details updated successfully!");
       queryClient.invalidateQueries({ queryKey: ["student", user?.id] });
@@ -381,6 +382,9 @@ export default function ProfilePage() {
     afternoonTimeIn?: string | null;
     afternoonTimeOut?: string | null;
     afternoonHours?: number;
+    overtimeTimeIn?: string | null;
+    overtimeTimeOut?: string | null;
+    overtimeHours?: number;
     hours: number;
     status: string;
     remarks: string;
@@ -439,10 +443,23 @@ export default function ProfilePage() {
         } catch {}
       }
 
+      // Calculate overtime hours
+      let overtimeHours = 0;
+      if (a.overtimeTimeIn && a.overtimeTimeOut) {
+        try {
+          const start = new Date(a.overtimeTimeIn);
+          const end = new Date(a.overtimeTimeOut);
+          overtimeHours = Math.max(
+            0,
+            (end.getTime() - start.getTime()) / (1000 * 60 * 60)
+          );
+        } catch {}
+      }
+
       // Calculate total hours (use provided hours or sum of sessions)
       let hours = a.hours || 0;
-      if (hours === 0 && (morningHours > 0 || afternoonHours > 0)) {
-        hours = morningHours + afternoonHours;
+      if (hours === 0 && (morningHours > 0 || afternoonHours > 0 || overtimeHours > 0)) {
+        hours = morningHours + afternoonHours + overtimeHours;
       } else if (hours === 0 && a.timeIn && a.timeOut) {
         // Fallback to legacy calculation
         try {
@@ -470,6 +487,13 @@ export default function ProfilePage() {
           ? formatTime(a.afternoonTimeOut)
           : null,
         afternoonHours: Number(afternoonHours.toFixed(2)),
+        overtimeTimeIn: a.overtimeTimeIn
+          ? formatTime(a.overtimeTimeIn)
+          : null,
+        overtimeTimeOut: a.overtimeTimeOut
+          ? formatTime(a.overtimeTimeOut)
+          : null,
+        overtimeHours: Number(overtimeHours.toFixed(2)),
         hours: Number(hours.toFixed(2)),
         status: a.status || "present",
         remarks: a.timeInRemarks || a.timeOutRemarks || "",
@@ -706,6 +730,7 @@ export default function ProfilePage() {
 								<th>Day</th>
 								<th colspan="2" style="background-color: #e0f2fe;">Morning Session</th>
 								<th colspan="2" style="background-color: #dcfce7;">Afternoon Session</th>
+								<th colspan="2" style="background-color: #fff7ed;">Overtime Session</th>
 								<th>Total Hours</th>
 								<th>Remarks</th>
 							</tr>
@@ -716,6 +741,8 @@ export default function ProfilePage() {
 								<th style="background-color: #e0f2fe;">Out</th>
 								<th style="background-color: #dcfce7;">In</th>
 								<th style="background-color: #dcfce7;">Out</th>
+								<th style="background-color: #fff7ed;">In</th>
+								<th style="background-color: #fff7ed;">Out</th>
 								<th></th>
 								<th></th>
 							</tr>
@@ -735,6 +762,8 @@ export default function ProfilePage() {
 									<td style="background-color: #e0f2fe;">${record.morningTimeOut || "N/A"}</td>
 									<td style="background-color: #dcfce7;">${record.afternoonTimeIn || "N/A"}</td>
 									<td style="background-color: #dcfce7;">${record.afternoonTimeOut || "N/A"}</td>
+									<td style="background-color: #fff7ed;">${record.overtimeTimeIn || "N/A"}</td>
+									<td style="background-color: #fff7ed;">${record.overtimeTimeOut || "N/A"}</td>
 									<td>${record.hours.toFixed(2)}</td>
 									<td>${record.remarks || "N/A"}</td>
 								</tr>
@@ -743,7 +772,7 @@ export default function ProfilePage() {
                       .join("")
                   : `
 								<tr>
-									<td colspan="8" style="text-align: center; font-style: italic; color: #666;">
+									<td colspan="10" style="text-align: center; font-style: italic; color: #666;">
 										No attendance records found
 									</td>
 								</tr>
@@ -954,6 +983,7 @@ export default function ProfilePage() {
 								<th>Day</th>
 								<th colspan="2" style="background-color: #e0f2fe;">Morning Session</th>
 								<th colspan="2" style="background-color: #dcfce7;">Afternoon Session</th>
+								<th colspan="2" style="background-color: #fff7ed;">Overtime Session</th>
 								<th>Total Hours</th>
 								<th>Remarks</th>
 							</tr>
@@ -964,6 +994,8 @@ export default function ProfilePage() {
 								<th style="background-color: #e0f2fe;">Out</th>
 								<th style="background-color: #dcfce7;">In</th>
 								<th style="background-color: #dcfce7;">Out</th>
+								<th style="background-color: #fff7ed;">In</th>
+								<th style="background-color: #fff7ed;">Out</th>
 								<th></th>
 								<th></th>
 							</tr>
@@ -983,6 +1015,8 @@ export default function ProfilePage() {
 									<td style="background-color: #e0f2fe;">${record.morningTimeOut || "N/A"}</td>
 									<td style="background-color: #dcfce7;">${record.afternoonTimeIn || "N/A"}</td>
 									<td style="background-color: #dcfce7;">${record.afternoonTimeOut || "N/A"}</td>
+									<td style="background-color: #fff7ed;">${record.overtimeTimeIn || "N/A"}</td>
+									<td style="background-color: #fff7ed;">${record.overtimeTimeOut || "N/A"}</td>
 									<td>${record.hours.toFixed(2)}</td>
 									<td>${record.remarks || "N/A"}</td>
 								</tr>
@@ -991,7 +1025,7 @@ export default function ProfilePage() {
                       .join("")
                   : `
 								<tr>
-									<td colspan="8" style="text-align: center; font-style: italic; color: #666;">
+									<td colspan="10" style="text-align: center; font-style: italic; color: #666;">
 										No attendance records found
 									</td>
 								</tr>
@@ -1778,6 +1812,12 @@ export default function ProfilePage() {
                         >
                           Afternoon Session
                         </th>
+                        <th
+                          colSpan={2}
+                          className="border border-gray-300 px-3 py-2 text-center text-xs sm:text-sm font-medium text-gray-700 bg-orange-50"
+                        >
+                          Overtime Session
+                        </th>
                         <th className="border border-gray-300 px-3 py-2 text-left text-xs sm:text-sm font-medium text-gray-700">
                           Total Hours
                         </th>
@@ -1798,6 +1838,12 @@ export default function ProfilePage() {
                           In
                         </th>
                         <th className="border border-gray-300 px-3 py-2 text-left text-xs sm:text-sm font-medium text-gray-700 bg-primary-50">
+                          Out
+                        </th>
+                        <th className="border border-gray-300 px-3 py-2 text-left text-xs sm:text-sm font-medium text-gray-700 bg-orange-50">
+                          In
+                        </th>
+                        <th className="border border-gray-300 px-3 py-2 text-left text-xs sm:text-sm font-medium text-gray-700 bg-orange-50">
                           Out
                         </th>
                         <th className="border border-gray-300 px-3 py-2"></th>
@@ -1824,6 +1870,12 @@ export default function ProfilePage() {
                           </td>
                           <td className="border border-gray-300 px-3 py-2 text-xs sm:text-sm bg-primary-50">
                             {record.afternoonTimeOut || "N/A"}
+                          </td>
+                          <td className="border border-gray-300 px-3 py-2 text-xs sm:text-sm bg-orange-50">
+                            {record.overtimeTimeIn || "N/A"}
+                          </td>
+                          <td className="border border-gray-300 px-3 py-2 text-xs sm:text-sm bg-orange-50">
+                            {record.overtimeTimeOut || "N/A"}
                           </td>
                           <td className="border border-gray-300 px-3 py-2 text-xs sm:text-sm font-semibold">
                             {record.hours.toFixed(2)}
@@ -1918,6 +1970,40 @@ export default function ProfilePage() {
                               record.afternoonHours > 0 && (
                                 <div className="text-xs text-gray-600 mt-1">
                                   Hours: {record.afternoonHours.toFixed(2)}h
+                                </div>
+                              )}
+                          </div>
+                        )}
+
+                        {/* Overtime Session */}
+                        {(record.overtimeTimeIn ||
+                          record.overtimeTimeOut) && (
+                          <div className="pb-2 border-b border-gray-200">
+                            <div className="text-xs font-semibold text-orange-700 mb-1">
+                              Overtime Session
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="text-sm">
+                                <span className="font-medium text-gray-700">
+                                  Time In:
+                                </span>
+                                <div className="text-gray-900">
+                                  {record.overtimeTimeIn || "N/A"}
+                                </div>
+                              </div>
+                              <div className="text-sm">
+                                <span className="font-medium text-gray-700">
+                                  Time Out:
+                                </span>
+                                <div className="text-gray-900">
+                                  {record.overtimeTimeOut || "N/A"}
+                                </div>
+                              </div>
+                            </div>
+                            {record.overtimeHours &&
+                              record.overtimeHours > 0 && (
+                                <div className="text-xs text-gray-600 mt-1">
+                                  Hours: {record.overtimeHours.toFixed(2)}h
                                 </div>
                               )}
                           </div>

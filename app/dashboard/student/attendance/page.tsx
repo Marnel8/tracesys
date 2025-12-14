@@ -24,16 +24,6 @@ import {
   useClockOut,
   AttendanceRecord,
 } from "@/hooks/attendance";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 
 export default function AttendancePage() {
   const { toast } = useToast();
@@ -72,10 +62,23 @@ export default function AttendancePage() {
     useState(false);
   const detectionIntervalRef = useRef<number | null>(null);
   const detectionRafRef = useRef<number | null>(null);
-  const [showClockOutConfirm, setShowClockOutConfirm] = useState(false);
   const [currentSession, setCurrentSession] = useState<
     "morning" | "afternoon" | null
   >(null);
+  const [clockInSession, setClockInSession] = useState<
+    "morning" | "afternoon" | null
+  >(null);
+  const [clockOutSession, setClockOutSession] = useState<
+    "morning" | "afternoon" | null
+  >(null);
+  const [overtimeClockInSession, setOvertimeClockInSession] = useState<
+    "overtime" | null
+  >(null);
+  const [overtimeClockOutSession, setOvertimeClockOutSession] = useState<
+    "overtime" | null
+  >(null);
+  const [isOvertimeClockingIn, setIsOvertimeClockingIn] = useState(false);
+  const [isOvertimeClockingOut, setIsOvertimeClockingOut] = useState(false);
   const [showClockingMechanism, setShowClockingMechanism] = useState(true);
 
   // Auth and required-requirements gate
@@ -148,8 +151,13 @@ export default function AttendancePage() {
 
   // Get agency operating info
   const agency = practicumWithAgency?.agency;
-  const agencyOperatingDays = agency?.operatingDays
-    ? agency.operatingDays.split(",").map((d: string) => d.trim())
+  const agencyOperatingDaysRaw = agency?.operatingDays;
+  // Parse operating days - split by comma and clean up
+  const agencyOperatingDays = agencyOperatingDaysRaw
+    ? String(agencyOperatingDaysRaw)
+        .split(",")
+        .map((d: string) => d.trim())
+        .filter((d: string) => d.length > 0)
     : [];
   const agencyOpeningTime = agency?.openingTime;
   const agencyClosingTime = agency?.closingTime;
@@ -160,48 +168,137 @@ export default function AttendancePage() {
   const todayDayName = new Date().toLocaleDateString("en-US", {
     weekday: "long",
   });
+
+  // Normalize both for case-insensitive comparison
+  const normalizedOperatingDays = agencyOperatingDays.map((day: string) =>
+    day.trim().toLowerCase()
+  );
+  const normalizedTodayDayName = todayDayName.toLowerCase().trim();
+
+  // Check if today is an operating day
+  // If no operating days are set, allow all days
   const isOperatingDay =
     agencyOperatingDays.length === 0 ||
-    agencyOperatingDays.includes(todayDayName);
+    normalizedOperatingDays.includes(normalizedTodayDayName);
+
+  // Helper function to parse time string to minutes since midnight
+  const parseTimeToMinutes = (
+    timeStr: string | null | undefined
+  ): number | null => {
+    if (!timeStr) return null;
+    const parts = timeStr.split(":");
+    if (parts.length < 2) return null;
+    return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+  };
+
+  // Check if current time is within operating hours (allowing early/late clock-ins)
+  const isWithinOperatingHours = useMemo(() => {
+    if (!agencyOpeningTime || !agencyClosingTime) {
+      // If no operating hours set, allow clocking at any time
+      return true;
+    }
+
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const currentTimeMinutes = currentHour * 60 + currentMinute;
+
+    const opening = parseTimeToMinutes(agencyOpeningTime);
+    const closing = parseTimeToMinutes(agencyClosingTime);
+
+    if (opening === null || closing === null) return true;
+
+    // Handle case where operating hours span midnight (e.g., 12:00 AM - 5:00 AM)
+    // If closing time is less than opening time, it means it spans midnight
+    if (closing < opening) {
+      // Operating hours span midnight (e.g., 12:00 AM - 5:00 AM)
+      // Current time is valid if it's >= opening OR <= closing
+      return currentTimeMinutes >= opening || currentTimeMinutes <= closing;
+    } else {
+      // Normal case: operating hours within the same day
+      return currentTimeMinutes >= opening && currentTimeMinutes <= closing;
+    }
+  }, [agencyOpeningTime, agencyClosingTime, currentTime]);
 
   // Determine current session type based on time
+  // Session determination is based on lunch times (if available) or midpoint of operating hours
+  // Students can clock in/out at ANY time - operating hours are just reference points
+  // NOTE: Agency lunch times (lunchStartTime, lunchEndTime) are REFERENCE POINTS ONLY
+  // They are used for session determination and remarks calculation, NOT for hours calculation.
+  // Actual lunch duration is calculated dynamically as: afternoonTimeIn - morningTimeOut
   useEffect(() => {
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
     const currentTimeMinutes = currentHour * 60 + currentMinute;
 
-    // Parse time string to minutes
-    const parseTime = (timeStr: string | null | undefined): number | null => {
-      if (!timeStr) return null;
-      const parts = timeStr.split(":");
-      if (parts.length < 2) return null;
-      return parseInt(parts[0]) * 60 + parseInt(parts[1]);
-    };
+    const lunchStart = parseTimeToMinutes(agencyLunchStartTime);
+    const lunchEnd = parseTimeToMinutes(agencyLunchEndTime);
+    const opening = parseTimeToMinutes(agencyOpeningTime);
+    const closing = parseTimeToMinutes(agencyClosingTime);
 
-    const lunchStart = parseTime(agencyLunchStartTime);
-    const lunchEnd = parseTime(agencyLunchEndTime);
-    const opening = parseTime(agencyOpeningTime);
-    const closing = parseTime(agencyClosingTime);
-
-    // Determine session - allow early/late clock-ins
-    // Morning session: before lunch start (or before midpoint if no lunch times)
-    // Afternoon session: after lunch end (or after midpoint if no lunch times)
-    // During lunch: default to afternoon (allows clocking in for afternoon session)
-    if (lunchStart && lunchEnd) {
-      // If we have lunch times, use them to determine session
-      if (currentTimeMinutes < lunchStart) {
-        setCurrentSession("morning");
+    // Determine session based on lunch times (primary) or operating hours midpoint (fallback)
+    // Morning session: before lunch start (reference point)
+    // Afternoon session: at/after lunch start (reference point) - allows clocking in during lunch for afternoon
+    // NOTE: These lunch times are reference points for session determination, not actual lunch duration
+    if (lunchStart !== null) {
+      // Use lunch start time (reference point) as the divider between morning and afternoon
+      // Handle lunch break that might span midnight
+      if (lunchEnd !== null && lunchEnd < lunchStart) {
+        // Lunch spans midnight (e.g., 11:00 PM - 1:00 AM)
+        // Morning: between lunch end and lunch start
+        // Afternoon: at/after lunch start OR before/at lunch end
+        if (currentTimeMinutes > lunchEnd && currentTimeMinutes < lunchStart) {
+          setCurrentSession("morning");
+        } else {
+          setCurrentSession("afternoon");
+        }
       } else {
-        // After lunch start, allow afternoon session (even during lunch break)
-        setCurrentSession("afternoon");
+        // Normal lunch break (e.g., 2:00 AM - 4:00 AM)
+        // Morning: before lunch start
+        // Afternoon: at/after lunch start (includes during lunch break)
+        if (currentTimeMinutes < lunchStart) {
+          setCurrentSession("morning");
+        } else {
+          setCurrentSession("afternoon");
+        }
       }
-    } else if (opening && closing) {
-      // No lunch times, use midpoint
-      const midPoint = opening + (closing - opening) / 2;
-      setCurrentSession(
-        currentTimeMinutes < midPoint ? "morning" : "afternoon"
-      );
+    } else if (opening !== null && closing !== null) {
+      // No lunch times, use midpoint of operating hours
+      // Handle case where operating hours span midnight
+      if (closing < opening) {
+        // Operating hours span midnight (e.g., 12:00 AM - 5:00 AM)
+        const totalMinutes = 24 * 60 - opening + closing;
+        const midPoint = opening + totalMinutes / 2;
+
+        // Adjust midpoint if it wraps past midnight
+        if (midPoint >= 24 * 60) {
+          const adjustedMidPoint = midPoint - 24 * 60;
+          // Morning: from opening to adjusted midpoint (wrapping past midnight)
+          // Afternoon: after adjusted midpoint to closing
+          if (
+            currentTimeMinutes >= opening ||
+            currentTimeMinutes <= adjustedMidPoint
+          ) {
+            setCurrentSession("morning");
+          } else {
+            setCurrentSession("afternoon");
+          }
+        } else {
+          // Midpoint doesn't wrap
+          if (currentTimeMinutes >= opening && currentTimeMinutes < midPoint) {
+            setCurrentSession("morning");
+          } else {
+            setCurrentSession("afternoon");
+          }
+        }
+      } else {
+        // Normal case: operating hours within same day
+        const midPoint = opening + (closing - opening) / 2;
+        setCurrentSession(
+          currentTimeMinutes < midPoint ? "morning" : "afternoon"
+        );
+      }
     } else {
       // No time constraints, default to morning
       setCurrentSession("morning");
@@ -214,64 +311,92 @@ export default function AttendancePage() {
     currentTime,
   ]);
 
-  // Compute available session for clock-in based on completed sessions
+  // Compute available session for clock-in based on time and operating hours
+  // Always returns a session on operating days - restriction is handled in handleClockIn
   const availableSessionForClockIn = useMemo(() => {
+    // If not an operating day, no session available
+    if (!isOperatingDay) {
+      return null;
+    }
+
     const morningComplete =
       todayAttendance?.morningTimeIn && todayAttendance?.morningTimeOut;
     const afternoonComplete =
       todayAttendance?.afternoonTimeIn && todayAttendance?.afternoonTimeOut;
-    const morningInProgress =
-      todayAttendance?.morningTimeIn && !todayAttendance?.morningTimeOut;
-    const afternoonInProgress =
-      todayAttendance?.afternoonTimeIn && !todayAttendance?.afternoonTimeOut;
-    const morningStarted = !!todayAttendance?.morningTimeIn;
-    const afternoonStarted = !!todayAttendance?.afternoonTimeIn;
 
     // If both sessions are complete, no session available for clock-in
     if (morningComplete && afternoonComplete) {
       return null;
     }
 
-    // If morning is complete and afternoon hasn't started, allow afternoon clock-in
-    if (morningComplete && !afternoonStarted) {
-      return "afternoon";
-    }
+    // Check for in-progress sessions - if any session is in progress, no clock-in available
+    const morningInProgress =
+      todayAttendance?.morningTimeIn && !todayAttendance?.morningTimeOut;
+    const afternoonInProgress =
+      todayAttendance?.afternoonTimeIn && !todayAttendance?.afternoonTimeOut;
 
-    // If afternoon is complete and morning hasn't started, allow morning clock-in
-    if (afternoonComplete && !morningStarted) {
-      return "morning";
-    }
-
-    // If morning is in progress but afternoon hasn't started, allow afternoon clock-in
-    if (morningInProgress && !afternoonStarted) {
-      return "afternoon";
-    }
-
-    // If afternoon is in progress but morning hasn't started, allow morning clock-in
-    if (afternoonInProgress && !morningStarted) {
-      return "morning";
-    }
-
-    // If both sessions are in progress or one is complete and the other is in progress, no clock-in available
-    if (
-      (morningInProgress && afternoonInProgress) ||
-      (morningComplete && afternoonInProgress) ||
-      (afternoonComplete && morningInProgress)
-    ) {
+    // If any session is in progress, no clock-in available (must clock out first)
+    if (morningInProgress || afternoonInProgress) {
       return null;
     }
 
-    // If neither session has started, use the time-based current session
-    if (!morningStarted && !afternoonStarted) {
+    // Determine session based on current time and operating hours
+    // The restriction for second session is handled in handleClockIn
+    if (currentSession) {
       return currentSession;
     }
 
-    // Default: no session available
-    return null;
-  }, [todayAttendance, currentSession]);
+    // Fallback: if currentSession is null, determine session based on operating hours
+    const lunchStart = parseTimeToMinutes(agencyLunchStartTime);
+    const opening = parseTimeToMinutes(agencyOpeningTime);
+    const closing = parseTimeToMinutes(agencyClosingTime);
+    const now = new Date();
+    const currentTimeMinutes = now.getHours() * 60 + now.getMinutes();
+
+    if (lunchStart !== null) {
+      // Use lunch start as divider
+      return currentTimeMinutes < lunchStart ? "morning" : "afternoon";
+    } else if (opening !== null && closing !== null) {
+      // Use midpoint
+      if (closing < opening) {
+        // Spans midnight
+        const totalMinutes = 24 * 60 - opening + closing;
+        const midPoint = opening + totalMinutes / 2;
+        if (midPoint >= 24 * 60) {
+          const adjustedMidPoint = midPoint - 24 * 60;
+          return currentTimeMinutes >= opening ||
+            currentTimeMinutes <= adjustedMidPoint
+            ? "morning"
+            : "afternoon";
+        } else {
+          return currentTimeMinutes >= opening && currentTimeMinutes < midPoint
+            ? "morning"
+            : "afternoon";
+        }
+      } else {
+        const midPoint = opening + (closing - opening) / 2;
+        return currentTimeMinutes < midPoint ? "morning" : "afternoon";
+      }
+    }
+    // Default to morning
+    return "morning";
+  }, [
+    todayAttendance,
+    currentSession,
+    isOperatingDay,
+    agencyLunchStartTime,
+    agencyOpeningTime,
+    agencyClosingTime,
+  ]);
 
   // Compute available session for clock-out based on in-progress sessions
+  // Operating hours are the determining factor
   const availableSessionForClockOut = useMemo(() => {
+    // If not an operating day, no session available
+    if (!isOperatingDay) {
+      return null;
+    }
+
     const morningInProgress =
       todayAttendance?.morningTimeIn && !todayAttendance?.morningTimeOut;
     const afternoonInProgress =
@@ -289,14 +414,63 @@ export default function AttendancePage() {
 
     // No session in progress
     return null;
+  }, [todayAttendance, isOperatingDay]);
+
+  // Check if regular sessions are complete (both morning and afternoon clocked out)
+  const areRegularSessionsComplete = useMemo(() => {
+    return !!(
+      todayAttendance?.morningTimeIn &&
+      todayAttendance?.morningTimeOut &&
+      todayAttendance?.afternoonTimeIn &&
+      todayAttendance?.afternoonTimeOut
+    );
+  }, [todayAttendance]);
+
+  // Compute available overtime session for clock-in
+  // Overtime can only be clocked in if regular sessions are complete
+  const availableOvertimeSessionForClockIn = useMemo(() => {
+    if (!areRegularSessionsComplete) {
+      return null;
+    }
+
+    // Check if overtime is already clocked in (has overtimeTimeIn but no overtimeTimeOut means in progress)
+    if (todayAttendance?.overtimeTimeIn && !todayAttendance?.overtimeTimeOut) {
+      return null; // Overtime is in progress, cannot clock in again
+    }
+
+    // Check if overtime is already complete
+    if (todayAttendance?.overtimeTimeIn && todayAttendance?.overtimeTimeOut) {
+      return null; // Overtime is already complete
+    }
+
+    // Regular sessions are complete and overtime hasn't started yet
+    return "overtime";
+  }, [areRegularSessionsComplete, todayAttendance]);
+
+  // Compute available overtime session for clock-out
+  const availableOvertimeSessionForClockOut = useMemo(() => {
+    // Check if overtime is in progress
+    // Overtime is in progress if we have overtimeTimeIn but not overtimeTimeOut
+    if (todayAttendance?.overtimeTimeIn && !todayAttendance?.overtimeTimeOut) {
+      return "overtime";
+    }
+    return null;
   }, [todayAttendance]);
 
   // Attendance hooks
   const clockInMutation = useClockIn();
   const clockOutMutation = useClockOut();
 
-  // Get today's date for filtering
-  const today = new Date().toISOString().split("T")[0];
+  // Get today's date for filtering - use local timezone, not UTC
+  // This ensures the date matches the local day of the week
+  const getLocalDateString = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+  const today = getLocalDateString();
 
   // Fetch today's attendance record
   const { data: attendanceData, isLoading: isLoadingAttendance } =
@@ -893,19 +1067,48 @@ export default function AttendancePage() {
       return;
     }
 
-    // Check if already clocked in for the available session
-    if (!availableSessionForClockIn) {
+    // Check if there's an in-progress session first
+    const morningInProgress =
+      todayAttendance?.morningTimeIn && !todayAttendance?.morningTimeOut;
+    const afternoonInProgress =
+      todayAttendance?.afternoonTimeIn && !todayAttendance?.afternoonTimeOut;
+
+    if (morningInProgress || afternoonInProgress) {
+      const inProgressSession = morningInProgress ? "morning" : "afternoon";
       toast({
         variant: "destructive",
-        title: "No session available",
-        description:
-          "All sessions for today have been completed or are not available.",
+        title: "Clock out required",
+        description: `You have an active ${inProgressSession} session. Please clock out before clocking in again.`,
       });
       return;
     }
 
+    // Use currentSession as fallback if availableSessionForClockIn is null
+    // This ensures buttons are always enabled and session is determined by time
+    const sessionToUse = availableSessionForClockIn || currentSession;
+
+    if (!sessionToUse) {
+      const bothComplete =
+        todayAttendance?.morningTimeIn &&
+        todayAttendance?.morningTimeOut &&
+        todayAttendance?.afternoonTimeIn &&
+        todayAttendance?.afternoonTimeOut;
+
+      toast({
+        variant: "destructive",
+        title: "No session available",
+        description: bothComplete
+          ? "All sessions for today have been completed."
+          : "Unable to determine session. Please try again.",
+      });
+      return;
+    }
+
+    // Note: In-progress session checks are handled by the early return above
+
+    // Check if already clocked in for the session
     if (
-      availableSessionForClockIn === "morning" &&
+      sessionToUse === "morning" &&
       todayAttendance?.morningTimeIn &&
       !todayAttendance?.morningTimeOut
     ) {
@@ -919,7 +1122,7 @@ export default function AttendancePage() {
     }
 
     if (
-      availableSessionForClockIn === "afternoon" &&
+      sessionToUse === "afternoon" &&
       todayAttendance?.afternoonTimeIn &&
       !todayAttendance?.afternoonTimeOut
     ) {
@@ -931,6 +1134,9 @@ export default function AttendancePage() {
       });
       return;
     }
+
+    // Store the session for use in submitClockIn
+    setClockInSession(sessionToUse);
 
     // Start camera for selfie capture
     setIsClockingIn(true);
@@ -987,9 +1193,14 @@ export default function AttendancePage() {
 
       // Determine session type and if late
       const now = new Date();
-      const sessionType = availableSessionForClockIn || "morning";
+      const sessionType =
+        clockInSession ||
+        availableSessionForClockIn ||
+        currentSession ||
+        "morning";
 
-      // Check if late based on opening time or lunch end time
+      // Check if late based on opening time or lunch end time (reference points for remarks)
+      // NOTE: These times are reference points for determining "Late" remarks, not for hours calculation
       let isLate = false;
       if (sessionType === "morning" && agencyOpeningTime) {
         const [hours, minutes] = agencyOpeningTime.split(":").map(Number);
@@ -997,6 +1208,7 @@ export default function AttendancePage() {
         expectedTime.setHours(hours, minutes || 0, 0, 0);
         isLate = now > expectedTime;
       } else if (sessionType === "afternoon" && agencyLunchEndTime) {
+        // lunchEndTime is a reference point for determining if afternoon clock-in is late
         const [hours, minutes] = agencyLunchEndTime.split(":").map(Number);
         const expectedTime = new Date();
         expectedTime.setHours(hours, minutes || 0, 0, 0);
@@ -1024,6 +1236,7 @@ export default function AttendancePage() {
       setWasCapturedWithFaceDetection(false);
       setShowCamera(false);
       setIsClockingIn(false);
+      setClockInSession(null);
     } catch (error) {
       console.log(error);
     }
@@ -1052,7 +1265,7 @@ export default function AttendancePage() {
     }
   };
 
-  const cancelClockIn = () => {
+  const cancelCamera = () => {
     // Stop camera if running
     if (videoRef.current?.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
@@ -1065,6 +1278,13 @@ export default function AttendancePage() {
     setIsCapturing(false);
     setShowCamera(false);
     setIsClockingIn(false);
+    setIsClockingOut(false);
+    setIsOvertimeClockingIn(false);
+    setIsOvertimeClockingOut(false);
+    setClockInSession(null);
+    setClockOutSession(null);
+    setOvertimeClockInSession(null);
+    setOvertimeClockOutSession(null);
   };
 
   const handleClockOut = async () => {
@@ -1145,15 +1365,53 @@ export default function AttendancePage() {
       return;
     }
 
-    // Show confirmation modal
-    setShowClockOutConfirm(true);
+    // Store the session for use in submitClockOut
+    setClockOutSession(sessionType);
+
+    // Start camera for selfie capture
+    setIsClockingOut(true);
+    await startCamera();
   };
 
-  const confirmClockOut = async () => {
-    setIsClockingOut(true);
-    setShowClockOutConfirm(false);
+  const submitClockOut = async () => {
+    if (!capturedImage) {
+      toast({
+        variant: "destructive",
+        title: "Selfie required",
+        description: "Take a selfie to complete clock out.",
+      });
+      return;
+    }
+
+    // Safety check: ensure image was captured with face detection active
+    if (!wasCapturedWithFaceDetection) {
+      toast({
+        variant: "destructive",
+        title: "Invalid capture",
+        description:
+          "The photo was not captured with face detection active. Please retake the photo with your face properly detected.",
+      });
+      // Reset captured image to force retake
+      setCapturedImage(null);
+      setWasCapturedWithFaceDetection(false);
+      return;
+    }
+
+    if (!practicumWithAgency?.id) {
+      toast({
+        variant: "destructive",
+        title: "No practicum found",
+        description: "You need to be assigned to a practicum to clock out.",
+      });
+      return;
+    }
 
     try {
+      // Convert captured image to File object
+      const response = await fetch(capturedImage);
+      const blob = await response.blob();
+      const file = new File([blob], "selfie.jpg", { type: "image/jpeg" });
+
       // Get device information
       const deviceInfo = {
         deviceType: /Mobile|Android|iPhone|iPad/.test(navigator.userAgent)
@@ -1165,11 +1423,14 @@ export default function AttendancePage() {
 
       // Determine session type and if early departure
       const now = new Date();
-      const sessionType = availableSessionForClockOut || "morning";
+      const sessionType =
+        clockOutSession || availableSessionForClockOut || "morning";
 
-      // Check if early departure
+      // Check if early departure (using reference points for remarks)
+      // NOTE: These times are reference points for determining "Early Departure" remarks, not for hours calculation
       let isEarlyDeparture = false;
       if (sessionType === "morning" && agencyLunchStartTime) {
+        // lunchStartTime is a reference point for determining if morning clock-out is early
         const [hours, minutes] = agencyLunchStartTime.split(":").map(Number);
         const expectedTime = new Date();
         expectedTime.setHours(hours, minutes || 0, 0, 0);
@@ -1192,17 +1453,253 @@ export default function AttendancePage() {
         deviceUnit: deviceInfo.deviceUnit,
         macAddress: macAddress,
         remarks: isEarlyDeparture ? "Early Departure" : "Normal",
-        photo: null, // Clock out doesn't require photo for now
+        photo: file,
         sessionType: sessionType,
       });
+
+      // Reset camera state
+      setCapturedImage(null);
+      setWasCapturedWithFaceDetection(false);
+      setShowCamera(false);
+      setIsClockingOut(false);
+      setClockOutSession(null);
     } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const handleOvertimeClockIn = async () => {
+    if (hasBlockingRequired) {
       toast({
         variant: "destructive",
-        title: "Clock out failed",
-        description: "Something went wrong. Please try again.",
+        title: "Action required",
+        description: "Get required items approved before recording attendance.",
       });
-    } finally {
-      setIsClockingOut(false);
+      return;
+    }
+    if (!location) {
+      toast({
+        variant: "destructive",
+        title: "Location required",
+        description: "Enable location services to clock in.",
+      });
+      return;
+    }
+
+    // Check if regular sessions are complete
+    if (!areRegularSessionsComplete) {
+      toast({
+        variant: "destructive",
+        title: "Regular sessions required",
+        description:
+          "You must complete both morning and afternoon sessions before clocking in for overtime.",
+      });
+      return;
+    }
+
+    // Store the session for use in submitOvertimeClockIn
+    setOvertimeClockInSession("overtime");
+
+    // Start camera for selfie capture
+    setIsOvertimeClockingIn(true);
+    await startCamera();
+  };
+
+  const submitOvertimeClockIn = async () => {
+    if (!capturedImage) {
+      toast({
+        variant: "destructive",
+        title: "Selfie required",
+        description: "Take a selfie to complete clock in.",
+      });
+      return;
+    }
+
+    // Safety check: ensure image was captured with face detection active
+    if (!wasCapturedWithFaceDetection) {
+      toast({
+        variant: "destructive",
+        title: "Invalid capture",
+        description:
+          "The photo was not captured with face detection active. Please retake the photo with your face properly detected.",
+      });
+      // Reset captured image to force retake
+      setCapturedImage(null);
+      setWasCapturedWithFaceDetection(false);
+      return;
+    }
+
+    if (!practicumWithAgency?.id) {
+      toast({
+        variant: "destructive",
+        title: "No practicum found",
+        description: "You need to be assigned to a practicum to clock in.",
+      });
+      return;
+    }
+
+    try {
+      // Convert captured image to File object
+      const response = await fetch(capturedImage);
+      const blob = await response.blob();
+      const file = new File([blob], "selfie.jpg", { type: "image/jpeg" });
+
+      // Get device information
+      const deviceInfo = {
+        deviceType: /Mobile|Android|iPhone|iPad/.test(navigator.userAgent)
+          ? "Mobile"
+          : "Desktop",
+        deviceUnit: navigator.userAgent,
+        macAddress: null, // Not available in browser
+      };
+
+      const now = new Date();
+
+      await clockInMutation.mutateAsync({
+        practicumId: practicumWithAgency.id,
+        date: today,
+        day: now.toLocaleDateString("en-US", { weekday: "long" }),
+        latitude: location?.latitude || null,
+        longitude: location?.longitude || null,
+        address: location?.address || null,
+        locationType: (locationType || "Inside") as any,
+        deviceType: deviceInfo.deviceType as "Mobile" | "Desktop" | "Tablet",
+        deviceUnit: deviceInfo.deviceUnit,
+        macAddress: macAddress,
+        remarks: "Normal",
+        photo: file,
+        sessionType: "overtime",
+      });
+
+      // Reset camera state
+      setCapturedImage(null);
+      setWasCapturedWithFaceDetection(false);
+      setShowCamera(false);
+      setIsOvertimeClockingIn(false);
+      setOvertimeClockInSession(null);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const handleOvertimeClockOut = async () => {
+    if (hasBlockingRequired) {
+      toast({
+        variant: "destructive",
+        title: "Action required",
+        description: "Get required items approved before recording attendance.",
+      });
+      return;
+    }
+    if (!location) {
+      toast({
+        variant: "destructive",
+        title: "Location required",
+        description: "Enable location services to clock out.",
+      });
+      return;
+    }
+
+    // Check if overtime is clocked in
+    // This would need to be checked from the backend response
+    // For now, we'll allow it if regular sessions are complete
+    if (!areRegularSessionsComplete) {
+      toast({
+        variant: "destructive",
+        title: "Overtime not started",
+        description: "You must clock in for overtime before clocking out.",
+      });
+      return;
+    }
+
+    if (!practicumWithAgency?.id) {
+      toast({
+        variant: "destructive",
+        title: "No practicum found",
+        description: "You need to be assigned to a practicum to clock out.",
+      });
+      return;
+    }
+
+    // Store the session for use in submitOvertimeClockOut
+    setOvertimeClockOutSession("overtime");
+
+    // Start camera for selfie capture
+    setIsOvertimeClockingOut(true);
+    await startCamera();
+  };
+
+  const submitOvertimeClockOut = async () => {
+    if (!capturedImage) {
+      toast({
+        variant: "destructive",
+        title: "Selfie required",
+        description: "Take a selfie to complete clock out.",
+      });
+      return;
+    }
+
+    // Safety check: ensure image was captured with face detection active
+    if (!wasCapturedWithFaceDetection) {
+      toast({
+        variant: "destructive",
+        title: "Invalid capture",
+        description:
+          "The photo was not captured with face detection active. Please retake the photo with your face properly detected.",
+      });
+      // Reset captured image to force retake
+      setCapturedImage(null);
+      setWasCapturedWithFaceDetection(false);
+      return;
+    }
+
+    if (!practicumWithAgency?.id) {
+      toast({
+        variant: "destructive",
+        title: "No practicum found",
+        description: "You need to be assigned to a practicum to clock out.",
+      });
+      return;
+    }
+
+    try {
+      // Convert captured image to File object
+      const response = await fetch(capturedImage);
+      const blob = await response.blob();
+      const file = new File([blob], "selfie.jpg", { type: "image/jpeg" });
+
+      // Get device information
+      const deviceInfo = {
+        deviceType: /Mobile|Android|iPhone|iPad/.test(navigator.userAgent)
+          ? "Mobile"
+          : "Desktop",
+        deviceUnit: navigator.userAgent,
+        macAddress: null, // Not available in browser
+      };
+
+      await clockOutMutation.mutateAsync({
+        practicumId: practicumWithAgency.id,
+        date: today,
+        latitude: location?.latitude || null,
+        longitude: location?.longitude || null,
+        address: location?.address || null,
+        locationType: (locationType || "Inside") as any,
+        deviceType: deviceInfo.deviceType as "Mobile" | "Desktop" | "Tablet",
+        deviceUnit: deviceInfo.deviceUnit,
+        macAddress: macAddress,
+        remarks: "Overtime",
+        photo: file,
+        sessionType: "overtime",
+      });
+
+      // Reset camera state
+      setCapturedImage(null);
+      setWasCapturedWithFaceDetection(false);
+      setShowCamera(false);
+      setIsOvertimeClockingOut(false);
+      setOvertimeClockOutSession(null);
+    } catch (error) {
+      console.log(error);
     }
   };
 
@@ -1321,10 +1818,14 @@ export default function AttendancePage() {
                             )}
                             {agencyLunchStartTime && agencyLunchEndTime && (
                               <p className="text-primary-800">
-                                <strong>Lunch Break:</strong>{" "}
+                                <strong>Lunch Break (Reference):</strong>{" "}
                                 {formatTimeTo12Hour(agencyLunchStartTime)} -{" "}
                                 {formatTimeTo12Hour(agencyLunchEndTime)}{" "}
-                                (excluded from hours)
+                                <span className="text-xs italic">
+                                  (Reference time only - actual lunch duration
+                                  is calculated from your clock-out and clock-in
+                                  times)
+                                </span>
                               </p>
                             )}
                             <div className="mt-2 pt-2 border-t border-primary-300">
@@ -1357,6 +1858,14 @@ export default function AttendancePage() {
                                 The system will automatically determine your
                                 session based on the current time.
                               </p>
+                              <p className="text-primary-800 text-sm mt-2 italic">
+                                <strong>Lunch Duration:</strong> Your actual
+                                lunch break duration is calculated dynamically
+                                as the time between your morning clock-out and
+                                afternoon clock-in. This ensures accurate work
+                                hours calculation by automatically excluding
+                                your actual lunch break from total hours.
+                              </p>
                             </div>
                             <p className="text-primary-900 font-semibold mt-2 pt-2 border-t border-primary-300">
                               Important: If you don't clock out by end of day,
@@ -1384,8 +1893,16 @@ export default function AttendancePage() {
                 overlayCircleRef={overlayCircleRef}
                 capturedImage={capturedImage}
                 onCapture={capturePhoto}
-                onCancel={cancelClockIn}
-                onSubmit={submitClockIn}
+                onCancel={cancelCamera}
+                onSubmit={
+                  isOvertimeClockingOut
+                    ? submitOvertimeClockOut
+                    : isOvertimeClockingIn
+                    ? submitOvertimeClockIn
+                    : isClockingOut
+                    ? submitClockOut
+                    : submitClockIn
+                }
                 onRetake={async () => {
                   setCapturedImage(null);
                   setWasCapturedWithFaceDetection(false);
@@ -1408,14 +1925,10 @@ export default function AttendancePage() {
                       !location ||
                       isClockingIn ||
                       clockInMutation.isPending ||
+                      // Operating hours are the determining factor - always enable on operating days
                       !isOperatingDay ||
-                      // Disable if no session is available for clock-in
-                      !availableSessionForClockIn ||
-                      // Disable if already clocked in for the available session
-                      (availableSessionForClockIn === "morning" &&
-                        todayAttendance?.morningTimeIn) ||
-                      (availableSessionForClockIn === "afternoon" &&
-                        todayAttendance?.afternoonTimeIn)
+                      // Disable if no session is available for clock-in (e.g., session in progress)
+                      !availableSessionForClockIn
                     )
                   }
                   disableClockOut={
@@ -1425,20 +1938,69 @@ export default function AttendancePage() {
                       !location ||
                       isClockingOut ||
                       clockOutMutation.isPending ||
+                      // Operating hours are the determining factor - always enable on operating days
                       !isOperatingDay ||
-                      // Disable if no session is available for clock-out
-                      !availableSessionForClockOut ||
-                      // Disable if already clocked out for the available session
-                      (availableSessionForClockOut === "morning" &&
-                        (!todayAttendance?.morningTimeIn ||
-                          todayAttendance?.morningTimeOut)) ||
-                      (availableSessionForClockOut === "afternoon" &&
-                        (!todayAttendance?.afternoonTimeIn ||
-                          todayAttendance?.afternoonTimeOut))
+                      // Disable if no session is available for clock-out (no clock-in yet)
+                      !availableSessionForClockOut
                     )
                   }
                   isClockingOut={isClockingOut || clockOutMutation.isPending}
                 />
+              )}
+
+              {/* Overtime Section */}
+              {areRegularSessionsComplete && (
+                <Card className="border border-orange-200 shadow-sm bg-orange-50/30">
+                  <CardHeader className="pb-3 sm:pb-6">
+                    <CardTitle className="flex items-center gap-2 text-base sm:text-lg text-orange-700">
+                      <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600" />
+                      Overtime Session
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 sm:space-y-4">
+                    <p className="text-xs sm:text-sm text-orange-800 mb-3">
+                      You can clock in for overtime after completing both
+                      morning and afternoon sessions.
+                    </p>
+
+                    {!showCamera && (
+                      <ClockButtons
+                        onClockIn={handleOvertimeClockIn}
+                        onClockOut={handleOvertimeClockOut}
+                        currentSession={null}
+                        clockInSession={
+                          availableOvertimeSessionForClockIn || null
+                        }
+                        clockOutSession={availableOvertimeSessionForClockOut}
+                        disableClockIn={
+                          !!(
+                            hasBlockingRequired ||
+                            hasAgencyOrDateBlocking ||
+                            !location ||
+                            isOvertimeClockingIn ||
+                            clockInMutation.isPending ||
+                            !areRegularSessionsComplete ||
+                            !availableOvertimeSessionForClockIn
+                          )
+                        }
+                        disableClockOut={
+                          !!(
+                            hasBlockingRequired ||
+                            hasAgencyOrDateBlocking ||
+                            !location ||
+                            isOvertimeClockingOut ||
+                            clockOutMutation.isPending ||
+                            !areRegularSessionsComplete ||
+                            !availableOvertimeSessionForClockOut
+                          )
+                        }
+                        isClockingOut={
+                          isOvertimeClockingOut || clockOutMutation.isPending
+                        }
+                      />
+                    )}
+                  </CardContent>
+                </Card>
               )}
 
               <div className="text-xs text-gray-600 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-md border p-3">
@@ -1519,28 +2081,6 @@ export default function AttendancePage() {
           />
         </div>
       </div>
-
-      {/* Clock Out Confirmation Modal */}
-      <AlertDialog
-        open={showClockOutConfirm}
-        onOpenChange={setShowClockOutConfirm}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Clock Out</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to clock out? This action will record your
-              departure time and cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmClockOut}>
-              Clock Out
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

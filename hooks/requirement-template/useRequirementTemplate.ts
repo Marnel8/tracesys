@@ -33,7 +33,7 @@ export interface RequirementTemplateFormData {
 	title: string;
 	description: string;
 	category: RequirementCategory;
-	priority: RequirementPriority;
+	priority?: RequirementPriority; // Optional, defaults to "medium" on backend
 	isRequired: boolean;
 	instructions?: string | null;
 	allowedFileTypes?: string[]; // client uses array; server stores CSV
@@ -129,12 +129,12 @@ export const useCreateRequirementTemplate = () => {
 
 	return useMutation({
 		mutationFn: async (data: RequirementTemplateFormData & { templateFile?: File | null }): Promise<RequirementTemplate> => {
-			const form = new FormData();
-			form.append("title", data.title);
-			form.append("description", data.description);
-			form.append("category", data.category);
-			form.append("priority", data.priority);
-			form.append("isRequired", String(data.isRequired));
+		const form = new FormData();
+		form.append("title", data.title);
+		form.append("description", data.description);
+		form.append("category", data.category);
+		if (data.priority) form.append("priority", data.priority);
+		form.append("isRequired", String(data.isRequired));
 			if (data.instructions) form.append("instructions", data.instructions);
 			if (Array.isArray(data.allowedFileTypes)) form.append("allowedFileTypes", JSON.stringify(data.allowedFileTypes));
 			if (typeof data.maxFileSize === "number") form.append("maxFileSize", String(data.maxFileSize));

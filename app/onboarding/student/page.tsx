@@ -31,10 +31,13 @@ import { toast } from "sonner";
 import { ArrowRight, Building2, CheckCircle2, Loader2 } from "lucide-react";
 
 const profileSchema = z.object({
-  age: z.number().min(1).max(120),
+  age: z
+    .number()
+    .min(20, "Age must be at least 20")
+    .max(80, "Age must be at most 80"),
   phone: z.string().min(10),
   gender: z.enum(["male", "female", "other"]),
-  studentId: z.string().min(1),
+  studentId: z.string().min(1, "Student ID is required"),
 });
 
 const agencySchema = z
@@ -129,6 +132,7 @@ function StudentOnboardingContent() {
     setLoading(true);
     try {
       // Only create practicum if required fields are provided (supervisor is optional)
+      // Note: Work setup is always "On-site" for all practicums
       if (data.agencyId && data.startDate && data.endDate) {
         await api.post("/practicum/", {
           agencyId: data.agencyId,
@@ -137,7 +141,7 @@ function StudentOnboardingContent() {
           endDate: data.endDate,
           position: "Student Intern",
           totalHours: 400,
-          workSetup: "On-site",
+          workSetup: "On-site", // Always "On-site" - no other options allowed
         });
         toast.success("Agency placement added successfully!");
       }
@@ -235,8 +239,41 @@ function StudentOnboardingContent() {
                       <Input
                         id="age"
                         type="number"
-                        min={1}
+                        min={20}
+                        max={80}
                         inputMode="numeric"
+                        onKeyDown={(e) => {
+                          // Prevent non-numeric keys except backspace, delete, tab, escape, enter, and arrow keys
+                          if (
+                            !/[0-9]/.test(e.key) &&
+                            ![
+                              "Backspace",
+                              "Delete",
+                              "Tab",
+                              "Escape",
+                              "Enter",
+                              "ArrowLeft",
+                              "ArrowRight",
+                              "ArrowUp",
+                              "ArrowDown",
+                            ].includes(e.key) &&
+                            !(e.ctrlKey || e.metaKey) // Allow Ctrl/Cmd combinations
+                          ) {
+                            e.preventDefault();
+                          }
+                        }}
+                        onInput={(e) => {
+                          // Ensure value stays within bounds
+                          const target = e.target as HTMLInputElement;
+                          const value = parseInt(target.value, 10);
+                          if (target.value && !isNaN(value)) {
+                            if (value < 20) {
+                              target.value = "20";
+                            } else if (value > 80) {
+                              target.value = "80";
+                            }
+                          }
+                        }}
                         {...profileForm.register("age", {
                           valueAsNumber: true,
                         })}
@@ -276,10 +313,11 @@ function StudentOnboardingContent() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="studentId">Student ID</Label>
+                      <Label htmlFor="studentId">Student ID *</Label>
                       <Input
                         id="studentId"
                         autoComplete="off"
+                        required
                         {...profileForm.register("studentId")}
                       />
                       {profileForm.formState.errors.studentId && (

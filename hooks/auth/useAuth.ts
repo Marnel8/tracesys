@@ -16,6 +16,10 @@ export interface registerParams {
 	bio?: string;
 	studentId?: string;
 	instructorId?: string;
+	departmentId?: string;
+	program?: string;
+	specialization?: string;
+	yearLevel?: string;
 }
 
 const register = async (userData: registerParams) => {
@@ -46,6 +50,18 @@ const register = async (userData: registerParams) => {
 	}
 	if (userData.instructorId) {
 		formData.append("instructorId", userData.instructorId);
+	}
+	if (userData.departmentId) {
+		formData.append("departmentId", userData.departmentId);
+	}
+	if (userData.program) {
+		formData.append("program", userData.program);
+	}
+	if (userData.specialization) {
+		formData.append("specialization", userData.specialization);
+	}
+	if (userData.yearLevel) {
+		formData.append("yearLevel", userData.yearLevel);
 	}
 	if (userData.avatar) {
 		if (userData.avatar instanceof File) {
@@ -295,6 +311,10 @@ interface EditUserParams {
 	role?: string;
 	password?: string;
 	avatar?: File;
+	departmentId?: string;
+	program?: string;
+	specialization?: string;
+	yearLevel?: string;
 }
 
 const editUser = async (userData: EditUserParams) => {
@@ -336,6 +356,18 @@ const editUser = async (userData: EditUserParams) => {
 	}
 	if (userData.role) {
 		formData.append("role", userData.role);
+	}
+	if (userData.departmentId !== undefined) {
+		formData.append("departmentId", userData.departmentId);
+	}
+	if (userData.program !== undefined) {
+		formData.append("program", userData.program);
+	}
+	if (userData.specialization !== undefined) {
+		formData.append("specialization", userData.specialization);
+	}
+	if (userData.yearLevel !== undefined) {
+		formData.append("yearLevel", userData.yearLevel);
 	}
 	if (userData.password) {
 		formData.append("password", userData.password);

@@ -26,6 +26,29 @@ export interface Requirement {
 	updatedAt: string;
 	template?: any;
 	student?: any;
+	comments?: RequirementComment[];
+}
+
+export interface RequirementComment {
+	id: string;
+	requirementId: string;
+	userId: string;
+	content: string;
+	isPrivate: boolean;
+	createdAt: string;
+	updatedAt: string;
+	user?: {
+		id: string;
+		firstName: string;
+		lastName: string;
+		email: string;
+		role: string;
+	};
+	requirement?: {
+		id: string;
+		title: string;
+		studentId: string;
+	};
 }
 
 export interface RequirementListResponse {
@@ -45,6 +68,9 @@ const ENDPOINTS = {
 	submit: (id: string) => `/requirements/${id}/submit`,
 	approve: (id: string) => `/requirements/${id}/approve`,
 	reject: (id: string) => `/requirements/${id}/reject`,
+	updateDueDate: (id: string) => `/requirements/${id}/due-date`,
+	comments: (id: string) => `/requirements/${id}/comments`,
+	studentComments: (studentId: string) => `/requirements/comments/student/${studentId}`,
 };
 
 export const requirementKeys = {
@@ -62,6 +88,7 @@ export const useRequirements = (filters: {
 	status?: RequirementStatus | "all";
 	studentId?: string;
 	practicumId?: string;
+	includePending?: boolean;
 } = {}) => {
 	return useQuery({
 		queryKey: requirementKeys.list(filters),
@@ -73,6 +100,7 @@ export const useRequirements = (filters: {
 			if (filters.status && filters.status !== "all") params.append("status", filters.status);
 			if (filters.studentId) params.append("studentId", filters.studentId);
 			if (filters.practicumId) params.append("practicumId", filters.practicumId);
+			if (filters.includePending) params.append("includePending", "true");
 			const res = await api.get(`${ENDPOINTS.list}?${params.toString()}`);
 			return res.data.data as RequirementListResponse;
 		},
@@ -164,6 +192,84 @@ export const useRejectRequirement = () => {
 		},
 		onError: (err: any) => {
 			toast.error(err.response?.data?.message || "Failed to reject requirement");
+		},
+	});
+};
+
+export const useCreateRequirementComment = () => {
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: async ({
+			requirementId,
+			content,
+			isPrivate = false,
+		}: {
+			requirementId: string;
+			content: string;
+			isPrivate?: boolean;
+		}) => {
+			const res = await api.post(ENDPOINTS.comments(requirementId), {
+				content,
+				isPrivate,
+			});
+			return res.data.data as RequirementComment;
+		},
+		onSuccess: (data) => {
+			qc.invalidateQueries({ queryKey: requirementKeys.detail(data.requirementId) });
+			qc.invalidateQueries({ queryKey: requirementKeys.all });
+			qc.invalidateQueries({ queryKey: ["requirement-comments", data.requirementId] });
+			qc.invalidateQueries({ queryKey: ["student-requirement-comments"] });
+			toast.success("Comment added");
+		},
+		onError: (err: any) => {
+			toast.error(err.response?.data?.message || "Failed to add comment");
+		},
+	});
+};
+
+export const useRequirementComments = (requirementId: string, options?: { enabled?: boolean }) => {
+	return useQuery({
+		queryKey: ["requirement-comments", requirementId],
+		queryFn: async (): Promise<RequirementComment[]> => {
+			const res = await api.get(ENDPOINTS.comments(requirementId));
+			return res.data.data as RequirementComment[];
+		},
+		enabled: options?.enabled !== undefined ? options.enabled && !!requirementId : !!requirementId,
+	});
+};
+
+export const useStudentRequirementComments = (studentId?: string, lastCheckTime?: string | null) => {
+	return useQuery({
+		queryKey: ["student-requirement-comments", studentId, lastCheckTime],
+		queryFn: async (): Promise<RequirementComment[]> => {
+			if (!studentId) return [];
+			const params = new URLSearchParams();
+			if (lastCheckTime) params.append("lastCheckTime", lastCheckTime);
+			const res = await api.get(`${ENDPOINTS.studentComments(studentId)}?${params.toString()}`);
+			return res.data.data as RequirementComment[];
+		},
+		enabled: !!studentId,
+		staleTime: 0,
+		refetchOnMount: true,
+		refetchOnWindowFocus: true,
+		refetchInterval: 30000, // Refetch every 30 seconds
+	});
+};
+
+export const useUpdateRequirementDueDate = () => {
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: async ({ id, dueDate }: { id: string; dueDate: string | null }) => {
+			const res = await api.put(ENDPOINTS.updateDueDate(id), { dueDate });
+			return res.data.data as Requirement;
+		},
+		onSuccess: (data) => {
+			qc.invalidateQueries({ queryKey: requirementKeys.detail(data.id) });
+			qc.invalidateQueries({ queryKey: requirementKeys.all });
+			toast.success("Due date updated successfully");
+		},
+		onError: (err: any) => {
+			toast.error(err.response?.data?.message || "Failed to update due date");
 		},
 	});
 };

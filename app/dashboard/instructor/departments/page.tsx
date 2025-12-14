@@ -69,9 +69,11 @@ import {
 import { toast } from "sonner";
 import { Department, DepartmentFilters } from "@/data/departments";
 import { InstructorStatsCard } from "@/components/instructor-stats-card";
+import { useAuth } from "@/hooks/auth/useAuth";
 
 export default function DepartmentsPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<
@@ -86,20 +88,30 @@ export default function DepartmentsPage() {
     description: "",
   });
 
+  // Get instructor's departmentId
+  const instructorDepartmentId = (user as any)?.departmentId;
+
   // Fetch data
   const { data: departmentsData, isLoading } = useDepartments({
     search: searchTerm || undefined,
     status: statusFilter,
   });
 
+  // Filter departments to only show the instructor's department
+  const filteredDepartments = instructorDepartmentId
+    ? departmentsData?.departments.filter(
+        (dept) => dept.id === instructorDepartmentId
+      ) || []
+    : departmentsData?.departments || [];
+
   const deleteDepartment = useDeleteDepartment();
   const toggleStatus = useToggleDepartmentStatus();
   const createDepartment = useCreateDepartment();
-  const totalDepartments = departmentsData?.pagination.totalItems || 0;
+  const totalDepartments = filteredDepartments.length;
   const activeDepartments =
-    departmentsData?.departments.filter((d) => d.isActive).length || 0;
+    filteredDepartments.filter((d) => d.isActive).length || 0;
   const totalCourses =
-    departmentsData?.departments.reduce(
+    filteredDepartments.reduce(
       (total, dept) => total + (dept.courses?.length || 0),
       0
     ) || 0;
@@ -178,7 +190,7 @@ export default function DepartmentsPage() {
             Manage your academic departments and track their progress
           </p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        {/* <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button
               variant="outline"
@@ -259,7 +271,7 @@ export default function DepartmentsPage() {
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
+        </Dialog> */}
       </div>
 
       {/* Overview Stats */}
@@ -294,7 +306,7 @@ export default function DepartmentsPage() {
 
       {/* Departments Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {departmentsData?.departments.map((department) => (
+        {filteredDepartments.map((department) => (
           <Card
             key={department.id}
             className="hover:shadow-lg transition-shadow"
@@ -385,17 +397,21 @@ export default function DepartmentsPage() {
             <div className="flex items-center justify-center py-8">
               <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : departmentsData?.departments.length === 0 ? (
+          ) : filteredDepartments.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-gray-500">No departments found</p>
-              <Button
+              <p className="text-gray-500">
+                {instructorDepartmentId
+                  ? "No department assigned to your account"
+                  : "No departments found"}
+              </p>
+              {/* <Button
                 variant="outline"
                 onClick={() => setIsCreateDialogOpen(true)}
                 className="mt-4"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Add First Department
-              </Button>
+              </Button> */}
             </div>
           ) : (
             <div className="rounded-md border">
@@ -411,7 +427,7 @@ export default function DepartmentsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {departmentsData?.departments.map((department) => (
+                  {filteredDepartments.map((department) => (
                     <TableRow key={department.id}>
                       <TableCell>
                         <div className="font-medium">{department.name}</div>

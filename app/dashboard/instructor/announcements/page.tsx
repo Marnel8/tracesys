@@ -61,7 +61,6 @@ import {
 import { useAuth } from "@/hooks/auth/useAuth";
 import { useSections } from "@/hooks/section/useSection";
 import { useCourses } from "@/hooks/course/useCourse";
-import { useDepartments } from "@/hooks/department/useDepartment";
 
 // Announcement form schema
 const announcementSchema = z
@@ -71,15 +70,8 @@ const announcementSchema = z
       .min(1, "Title is required")
       .max(255, "Title must be less than 255 characters"),
     content: z.string().min(1, "Content is required"),
-    priority: z.enum(["Low", "Medium", "High"], {
-      required_error: "Please select a priority level",
-    }),
-    status: z.enum(["Draft", "Published", "Archived"], {
-      required_error: "Please select a status",
-    }),
-    expiryDate: z.string().optional(),
     isPinned: z.boolean(),
-    targetType: z.enum(["all", "section", "course", "department"], {
+    targetType: z.enum(["all", "section", "course"], {
       required_error: "Please select a target type",
     }),
     targetId: z.string().optional(),
@@ -110,8 +102,6 @@ export default function AnnouncementsPage() {
   >(null);
   const [filters, setFilters] = useState<AnnouncementFilters>({
     search: "",
-    status: "all",
-    priority: "all",
     page: 1,
     limit: 10,
   });
@@ -136,8 +126,6 @@ export default function AnnouncementsPage() {
   const { data: coursesData, isLoading: isLoadingCourses } = useCourses({
     status: "active",
   });
-  const { data: departmentsData, isLoading: isLoadingDepartments } =
-    useDepartments({ status: "active" });
 
   // Mutations
   const createAnnouncement = useCreateAnnouncement();
@@ -158,10 +146,7 @@ export default function AnnouncementsPage() {
     defaultValues: {
       title: "",
       content: "",
-      priority: "Medium",
-      status: "Published",
       isPinned: false,
-      expiryDate: "",
       targetType: "all",
       targetId: "",
     },
@@ -194,20 +179,12 @@ export default function AnnouncementsPage() {
     const announcementData: AnnouncementFormData = {
       title: data.title,
       content: data.content,
-      priority: data.priority,
-      status: data.status,
+      status: "Published",
       authorId: user.id,
-      expiryDate: data.expiryDate
-        ? new Date(data.expiryDate).toISOString()
-        : undefined,
       isPinned: data.isPinned,
       targets: [
         {
-          targetType: data.targetType as
-            | "section"
-            | "course"
-            | "department"
-            | "all",
+          targetType: data.targetType as "section" | "course" | "all",
           targetId: data.targetId || undefined,
         },
       ],
@@ -238,26 +215,28 @@ export default function AnnouncementsPage() {
     if (isEditDialogOpen && selectedAnnouncementData && selectedAnnouncement) {
       setValue("title", selectedAnnouncementData.title);
       setValue("content", selectedAnnouncementData.content);
-      setValue("priority", selectedAnnouncementData.priority);
-      setValue("status", selectedAnnouncementData.status);
       setValue("isPinned", selectedAnnouncementData.isPinned);
-      setValue(
-        "expiryDate",
-        selectedAnnouncementData.expiryDate
-          ? new Date(selectedAnnouncementData.expiryDate)
-              .toISOString()
-              .slice(0, 16)
-          : ""
-      );
       if (
         selectedAnnouncementData.targets &&
         selectedAnnouncementData.targets.length > 0
       ) {
-        setValue("targetType", selectedAnnouncementData.targets[0].targetType);
-        setValue(
-          "targetId",
-          selectedAnnouncementData.targets[0].targetId || ""
-        );
+        const targetType = selectedAnnouncementData.targets[0].targetType;
+        // Only set targetType if it's a valid option (not "department" since we removed that option)
+        if (
+          targetType === "all" ||
+          targetType === "section" ||
+          targetType === "course"
+        ) {
+          setValue("targetType", targetType);
+          setValue(
+            "targetId",
+            selectedAnnouncementData.targets[0].targetId || ""
+          );
+        } else {
+          // If it's a department target or unknown, default to "all"
+          setValue("targetType", "all");
+          setValue("targetId", "");
+        }
       } else {
         setValue("targetType", "all");
         setValue("targetId", "");
@@ -315,8 +294,6 @@ export default function AnnouncementsPage() {
   const clearFilters = () => {
     setFilters({
       search: "",
-      status: "all",
-      priority: "all",
       page: 1,
       limit: 10,
     });
@@ -413,90 +390,6 @@ export default function AnnouncementsPage() {
                     Settings
                   </h3>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-gray-700 font-medium">
-                        Priority *
-                      </Label>
-                      <Controller
-                        name="priority"
-                        control={control}
-                        render={({ field }) => (
-                          <Select
-                            onValueChange={field.onChange}
-                            defaultValue={field.value}
-                          >
-                            <SelectTrigger className="border-gray-300 bg-white focus:border-primary-500 focus:ring-primary-500">
-                              <SelectValue placeholder="Select priority" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Low">Low</SelectItem>
-                              <SelectItem value="Medium">Medium</SelectItem>
-                              <SelectItem value="High">High</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        )}
-                      />
-                      {errors.priority && (
-                        <p className="text-sm text-red-600">
-                          {errors.priority.message}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-gray-700 font-medium">
-                        Status *
-                      </Label>
-                      <Controller
-                        name="status"
-                        control={control}
-                        render={({ field }) => (
-                          <Select
-                            onValueChange={field.onChange}
-                            defaultValue={field.value}
-                          >
-                            <SelectTrigger className="border-gray-300 bg-white focus:border-primary-500 focus:ring-primary-500">
-                              <SelectValue placeholder="Select status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Draft">Draft</SelectItem>
-                              <SelectItem value="Published">
-                                Published
-                              </SelectItem>
-                              <SelectItem value="Archived">Archived</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        )}
-                      />
-                      {errors.status && (
-                        <p className="text-sm text-red-600">
-                          {errors.status.message}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="expiryDate"
-                      className="text-gray-700 font-medium"
-                    >
-                      Expiry Date
-                    </Label>
-                    <Input
-                      id="expiryDate"
-                      type="datetime-local"
-                      className="border-gray-300 bg-white focus:border-primary-500 focus:ring-primary-500"
-                      {...register("expiryDate")}
-                    />
-                    {errors.expiryDate && (
-                      <p className="text-sm text-red-600">
-                        {errors.expiryDate.message}
-                      </p>
-                    )}
-                  </div>
-
                   <div className="flex items-center space-x-2">
                     <Controller
                       name="isPinned"
@@ -548,9 +441,6 @@ export default function AnnouncementsPage() {
                             <SelectItem value="course">
                               Specific Course
                             </SelectItem>
-                            <SelectItem value="department">
-                              Specific Department
-                            </SelectItem>
                           </SelectContent>
                         </Select>
                       )}
@@ -566,11 +456,7 @@ export default function AnnouncementsPage() {
                     <div className="space-y-2">
                       <Label className="text-gray-700 font-medium">
                         Select{" "}
-                        {watchedTargetType === "section"
-                          ? "Section"
-                          : watchedTargetType === "course"
-                          ? "Course"
-                          : "Department"}
+                        {watchedTargetType === "section" ? "Section" : "Course"}
                       </Label>
                       <Controller
                         name="targetId"
@@ -599,15 +485,6 @@ export default function AnnouncementsPage() {
                                     }`,
                                   })) || []
                                 );
-                              case "department":
-                                return (
-                                  departmentsData?.departments?.map(
-                                    (department) => ({
-                                      value: department.id,
-                                      label: `${department.name} (${department.code})`,
-                                    })
-                                  ) || []
-                                );
                               default:
                                 return [];
                             }
@@ -617,9 +494,7 @@ export default function AnnouncementsPage() {
                             (watchedTargetType === "section" &&
                               isLoadingSections) ||
                             (watchedTargetType === "course" &&
-                              isLoadingCourses) ||
-                            (watchedTargetType === "department" &&
-                              isLoadingDepartments);
+                              isLoadingCourses);
 
                           return (
                             <Select
@@ -634,9 +509,7 @@ export default function AnnouncementsPage() {
                                       : `Select ${
                                           watchedTargetType === "section"
                                             ? "section"
-                                            : watchedTargetType === "course"
-                                            ? "course"
-                                            : "department"
+                                            : "course"
                                         }`
                                   }
                                 />
@@ -747,90 +620,6 @@ export default function AnnouncementsPage() {
                     Settings
                   </h3>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-gray-700 font-medium">
-                        Priority *
-                      </Label>
-                      <Controller
-                        name="priority"
-                        control={control}
-                        render={({ field }) => (
-                          <Select
-                            onValueChange={field.onChange}
-                            defaultValue={field.value}
-                          >
-                            <SelectTrigger className="border-gray-300 bg-white focus:border-primary-500 focus:ring-primary-500">
-                              <SelectValue placeholder="Select priority" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Low">Low</SelectItem>
-                              <SelectItem value="Medium">Medium</SelectItem>
-                              <SelectItem value="High">High</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        )}
-                      />
-                      {errors.priority && (
-                        <p className="text-sm text-red-600">
-                          {errors.priority.message}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-gray-700 font-medium">
-                        Status *
-                      </Label>
-                      <Controller
-                        name="status"
-                        control={control}
-                        render={({ field }) => (
-                          <Select
-                            onValueChange={field.onChange}
-                            defaultValue={field.value}
-                          >
-                            <SelectTrigger className="border-gray-300 bg-white focus:border-primary-500 focus:ring-primary-500">
-                              <SelectValue placeholder="Select status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Draft">Draft</SelectItem>
-                              <SelectItem value="Published">
-                                Published
-                              </SelectItem>
-                              <SelectItem value="Archived">Archived</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        )}
-                      />
-                      {errors.status && (
-                        <p className="text-sm text-red-600">
-                          {errors.status.message}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="edit-expiryDate"
-                      className="text-gray-700 font-medium"
-                    >
-                      Expiry Date
-                    </Label>
-                    <Input
-                      id="edit-expiryDate"
-                      type="datetime-local"
-                      className="border-gray-300 bg-white focus:border-primary-500 focus:ring-primary-500"
-                      {...register("expiryDate")}
-                    />
-                    {errors.expiryDate && (
-                      <p className="text-sm text-red-600">
-                        {errors.expiryDate.message}
-                      </p>
-                    )}
-                  </div>
-
                   <div className="flex items-center space-x-2">
                     <Controller
                       name="isPinned"
@@ -882,9 +671,6 @@ export default function AnnouncementsPage() {
                             <SelectItem value="course">
                               Specific Course
                             </SelectItem>
-                            <SelectItem value="department">
-                              Specific Department
-                            </SelectItem>
                           </SelectContent>
                         </Select>
                       )}
@@ -900,11 +686,7 @@ export default function AnnouncementsPage() {
                     <div className="space-y-2">
                       <Label className="text-gray-700 font-medium">
                         Select{" "}
-                        {watchedTargetType === "section"
-                          ? "Section"
-                          : watchedTargetType === "course"
-                          ? "Course"
-                          : "Department"}
+                        {watchedTargetType === "section" ? "Section" : "Course"}
                       </Label>
                       <Controller
                         name="targetId"
@@ -933,15 +715,6 @@ export default function AnnouncementsPage() {
                                     }`,
                                   })) || []
                                 );
-                              case "department":
-                                return (
-                                  departmentsData?.departments?.map(
-                                    (department) => ({
-                                      value: department.id,
-                                      label: `${department.name} (${department.code})`,
-                                    })
-                                  ) || []
-                                );
                               default:
                                 return [];
                             }
@@ -951,9 +724,7 @@ export default function AnnouncementsPage() {
                             (watchedTargetType === "section" &&
                               isLoadingSections) ||
                             (watchedTargetType === "course" &&
-                              isLoadingCourses) ||
-                            (watchedTargetType === "department" &&
-                              isLoadingDepartments);
+                              isLoadingCourses);
 
                           return (
                             <Select
@@ -968,9 +739,7 @@ export default function AnnouncementsPage() {
                                       : `Select ${
                                           watchedTargetType === "section"
                                             ? "section"
-                                            : watchedTargetType === "course"
-                                            ? "course"
-                                            : "department"
+                                            : "course"
                                         }`
                                   }
                                 />
@@ -1063,18 +832,6 @@ export default function AnnouncementsPage() {
                         Pinned
                       </Badge>
                     )}
-                    <Badge variant="secondary">
-                      {selectedAnnouncementData.priority}
-                    </Badge>
-                    <Badge
-                      variant={
-                        selectedAnnouncementData.status === "Published"
-                          ? "default"
-                          : "secondary"
-                      }
-                    >
-                      {selectedAnnouncementData.status}
-                    </Badge>
                   </div>
                   <div className="prose max-w-none">
                     <p className="text-gray-700 whitespace-pre-wrap">
@@ -1148,45 +905,19 @@ export default function AnnouncementsPage() {
             />
           </div>
         </div>
-        <div className="flex gap-2">
-          <Select
-            value={filters.status}
-            onValueChange={(value) => handleFilterChange("status", value)}
-          >
-            <SelectTrigger className="w-32">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="Draft">Draft</SelectItem>
-              <SelectItem value="Published">Published</SelectItem>
-              <SelectItem value="Archived">Archived</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={filters.priority}
-            onValueChange={(value) => handleFilterChange("priority", value)}
-          >
-            <SelectTrigger className="w-32">
-              <SelectValue placeholder="Priority" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Priority</SelectItem>
-              <SelectItem value="Low">Low</SelectItem>
-              <SelectItem value="Medium">Medium</SelectItem>
-              <SelectItem value="High">High</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={clearFilters}
-            className="flex items-center gap-2"
-          >
-            <X className="w-4 h-4" />
-            Clear
-          </Button>
-        </div>
+        {searchInput && (
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={clearFilters}
+              className="flex items-center gap-2"
+            >
+              <X className="w-4 h-4" />
+              Clear
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Announcements List */}
@@ -1222,16 +953,6 @@ export default function AnnouncementsPage() {
                           Pinned
                         </Badge>
                       )}
-                      <Badge variant="secondary">{announcement.priority}</Badge>
-                      <Badge
-                        variant={
-                          announcement.status === "Published"
-                            ? "default"
-                            : "secondary"
-                        }
-                      >
-                        {announcement.status}
-                      </Badge>
                     </div>
                     <CardDescription className="text-base mb-3">
                       {announcement.content}

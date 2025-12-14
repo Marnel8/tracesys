@@ -85,7 +85,6 @@ type NewTemplate = {
   title: string;
   description: string;
   category: RequirementCategory;
-  priority: RequirementPriority;
   isRequired: boolean;
   allowedFileTypes: string[];
   maxFileSize: number; // in MB
@@ -129,7 +128,6 @@ export default function RequirementTemplatesPage() {
     title: "",
     description: "",
     category: "health",
-    priority: "medium",
     isRequired: true,
     allowedFileTypes: [],
     maxFileSize: 5,
@@ -143,7 +141,7 @@ export default function RequirementTemplatesPage() {
         title: newTemplate.title,
         description: newTemplate.description,
         category: newTemplate.category,
-        priority: newTemplate.priority,
+        priority: "medium" as RequirementPriority,
         isRequired: newTemplate.isRequired,
         instructions: newTemplate.instructions || "",
         allowedFileTypes: newTemplate.allowedFileTypes,
@@ -171,7 +169,8 @@ export default function RequirementTemplatesPage() {
           title: selectedTemplate.title,
           description: selectedTemplate.description,
           category: selectedTemplate.category,
-          priority: selectedTemplate.priority,
+          priority:
+            selectedTemplate.priority || ("medium" as RequirementPriority),
           isRequired: selectedTemplate.isRequired,
           instructions: selectedTemplate.instructions || "",
           allowedFileTypes: Array.isArray(selectedTemplate.allowedFileTypes)
@@ -210,28 +209,12 @@ export default function RequirementTemplatesPage() {
       title: "",
       description: "",
       category: "health",
-      priority: "medium",
       isRequired: true,
       allowedFileTypes: [],
       maxFileSize: 5,
       instructions: "",
       isActive: true,
     });
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority.toLowerCase()) {
-      case "urgent":
-        return "bg-red-200 text-red-900 capitalize";
-      case "high":
-        return "bg-red-100 text-red-800 capitalize";
-      case "medium":
-        return "bg-yellow-100 text-yellow-800 capitalize";
-      case "low":
-        return "bg-green-100 text-green-800 capitalize";
-      default:
-        return "bg-gray-100 text-gray-800 capitalize";
-    }
   };
 
   const totalPages = pagination?.totalPages ?? 1;
@@ -326,31 +309,6 @@ export default function RequirementTemplatesPage() {
                       <SelectItem value="academic">Academic</SelectItem>
                       <SelectItem value="evaluation">Evaluation</SelectItem>
                       <SelectItem value="legal">Legal</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="priority">Priority</Label>
-                  <Select
-                    value={newTemplate.priority}
-                    onValueChange={(value) =>
-                      setNewTemplate({
-                        ...newTemplate,
-                        priority: value as RequirementPriority,
-                      })
-                    }
-                  >
-                    <SelectTrigger className="invitation-select-trigger">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="urgent">Urgent</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -558,7 +516,6 @@ export default function RequirementTemplatesPage() {
                 <TableRow>
                   <TableHead>Template</TableHead>
                   <TableHead>Category</TableHead>
-                  <TableHead>Priority</TableHead>
                   <TableHead>File Types</TableHead>
                   <TableHead>Max Size</TableHead>
                   <TableHead>Status</TableHead>
@@ -568,7 +525,7 @@ export default function RequirementTemplatesPage() {
               <TableBody>
                 {templates.length === 0 && !isLoading && (
                   <TableRow>
-                    <TableCell colSpan={7}>
+                    <TableCell colSpan={6}>
                       <div className="text-sm text-gray-500">
                         No templates found.
                       </div>
@@ -615,14 +572,6 @@ export default function RequirementTemplatesPage() {
                     <TableCell>
                       <Badge variant="outline" className="text-xs capitalize">
                         {template.category}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={getPriorityColor(template.priority)}
-                      >
-                        {template.priority}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -788,31 +737,6 @@ export default function RequirementTemplatesPage() {
                       <SelectItem value="academic">Academic</SelectItem>
                       <SelectItem value="evaluation">Evaluation</SelectItem>
                       <SelectItem value="legal">Legal</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-priority">Priority</Label>
-                  <Select
-                    value={selectedTemplate.priority as any}
-                    onValueChange={(value) =>
-                      setSelectedTemplate({
-                        ...selectedTemplate,
-                        priority: value as any,
-                      })
-                    }
-                  >
-                    <SelectTrigger className="invitation-select-trigger">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="urgent">Urgent</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

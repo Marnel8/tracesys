@@ -102,18 +102,6 @@ export default function AllRequirementsPage() {
     }
   }
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority.toLowerCase()) {
-      case "high":
-        return "bg-red-100 text-red-800"
-      case "medium":
-        return "bg-yellow-100 text-yellow-800"
-      case "low":
-        return "bg-green-100 text-green-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
 
   const getStatusIcon = (status: string) => {
     switch (status.toLowerCase()) {
@@ -309,7 +297,6 @@ export default function AllRequirementsPage() {
                   <TableHead>Requirement</TableHead>
                   <TableHead>Section</TableHead>
                   <TableHead>Submitted</TableHead>
-                  <TableHead>Priority</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>File Size</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -341,11 +328,6 @@ export default function AllRequirementsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="text-sm">{formatDate(req.submittedDate || req.createdAt)}</div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className={getPriorityColor(req.priority)}>
-                        {req.priority}
-                      </Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">

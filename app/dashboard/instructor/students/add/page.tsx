@@ -87,7 +87,7 @@ const createStudentSchema = (includePracticum: boolean) => z.object({
 	startDate: z.string().optional(),
 	endDate: z.string().optional(),
 	totalHours: z.number().min(1, "Total hours must be at least 1").default(400),
-	workSetup: z.enum(["On-site", "Hybrid", "Work From Home"]).default("On-site"),
+	workSetup: z.enum(["On-site"]).default("On-site"), // Work setup is always "On-site"
 
 	// Account Settings
 	sendCredentials: z.boolean().default(true),
@@ -1132,14 +1132,16 @@ export default function AddStudentPage() {
 												</Badge>
 											)}
 										</Label>
-										<Select onValueChange={(value) => setValue("workSetup", value as any)}>
+										<Select 
+											onValueChange={(value) => setValue("workSetup", value as any)}
+											value="On-site"
+											disabled
+										>
 											<SelectTrigger className={errors.workSetup ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""}>
-												<SelectValue placeholder="Select work setup" />
+												<SelectValue placeholder="On-site" />
 											</SelectTrigger>
 											<SelectContent>
 												<SelectItem value="On-site">On-site</SelectItem>
-												<SelectItem value="Hybrid">Hybrid</SelectItem>
-												<SelectItem value="Work From Home">Work From Home</SelectItem>
 											</SelectContent>
 										</Select>
 										{errors.workSetup && (

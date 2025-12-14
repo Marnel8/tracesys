@@ -44,13 +44,13 @@ export interface AnnouncementComment {
 export interface AnnouncementFormData {
 	title: string;
 	content: string;
-	priority: "Low" | "Medium" | "High";
+	priority?: "Low" | "Medium" | "High";
 	status: "Draft" | "Published" | "Archived";
 	authorId: string;
 	expiryDate?: string;
 	isPinned?: boolean;
 	targets?: {
-		targetType: "section" | "course" | "department" | "all";
+		targetType: "section" | "course" | "all";
 		targetId?: string;
 	}[];
 }
@@ -63,8 +63,6 @@ export interface CommentFormData {
 
 export interface AnnouncementFilters {
 	search?: string;
-	status?: "all" | "Draft" | "Published" | "Archived";
-	priority?: "all" | "Low" | "Medium" | "High";
 	authorId?: string;
 	userId?: string;
 	page?: number;

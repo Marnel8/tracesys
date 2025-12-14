@@ -66,6 +66,8 @@ import {
   useApproveRequirement,
   useRejectRequirement,
   useRequirements,
+  useCreateRequirementComment,
+  useRequirementComments,
 } from "@/hooks/requirement";
 import { useRequirementTemplates } from "@/hooks/requirement-template/useRequirementTemplate";
 import {
@@ -99,6 +101,16 @@ const resolveFileUrl = (url?: string | null) => {
   return `${base}${path}`;
 };
 
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
 export default function RequirementsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("submitted");
@@ -107,6 +119,9 @@ export default function RequirementsPage() {
   const [reviewComment, setReviewComment] = useState("");
   const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState<any>(null);
+  const [isViewSubmissionsDialogOpen, setIsViewSubmissionsDialogOpen] =
+    useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -255,6 +270,7 @@ export default function RequirementsPage() {
 
   const approve = useApproveRequirement();
   const reject = useRejectRequirement();
+  const createComment = useCreateRequirementComment();
 
   const handleApprove = (id: string) => {
     approve.mutate({ id });
@@ -387,16 +403,6 @@ export default function RequirementsPage() {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case "approved":
@@ -414,20 +420,6 @@ export default function RequirementsPage() {
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority.toLowerCase()) {
-      case "high":
-        return "bg-red-100 text-red-800 capitalize";
-      case "medium":
-        return "bg-yellow-100 text-yellow-800 capitalize";
-      case "low":
-        return "bg-green-100 text-green-800 capitalize";
-      case "urgent":
-        return "bg-rose-100 text-rose-800 capitalize";
-      default:
-        return "bg-gray-100 text-gray-800 capitalize";
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -549,7 +541,6 @@ export default function RequirementsPage() {
                   <TableHead>Requirement</TableHead>
                   <TableHead>File</TableHead>
                   <TableHead>Submitted</TableHead>
-                  <TableHead>Priority</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -621,14 +612,6 @@ export default function RequirementsPage() {
                       <TableCell>
                         <Badge
                           variant="secondary"
-                          className={getPriorityColor(req.priority)}
-                        >
-                          {req.priority}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="secondary"
                           className={getStatusColor(req.status)}
                         >
                           {req.status}
@@ -666,6 +649,16 @@ export default function RequirementsPage() {
                                   Preview
                                 </DropdownMenuItem>
                               )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setSelectedStudent(req.student);
+                                  setIsViewSubmissionsDialogOpen(true);
+                                }}
+                              >
+                                <User className="w-4 h-4 mr-2" />
+                                View Submissions
+                              </DropdownMenuItem>
                               {canReview && (
                                 <>
                                   <DropdownMenuSeparator />
@@ -839,6 +832,226 @@ export default function RequirementsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* View Student Submissions Dialog */}
+      <ViewStudentSubmissionsDialog
+        isOpen={isViewSubmissionsDialogOpen}
+        onOpenChange={setIsViewSubmissionsDialogOpen}
+        student={selectedStudent}
+        createComment={createComment}
+      />
     </div>
+  );
+}
+
+// View Student Submissions Dialog Component
+function ViewStudentSubmissionsDialog({
+  isOpen,
+  onOpenChange,
+  student,
+  createComment,
+}: {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  student: any;
+  createComment: ReturnType<typeof useCreateRequirementComment>;
+}) {
+  const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
+  const studentId = student?.id;
+
+  const { data: studentRequirements, isLoading } = useRequirements({
+    studentId: studentId || undefined,
+    limit: 1000,
+    status: "all" as any,
+  });
+
+  const requirements = studentRequirements?.requirements || [];
+
+  const handleAddComment = async (requirementId: string) => {
+    const commentText = commentTexts[requirementId]?.trim();
+    if (!commentText) {
+      toast.error("Please enter a comment");
+      return;
+    }
+
+    try {
+      await createComment.mutateAsync({
+        requirementId,
+        content: commentText,
+        isPrivate: false,
+      });
+      setCommentTexts((prev) => {
+        const next = { ...prev };
+        delete next[requirementId];
+        return next;
+      });
+    } catch (error) {
+      // Error is handled by the mutation hook
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>
+            All Submissions -{" "}
+            {student ? `${student.firstName} ${student.lastName}` : "Student"}
+          </DialogTitle>
+          <DialogDescription>
+            View all requirement submissions and add comments
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex-1 overflow-auto">
+          {isLoading ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500">Loading submissions...</p>
+            </div>
+          ) : requirements.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500">
+                No requirements found for this student.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {requirements.map((req: any) => (
+                <RequirementCommentCard
+                  key={req.id}
+                  requirement={req}
+                  commentText={commentTexts[req.id] || ""}
+                  onCommentTextChange={(text) =>
+                    setCommentTexts((prev) => ({ ...prev, [req.id]: text }))
+                  }
+                  onAddComment={() => handleAddComment(req.id)}
+                  isSubmitting={createComment.isPending}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Requirement Comment Card Component
+function RequirementCommentCard({
+  requirement,
+  commentText,
+  onCommentTextChange,
+  onAddComment,
+  isSubmitting,
+}: {
+  requirement: any;
+  commentText: string;
+  onCommentTextChange: (text: string) => void;
+  onAddComment: () => void;
+  isSubmitting: boolean;
+}) {
+  const { data: comments, isLoading: isLoadingComments } =
+    useRequirementComments(requirement.id);
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <CardTitle className="text-lg">{requirement.title}</CardTitle>
+            <CardDescription className="mt-1">
+              {requirement.description}
+            </CardDescription>
+          </div>
+          <Badge
+            variant="secondary"
+            className={`ml-2 ${
+              requirement.status === "approved"
+                ? "bg-green-100 text-green-800"
+                : requirement.status === "rejected"
+                ? "bg-red-100 text-red-800"
+                : requirement.status === "submitted"
+                ? "bg-blue-100 text-blue-800"
+                : requirement.status === "in-progress"
+                ? "bg-purple-100 text-purple-800"
+                : "bg-yellow-100 text-yellow-800"
+            }`}
+          >
+            {requirement.status}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <span className="font-medium text-gray-700">File:</span>{" "}
+            <span className="text-gray-600">
+              {requirement.fileName || "No file"}
+            </span>
+          </div>
+          <div>
+            <span className="font-medium text-gray-700">Submitted:</span>{" "}
+            <span className="text-gray-600">
+              {requirement.submittedDate
+                ? formatDate(requirement.submittedDate)
+                : "Not submitted"}
+            </span>
+          </div>
+        </div>
+
+        {/* Existing Comments */}
+        <div className="border-t pt-4">
+          <h4 className="font-medium text-sm mb-3">Comments</h4>
+          {isLoadingComments ? (
+            <p className="text-sm text-gray-500">Loading comments...</p>
+          ) : comments && comments.length > 0 ? (
+            <div className="space-y-3">
+              {comments.map((comment: any) => (
+                <div key={comment.id} className="bg-gray-50 p-3 rounded-lg">
+                  <div className="flex items-start justify-between mb-1">
+                    <span className="font-medium text-sm">
+                      {comment.user?.firstName} {comment.user?.lastName}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {formatDate(comment.createdAt)}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-700">{comment.content}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">No comments yet</p>
+          )}
+        </div>
+
+        {/* Add Comment Section */}
+        <div className="border-t pt-4">
+          <Label htmlFor={`comment-${requirement.id}`} className="mb-2 block">
+            Add Comment
+          </Label>
+          <Textarea
+            id={`comment-${requirement.id}`}
+            placeholder="Add a comment to this requirement..."
+            value={commentText}
+            onChange={(e) => onCommentTextChange(e.target.value)}
+            rows={3}
+            className="mb-2"
+          />
+          <Button
+            onClick={onAddComment}
+            disabled={!commentText.trim() || isSubmitting}
+            size="sm"
+          >
+            <MessageSquare className="w-4 h-4 mr-2" />
+            {isSubmitting ? "Adding..." : "Add Comment"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

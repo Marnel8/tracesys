@@ -95,9 +95,6 @@ import {
   type UpdateStudentParams,
 } from "@/hooks/student/useStudent";
 import { useAgencies } from "@/hooks/agency";
-import { useDepartments } from "@/hooks/department";
-import { useCourses } from "@/hooks/course";
-import { useSections } from "@/hooks/section";
 import { useAttendance } from "@/hooks/attendance";
 import { useRequirements } from "@/hooks/requirement/useRequirement";
 import { useRequirementTemplates } from "@/hooks/requirement-template/useRequirementTemplate";
@@ -151,15 +148,15 @@ export default function StudentsPage() {
   const [viewProfileOpen, setViewProfileOpen] = useState(false);
   const [editStudentOpen, setEditStudentOpen] = useState(false);
   const [deleteAlertOpen, setDeleteAlertOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<
+    "yes" | "no" | null
+  >(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(
     null
   );
 
-  // Dropdown states for edit form
+  // Dropdown states for edit form (practicum only)
   const [selectedAgencyId, setSelectedAgencyId] = useState<string>("");
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
-  const [selectedCourseId, setSelectedCourseId] = useState<string>("");
-  const [includePracticum, setIncludePracticum] = useState(false);
 
   const { user } = useAuth();
   const teacherId =
@@ -180,19 +177,8 @@ export default function StudentsPage() {
     }
   }, [teacherId]); // refetch is stable, no need to include in deps
 
-  // Fetch data for dropdowns
+  // Fetch data for dropdowns (practicum only)
   const { data: agenciesData } = useAgencies({ status: "active" });
-  const { data: departmentsData } = useDepartments({
-    status: editStudentOpen ? "all" : "active",
-  });
-  const { data: coursesData } = useCourses({
-    status: editStudentOpen ? "all" : "active",
-    departmentId: selectedDepartmentId || undefined,
-  });
-  const { data: sectionsData } = useSections({
-    status: editStudentOpen ? "all" : "active",
-    courseId: selectedCourseId || undefined,
-  });
 
   // Get selected agency and its supervisors
   const selectedAgency = agenciesData?.agencies.find(
@@ -266,110 +252,23 @@ export default function StudentsPage() {
     } as UpdateStudentParams,
   });
 
-  // Update form when student data is loaded
+  // Update form when student data is loaded - only practicum fields
   useEffect(() => {
     if (selectedStudentData?.data && editStudentOpen) {
       const student = selectedStudentData.data;
-      const enrollment = student.enrollments?.[0];
       const practicum = student.practicums?.[0];
 
-      console.log("Student data:", student);
-      console.log("Enrollment data:", enrollment);
-      console.log("Practicum data:", practicum);
-
-      // Extract IDs for dropdowns with robust fallbacks
-      const departmentId =
-        student.departmentId ||
-        student.department?.id ||
-        enrollment?.section?.course?.departmentId ||
-        enrollment?.section?.course?.department?.id ||
-        practicum?.departmentId ||
-        practicum?.section?.course?.departmentId ||
-        practicum?.section?.course?.department?.id ||
-        "";
-      const courseId =
-        enrollment?.section?.courseId ||
-        enrollment?.section?.course?.id ||
-        practicum?.courseId ||
-        practicum?.section?.courseId ||
-        practicum?.section?.course?.id ||
-        "";
-      const sectionId =
-        enrollment?.sectionId ||
-        practicum?.sectionId ||
-        practicum?.section?.id ||
-        enrollment?.section?.id ||
-        "";
+      // Extract practicum-related fields only
       const agencyId = practicum?.agencyId || "";
       const supervisorId = practicum?.supervisorId || "";
-      const workSetup = practicum?.workSetup || "On-site";
-      // Normalize gender casing for select values
-      const genderValue = (student.gender || "").toString();
-      const normalizedGender = genderValue.toLowerCase();
-
-      // Extract year level from enrollment or use default
-      const rawYearLevel =
-        enrollment?.section?.academicYear ||
-        enrollment?.yearLevel ||
-        student.yearLevel ||
-        "4th Year";
-
-      // Normalize year level to match SelectItem values
-      let yearLevel = "4th Year"; // default
-      if (rawYearLevel) {
-        const yearLevelStr = rawYearLevel.toString().toLowerCase();
-        if (yearLevelStr.includes("4th") || yearLevelStr.includes("4")) {
-          yearLevel = "4th Year";
-        } else if (yearLevelStr.includes("3rd") || yearLevelStr.includes("3")) {
-          yearLevel = "3rd Year";
-        } else if (yearLevelStr.includes("2nd") || yearLevelStr.includes("2")) {
-          yearLevel = "2nd Year";
-        } else if (yearLevelStr.includes("1st") || yearLevelStr.includes("1")) {
-          yearLevel = "1st Year";
-        }
-      }
-
-      const year = yearLevel.includes("4th")
-        ? "4th"
-        : yearLevel.includes("3rd")
-        ? "3rd"
-        : yearLevel.includes("2nd")
-        ? "2nd"
-        : "1st";
-
-      console.log("Extracted values:", {
-        departmentId,
-        courseId,
-        sectionId,
-        agencyId,
-        supervisorId,
-        workSetup,
-        yearLevel,
-        year,
-      });
+      const workSetup = "On-site" as const;
 
       // Set dropdown states
-      setSelectedDepartmentId(departmentId);
-      setSelectedCourseId(courseId);
       setSelectedAgencyId(agencyId);
-      setIncludePracticum(!!agencyId);
 
-      // Reset form with all values
+      // Reset form with only practicum-related values
       const formData = {
         id: student.id,
-        firstName: student.firstName,
-        lastName: student.lastName,
-        middleName: student.middleName || "",
-        email: student.email,
-        phone: student.phone,
-        age: student.age,
-        gender: normalizedGender,
-        studentId: student.studentId,
-        address: student.address || "",
-        bio: student.bio || "",
-        departmentId: departmentId,
-        courseId: courseId,
-        sectionId: sectionId,
         agencyId: agencyId,
         supervisorId: supervisorId,
         position: practicum?.position || "",
@@ -381,57 +280,13 @@ export default function StudentsPage() {
           : "",
         totalHours: practicum?.totalHours || 400,
         workSetup: workSetup,
-        year: year,
-        semester: "2nd",
-        yearLevel: yearLevel,
-      };
+      } as UpdateStudentParams;
 
-      console.log("Form data being set:", formData);
       form.reset(formData);
     }
   }, [selectedStudentData, editStudentOpen, form]);
 
-  // Infer courseId and departmentId when only sectionId exists
-  useEffect(() => {
-    if (!editStudentOpen) return;
-    const currentSectionId = form.getValues("sectionId");
-    const currentCourseId = form.getValues("courseId");
-    const currentDepartmentId = form.getValues("departmentId");
-
-    if (currentSectionId && (!currentCourseId || !currentDepartmentId)) {
-      const section = sectionsData?.sections.find(
-        (s) => s.id === currentSectionId
-      );
-      if (section?.courseId && !currentCourseId) {
-        setSelectedCourseId(section.courseId);
-        form.setValue("courseId", section.courseId);
-      }
-      const courseIdToUse = section?.courseId || currentCourseId;
-      if (courseIdToUse && !currentDepartmentId) {
-        const course = coursesData?.courses.find((c) => c.id === courseIdToUse);
-        if (course?.departmentId) {
-          setSelectedDepartmentId(course.departmentId);
-          form.setValue("departmentId", course.departmentId);
-        }
-      }
-    }
-  }, [editStudentOpen, sectionsData, coursesData]);
-
   // Handler functions
-  const handleDepartmentChange = (departmentId: string) => {
-    setSelectedDepartmentId(departmentId);
-    setSelectedCourseId("");
-    form.setValue("departmentId", departmentId);
-    form.setValue("courseId", "");
-    form.setValue("sectionId", "");
-  };
-
-  const handleCourseChange = (courseId: string) => {
-    setSelectedCourseId(courseId);
-    form.setValue("courseId", courseId);
-    form.setValue("sectionId", "");
-  };
-
   const handleAgencyChange = (agencyId: string) => {
     setSelectedAgencyId(agencyId);
     form.setValue("agencyId", agencyId);
@@ -447,35 +302,52 @@ export default function StudentsPage() {
     setSelectedStudentId(studentId);
     setEditStudentOpen(true);
     // Reset dropdown states when opening dialog
-    setSelectedDepartmentId("");
-    setSelectedCourseId("");
     setSelectedAgencyId("");
-    setIncludePracticum(false);
   };
 
   const handleDeleteStudent = (studentId: string) => {
     setSelectedStudentId(studentId);
+    setDeleteConfirmation(null); // Reset confirmation when opening dialog
     setDeleteAlertOpen(true);
+  };
+
+  const handleDeleteDialogClose = (open: boolean) => {
+    setDeleteAlertOpen(open);
+    if (!open) {
+      setDeleteConfirmation(null); // Reset confirmation when closing dialog
+    }
   };
 
   const handleUpdateStudent = async (data: UpdateStudentParams) => {
     try {
-      await updateStudentMutation.mutateAsync(data);
-      toast.success("Student updated successfully");
+      // Only send practicum-related fields
+      const updatedData: UpdateStudentParams = {
+        id: data.id,
+        agencyId: data.agencyId || undefined,
+        supervisorId: data.supervisorId || undefined,
+        position: data.position || undefined,
+        startDate: data.startDate || undefined,
+        endDate: data.endDate || undefined,
+        totalHours: data.totalHours || undefined,
+        workSetup: "On-site" as const,
+      };
+      await updateStudentMutation.mutateAsync(updatedData);
+      toast.success("Practicum information updated successfully");
       setEditStudentOpen(false);
       setSelectedStudentId(null);
     } catch (error: any) {
-      toast.error(error.message || "Failed to update student");
+      toast.error(error.message || "Failed to update practicum information");
     }
   };
 
   const handleConfirmDelete = async () => {
-    if (!selectedStudentId) return;
+    if (!selectedStudentId || deleteConfirmation !== "yes") return;
 
     try {
       await deleteStudentMutation.mutateAsync(selectedStudentId);
       toast.success("Student deleted successfully");
       setDeleteAlertOpen(false);
+      setDeleteConfirmation(null);
       setSelectedStudentId(null);
     } catch (error: any) {
       toast.error(error.message || "Failed to delete student");
@@ -817,6 +689,25 @@ export default function StudentsPage() {
     currentAcademicYear,
     currentSemester,
   ]);
+
+  // Get student name for delete confirmation
+  const studentNameToDelete = useMemo(() => {
+    if (!selectedStudentId) return "this student";
+
+    const studentToDelete = filteredStudents.find(
+      (s: any) => s.id === selectedStudentId
+    );
+
+    if (studentToDelete) {
+      return studentToDelete.name;
+    }
+
+    if (selectedStudentData?.data) {
+      return `${selectedStudentData.data.firstName} ${selectedStudentData.data.lastName}`.trim();
+    }
+
+    return "this student";
+  }, [filteredStudents, selectedStudentId, selectedStudentData]);
 
   const statsLoading = !hasMounted || isLoading;
   const totalStudents = normalizedStudents.length;
@@ -1331,7 +1222,7 @@ export default function StudentsPage() {
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">
-                            Section
+                            Year and Section
                           </label>
                           <p className="text-gray-900">
                             {selectedStudentData.data.enrollments[0].section
@@ -1966,15 +1857,17 @@ export default function StudentsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Student Dialog */}
+      {/* Edit Student Dialog - Practicum Information Only */}
       <Dialog open={editStudentOpen} onOpenChange={setEditStudentOpen}>
-        <DialogContent className="max-w-6xl max-h-[95vh] flex flex-col bg-white">
+        <DialogContent className="max-w-4xl max-h-[95vh] flex flex-col bg-white">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <Edit className="w-5 h-5" />
-              Edit Student
+              Edit Practicum Information
             </DialogTitle>
-            <DialogDescription>Update student information</DialogDescription>
+            <DialogDescription>
+              Update practicum placement details for the student
+            </DialogDescription>
           </DialogHeader>
 
           <Form {...form}>
@@ -1983,734 +1876,219 @@ export default function StudentsPage() {
               className="flex-1 flex flex-col min-h-0"
             >
               <div className="flex-1 overflow-y-auto pr-2">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Personal Information */}
-                  <div className="lg:col-span-2 space-y-6">
-                    <Card className="invitation-form-card">
-                      <CardHeader>
-                        <CardTitle>Personal Information</CardTitle>
-                        <CardDescription>
-                          Basic student information and contact details
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <FormField
-                            control={form.control}
-                            name="firstName"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>First Name *</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    placeholder="Enter first name"
-                                    className="invitation-input"
-                                    {...field}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name="middleName"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Middle Name</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    placeholder="Enter middle name"
-                                    className="invitation-input"
-                                    {...field}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name="lastName"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Last Name *</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    placeholder="Enter last name"
-                                    className="invitation-input"
-                                    {...field}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+                <Card className="invitation-form-card">
+                  <CardHeader>
+                    <CardTitle>Practicum Information</CardTitle>
+                    <CardDescription>
+                      Manage the student's practicum placement, agency
+                      assignment, and supervisor details
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="agencyId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Agency/Company *</FormLabel>
+                          <Select
+                            onValueChange={handleAgencyChange}
+                            value={field.value || selectedAgencyId}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="invitation-select-trigger">
+                                <SelectValue placeholder="Select an agency" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {agenciesData?.agencies.map((agency) => (
+                                <SelectItem key={agency.id} value={agency.id}>
+                                  {agency.name} ({agency.branchType})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {selectedAgency && (
+                      <div className="p-4 bg-gray-50 rounded-lg">
+                        <h4 className="font-medium text-gray-900 mb-2">
+                          Selected Agency Details
+                        </h4>
+                        <div className="space-y-1 text-sm text-gray-600">
+                          <p>
+                            <strong>Name:</strong> {selectedAgency.name}
+                          </p>
+                          <p>
+                            <strong>Address:</strong> {selectedAgency.address}
+                          </p>
+                          <p>
+                            <strong>Contact:</strong>{" "}
+                            {selectedAgency.contactPerson} (
+                            {selectedAgency.contactRole})
+                          </p>
+                          <p>
+                            <strong>Phone:</strong>{" "}
+                            {selectedAgency.contactPhone}
+                          </p>
+                          <p>
+                            <strong>Email:</strong>{" "}
+                            {selectedAgency.contactEmail}
+                          </p>
                         </div>
+                      </div>
+                    )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <FormField
-                            control={form.control}
-                            name="email"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Email Address *</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    placeholder="student@omsc.edu.ph"
-                                    type="email"
-                                    className="invitation-input"
-                                    {...field}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name="phone"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Phone Number *</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    placeholder="+63 912 345 6789"
-                                    className="invitation-input"
-                                    {...field}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <FormField
-                            control={form.control}
-                            name="age"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Age *</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    placeholder="18"
-                                    type="number"
-                                    min="16"
-                                    max="100"
-                                    className="invitation-input"
-                                    {...field}
-                                    onChange={(e) =>
-                                      field.onChange(
-                                        parseInt(e.target.value) || 0
-                                      )
-                                    }
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name="gender"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Gender *</FormLabel>
-                                <Select
-                                  onValueChange={field.onChange}
-                                  value={field.value}
+                    <FormField
+                      control={form.control}
+                      name="supervisorId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Supervisor *</FormLabel>
+                          <Select
+                            onValueChange={(value) =>
+                              form.setValue("supervisorId", value)
+                            }
+                            value={field.value}
+                            disabled={!selectedAgencyId}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="invitation-select-trigger">
+                                <SelectValue placeholder="Select a supervisor" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {availableSupervisors.map((supervisor) => (
+                                <SelectItem
+                                  key={supervisor.id}
+                                  value={supervisor.id}
                                 >
-                                  <FormControl>
-                                    <SelectTrigger className="invitation-select-trigger">
-                                      <SelectValue placeholder="Select gender" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    <SelectItem value="male">Male</SelectItem>
-                                    <SelectItem value="female">
-                                      Female
-                                    </SelectItem>
-                                    <SelectItem value="other">Other</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
+                                  {supervisor.name} - {supervisor.position}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                          {selectedAgencyId &&
+                            availableSupervisors.length === 0 && (
+                              <p className="text-sm text-amber-600">
+                                No supervisors available for this agency. Please
+                                add supervisors to this agency first.
+                              </p>
                             )}
-                          />
-                        </div>
+                        </FormItem>
+                      )}
+                    />
 
-                        {/* Additional Personal Information */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <FormField
-                            control={form.control}
-                            name="address"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Address</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    placeholder="Enter address"
-                                    className="invitation-input"
-                                    {...field}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name="yearLevel"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Year Level</FormLabel>
-                                <Select
-                                  onValueChange={field.onChange}
-                                  value={field.value || ""}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger className="invitation-select-trigger">
-                                      <SelectValue placeholder="Select year level" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    <SelectItem value="4th Year">
-                                      4th Year
-                                    </SelectItem>
-                                    <SelectItem value="3rd Year">
-                                      3rd Year
-                                    </SelectItem>
-                                    <SelectItem value="2nd Year">
-                                      2nd Year
-                                    </SelectItem>
-                                    <SelectItem value="1st Year">
-                                      1st Year
-                                    </SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-
-                        <FormField
-                          control={form.control}
-                          name="bio"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Bio</FormLabel>
-                              <FormControl>
-                                <Input
-                                  placeholder="Enter bio"
-                                  className="invitation-input"
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </CardContent>
-                    </Card>
-
-                    {/* Academic Information */}
-                    <Card className="invitation-form-card">
-                      <CardHeader>
-                        <CardTitle>Academic Information</CardTitle>
-                        <CardDescription>
-                          Student's academic details and enrollment information
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <FormField
-                            control={form.control}
-                            name="studentId"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Student ID *</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    placeholder="MBO-IT-0000"
-                                    className="invitation-input"
-                                    {...field}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name="departmentId"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>College *</FormLabel>
-                                <Select
-                                  onValueChange={handleDepartmentChange}
-                                  value={field.value || selectedDepartmentId}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger className="invitation-select-trigger">
-                                      <SelectValue placeholder="Select college" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {departmentsData?.departments.map(
-                                      (department) => (
-                                        <SelectItem
-                                          key={department.id}
-                                          value={department.id}
-                                        >
-                                          {department.name} ({department.code})
-                                        </SelectItem>
-                                      )
-                                    )}
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <FormField
-                            control={form.control}
-                            name="courseId"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Course *</FormLabel>
-                                <Select
-                                  onValueChange={handleCourseChange}
-                                  value={field.value || selectedCourseId}
-                                  disabled={!selectedDepartmentId}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger className="invitation-select-trigger">
-                                      <SelectValue placeholder="Select course" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {coursesData?.courses.map((course) => (
-                                      <SelectItem
-                                        key={course.id}
-                                        value={course.id}
-                                      >
-                                        {course.name} ({course.code})
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                                {!selectedDepartmentId && (
-                                  <p className="text-sm text-amber-600">
-                                    Please select a department first
-                                  </p>
-                                )}
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <FormField
-                            control={form.control}
-                            name="sectionId"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Section *</FormLabel>
-                                <Select
-                                  onValueChange={(value) =>
-                                    form.setValue("sectionId", value)
-                                  }
-                                  value={field.value}
-                                  disabled={!selectedCourseId}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger className="invitation-select-trigger">
-                                      <SelectValue placeholder="Select section" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {sectionsData?.sections.map((section) => (
-                                      <SelectItem
-                                        key={section.id}
-                                        value={section.id}
-                                      >
-                                        {section.name} ({section.code})
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                                {!selectedCourseId && (
-                                  <p className="text-sm text-amber-600">
-                                    Please select a course first
-                                  </p>
-                                )}
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name="year"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Year Level *</FormLabel>
-                                <Select
-                                  onValueChange={field.onChange}
-                                  value={field.value || ""}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger className="invitation-select-trigger">
-                                      <SelectValue placeholder="Select year" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    <SelectItem value="4th">
-                                      4th Year
-                                    </SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name="semester"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Semester *</FormLabel>
-                                <Select
-                                  onValueChange={field.onChange}
-                                  value={field.value || ""}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger className="invitation-select-trigger">
-                                      <SelectValue placeholder="Select semester" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    <SelectItem value="2nd">
-                                      2nd Semester
-                                    </SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Practicum Information */}
-                    <Card className="invitation-form-card">
-                      <CardHeader>
-                        <CardTitle className="flex items-center justify-between">
-                          <span>Practicum Information</span>
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id="includePracticum"
-                              checked={includePracticum}
-                              onChange={(e) =>
-                                setIncludePracticum(e.target.checked)
-                              }
-                              className="rounded border-gray-300"
+                    <FormField
+                      control={form.control}
+                      name="position"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Position/Job Title *</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="Enter position or job title"
+                              className="invitation-input"
+                              {...field}
                             />
-                            <label
-                              htmlFor="includePracticum"
-                              className="text-sm"
-                            >
-                              Include practicum assignment
-                            </label>
-                          </div>
-                        </CardTitle>
-                        <CardDescription>
-                          {includePracticum
-                            ? "Select agency and supervisor for the student's practicum placement"
-                            : "Skip this section if practicum details are not yet available"}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        {includePracticum ? (
-                          <>
-                            <FormField
-                              control={form.control}
-                              name="agencyId"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Agency/Company *</FormLabel>
-                                  <Select
-                                    onValueChange={handleAgencyChange}
-                                    value={field.value || selectedAgencyId}
-                                  >
-                                    <FormControl>
-                                      <SelectTrigger className="invitation-select-trigger">
-                                        <SelectValue placeholder="Select an agency" />
-                                      </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                      {agenciesData?.agencies.map((agency) => (
-                                        <SelectItem
-                                          key={agency.id}
-                                          value={agency.id}
-                                        >
-                                          {agency.name} ({agency.branchType})
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                            {selectedAgency && (
-                              <div className="p-4 bg-gray-50 rounded-lg">
-                                <h4 className="font-medium text-gray-900 mb-2">
-                                  Selected Agency Details
-                                </h4>
-                                <div className="space-y-1 text-sm text-gray-600">
-                                  <p>
-                                    <strong>Name:</strong> {selectedAgency.name}
-                                  </p>
-                                  <p>
-                                    <strong>Address:</strong>{" "}
-                                    {selectedAgency.address}
-                                  </p>
-                                  <p>
-                                    <strong>Contact:</strong>{" "}
-                                    {selectedAgency.contactPerson} (
-                                    {selectedAgency.contactRole})
-                                  </p>
-                                  <p>
-                                    <strong>Phone:</strong>{" "}
-                                    {selectedAgency.contactPhone}
-                                  </p>
-                                  <p>
-                                    <strong>Email:</strong>{" "}
-                                    {selectedAgency.contactEmail}
-                                  </p>
-                                </div>
-                              </div>
-                            )}
-
-                            <FormField
-                              control={form.control}
-                              name="supervisorId"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Supervisor *</FormLabel>
-                                  <Select
-                                    onValueChange={(value) =>
-                                      form.setValue("supervisorId", value)
-                                    }
-                                    value={field.value}
-                                  >
-                                    <FormControl>
-                                      <SelectTrigger className="invitation-select-trigger">
-                                        <SelectValue placeholder="Select a supervisor" />
-                                      </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                      {availableSupervisors.map(
-                                        (supervisor) => (
-                                          <SelectItem
-                                            key={supervisor.id}
-                                            value={supervisor.id}
-                                          >
-                                            {supervisor.name} -{" "}
-                                            {supervisor.position}
-                                          </SelectItem>
-                                        )
-                                      )}
-                                    </SelectContent>
-                                  </Select>
-                                  <FormMessage />
-                                  {selectedAgencyId &&
-                                    availableSupervisors.length === 0 && (
-                                      <p className="text-sm text-amber-600">
-                                        No supervisors available for this
-                                        agency. Please add supervisors to this
-                                        agency first.
-                                      </p>
-                                    )}
-                                </FormItem>
-                              )}
-                            />
-
-                            <FormField
-                              control={form.control}
-                              name="position"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Position/Job Title *</FormLabel>
-                                  <FormControl>
-                                    <Input
-                                      placeholder="Enter position or job title"
-                                      className="invitation-input"
-                                      {...field}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <FormField
-                                control={form.control}
-                                name="startDate"
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>Start Date *</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        type="date"
-                                        className="invitation-input"
-                                        {...field}
-                                      />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="startDate"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Start Date *</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="date"
+                                className="invitation-input"
+                                {...field}
                               />
-                              <FormField
-                                control={form.control}
-                                name="endDate"
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>End Date *</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        type="date"
-                                        className="invitation-input"
-                                        {...field}
-                                      />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <FormField
-                                control={form.control}
-                                name="totalHours"
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>Total Hours *</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        type="number"
-                                        placeholder="400"
-                                        className="invitation-input"
-                                        {...field}
-                                        onChange={(e) =>
-                                          field.onChange(
-                                            parseInt(e.target.value) || 0
-                                          )
-                                        }
-                                      />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                              <FormField
-                                control={form.control}
-                                name="workSetup"
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>Work Setup *</FormLabel>
-                                    <Select
-                                      onValueChange={(value) =>
-                                        form.setValue("workSetup", value as any)
-                                      }
-                                      value={field.value}
-                                    >
-                                      <FormControl>
-                                        <SelectTrigger className="invitation-select-trigger">
-                                          <SelectValue placeholder="Select work setup" />
-                                        </SelectTrigger>
-                                      </FormControl>
-                                      <SelectContent>
-                                        <SelectItem value="On-site">
-                                          On-site
-                                        </SelectItem>
-                                        <SelectItem value="Hybrid">
-                                          Hybrid
-                                        </SelectItem>
-                                        <SelectItem value="Work From Home">
-                                          Work From Home
-                                        </SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                            </div>
-                          </>
-                        ) : (
-                          <div className="p-4 bg-gray-50 rounded-lg text-center">
-                            <p className="text-sm text-gray-600">
-                              Practicum information can be added later when
-                              details are available.
-                            </p>
-                          </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
                         )}
-                      </CardContent>
-                    </Card>
-                  </div>
+                      />
+                      <FormField
+                        control={form.control}
+                        name="endDate"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>End Date *</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="date"
+                                className="invitation-input"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
 
-                  {/* Sidebar for additional info */}
-                  <div className="space-y-6">
-                    <Card className="invitation-form-card">
-                      <CardHeader>
-                        <CardTitle>Student Status</CardTitle>
-                        <CardDescription>
-                          Current student status and information
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-2 text-sm">
-                          <div className="flex items-center gap-2">
-                            <Badge
-                              variant="outline"
-                              className="w-2 h-2 p-0 bg-green-500"
-                            ></Badge>
-                            <span>Active Student</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge
-                              variant="outline"
-                              className="w-2 h-2 p-0 bg-blue-500"
-                            ></Badge>
-                            <span>Enrolled</span>
-                          </div>
-                          {includePracticum && (
-                            <div className="flex items-center gap-2">
-                              <Badge
-                                variant="outline"
-                                className="w-2 h-2 p-0 bg-orange-500"
-                              ></Badge>
-                              <span>Practicum Assigned</span>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="totalHours"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Total Hours *</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                placeholder="400"
+                                className="invitation-input"
+                                {...field}
+                                onChange={(e) =>
+                                  field.onChange(parseInt(e.target.value) || 0)
+                                }
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="workSetup"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Work Setup *</FormLabel>
+                            <Select
+                              onValueChange={(value) =>
+                                form.setValue("workSetup", value as any)
+                              }
+                              value="On-site"
+                              disabled
+                            >
+                              <FormControl>
+                                <SelectTrigger className="invitation-select-trigger">
+                                  <SelectValue placeholder="On-site" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="On-site">On-site</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
 
               <DialogFooter className="flex-shrink-0 border-t pt-4">
@@ -2729,7 +2107,7 @@ export default function StudentsPage() {
                 >
                   {updateStudentMutation.isPending
                     ? "Updating..."
-                    : "Update Student"}
+                    : "Update Practicum"}
                 </Button>
               </DialogFooter>
             </form>
@@ -2738,7 +2116,10 @@ export default function StudentsPage() {
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteAlertOpen} onOpenChange={setDeleteAlertOpen}>
+      <AlertDialog
+        open={deleteAlertOpen}
+        onOpenChange={handleDeleteDialogClose}
+      >
         <AlertDialogContent className="bg-white">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
@@ -2746,21 +2127,68 @@ export default function StudentsPage() {
               Delete Student
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this student? This action cannot
-              be undone and will permanently remove the student's data from the
-              system.
+              Are you sure you want to delete{" "}
+              <strong className="font-semibold text-gray-900">
+                {studentNameToDelete}
+              </strong>
+              ? This action cannot be undone and will permanently remove the
+              student's data from the system.
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          {/* Yes/No Confirmation Step */}
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">
+                Please confirm your decision:
+              </label>
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant={deleteConfirmation === "yes" ? "default" : "outline"}
+                  className={cn(
+                    "flex-1",
+                    deleteConfirmation === "yes"
+                      ? "bg-green-600 hover:bg-green-700 text-white"
+                      : ""
+                  )}
+                  onClick={() => setDeleteConfirmation("yes")}
+                >
+                  Yes, I want to delete
+                </Button>
+                <Button
+                  type="button"
+                  variant={deleteConfirmation === "no" ? "default" : "outline"}
+                  className={cn(
+                    "flex-1",
+                    deleteConfirmation === "no"
+                      ? "bg-gray-600 hover:bg-gray-700 text-white"
+                      : ""
+                  )}
+                  onClick={() => {
+                    setDeleteConfirmation("no");
+                    setDeleteAlertOpen(false);
+                  }}
+                >
+                  No, cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+
           <AlertDialogFooter className="flex gap-2">
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setDeleteConfirmation(null)}>
+              Cancel
+            </AlertDialogCancel>
             <Button
               onClick={(e) => {
                 e.preventDefault();
-                console.log("Delete button clicked!");
                 handleConfirmDelete();
               }}
               className="bg-red-600 hover:bg-red-700 text-white"
-              disabled={deleteStudentMutation.isPending}
+              disabled={
+                deleteStudentMutation.isPending || deleteConfirmation !== "yes"
+              }
             >
               {deleteStudentMutation.isPending ? (
                 <>

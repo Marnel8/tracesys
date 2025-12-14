@@ -566,7 +566,7 @@ export default function InstructorDashboard() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <InstructorStatsCard
             icon={Users}
-            label="Total Students"
+            label="Total Student/s"
             value={stats.totalStudents}
             helperText={
               <>
@@ -586,7 +586,7 @@ export default function InstructorDashboard() {
           />
           <InstructorStatsCard
             icon={AlertTriangle}
-            label="Students Missing"
+            label="Students Absent Today"
             value={stats.studentsMissingToday}
             helperText={
               stats.dailyAttendanceTotal > 0
@@ -1257,36 +1257,6 @@ export default function InstructorDashboard() {
               </AccordionContent>
             </AccordionItem>
           </Accordion>
-        </Card>
-
-        {/* Quick Actions */}
-        <Card className="border border-primary-200 shadow-sm">
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>
-              Frequently used actions for managing your students
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-2">
-              <Button
-                variant="outline"
-                className="h-20 flex-col gap-2 border border-gray-300 text-gray-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50"
-                onClick={() => handleQuickAction("post-announcement")}
-              >
-                <MessageSquare className="w-6 h-6" />
-                <span>Post Announcement</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="h-20 flex-col gap-2 border border-gray-300 text-gray-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50"
-                onClick={() => handleQuickAction("settings")}
-              >
-                <Settings className="w-6 h-6" />
-                <span>Settings</span>
-              </Button>
-            </div>
-          </CardContent>
         </Card>
 
         {/* Recent Activity & Pending Items */}
