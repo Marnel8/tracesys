@@ -134,6 +134,17 @@ const getAttendanceRecordClass = (status?: string) => {
   return "invitation-status-pill--neutral";
 };
 
+// Helper: exclude practicum narrative and weekly report from requirement counts
+function isExcludedRequirementTitle(title?: string | null) {
+  if (!title) return false;
+  const lower = title.toLowerCase();
+  return lower.includes("narrative") || lower.includes("weekly report");
+}
+
+function isExcludedTemplate(template: any) {
+  return isExcludedRequirementTitle(template?.title);
+}
+
 export default function StudentsPage() {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
@@ -218,6 +229,13 @@ export default function StudentsPage() {
     limit: 100,
     status: "active",
   });
+
+  // Templates used for requirement progress, excluding practicum narrative and weekly report
+  const allRequirementTemplates = templatesData?.requirementTemplates || [];
+  const includedRequirementTemplates = useMemo(
+    () => allRequirementTemplates.filter((t: any) => !isExcludedTemplate(t)),
+    [allRequirementTemplates]
+  );
 
   // Fetch reports data for the selected student
   const { data: reportsData, isLoading: isLoadingReports } = useReports({
@@ -373,7 +391,7 @@ export default function StudentsPage() {
           Agency: student.agency,
           Status: student.status,
           "Requirements Completed": `${student.requirements}/${
-            templatesData?.requirementTemplates?.length || 0
+            includedRequirementTemplates.length || 0
           }`,
           "Requirements %": `${student.requirementsCompletion.toFixed(1)}%`,
           "Attendance %": `${student.attendance}%`,
@@ -545,7 +563,7 @@ export default function StudentsPage() {
   };
 
   const normalizedStudents = useMemo(() => {
-    const totalRequirements = templatesData?.requirementTemplates?.length || 0;
+    const totalRequirements = includedRequirementTemplates.length || 0;
 
     // Debug: Log the first student's data structure
     if (serverStudents.length > 0) {
@@ -581,9 +599,11 @@ export default function StudentsPage() {
       // Calculate requirements completion based on actual requirements data
       // Count approved requirements from the student's requirements array
       const studentRequirements = s.requirements || [];
-      const approvedRequirements = studentRequirements.filter(
-        (req: any) => req.status === "approved"
-      ).length;
+      const approvedRequirements = studentRequirements.filter((req: any) => {
+        const title =
+          req.title || req.template?.title || req.templateTitle || "";
+        return req.status === "approved" && !isExcludedRequirementTitle(title);
+      }).length;
 
       // Calculate attendance remarks based on attendance records
       const attendanceRecords = s.attendanceRecords || [];
@@ -648,12 +668,13 @@ export default function StudentsPage() {
         hourProgress: {
           completed: progress.completed,
           total: totalHours,
-          percent: totalHours > 0
-            ? Math.min(
-                100,
-                Math.round((progress.completed / totalHours) * 100)
-              )
-            : 0,
+          percent:
+            totalHours > 0
+              ? Math.min(
+                  100,
+                  Math.round((progress.completed / totalHours) * 100)
+                )
+              : 0,
         },
       };
     });
@@ -1075,25 +1096,27 @@ export default function StudentsPage() {
                                   {student.email}
                                 </div>
                               </div>
-                              {student.hourProgress && student.hourProgress.total > 0 && (
-                                <div className="space-y-1 pt-1 border-t">
-                                  <div className="flex items-center justify-between text-xs">
-                                    <span className="text-gray-600">
-                                      Hours Progress
-                                    </span>
-                                    <span className="font-medium text-gray-900">
-                                      {student.hourProgress.completed} / {student.hourProgress.total}h
-                                    </span>
+                              {student.hourProgress &&
+                                student.hourProgress.total > 0 && (
+                                  <div className="space-y-1 pt-1 border-t">
+                                    <div className="flex items-center justify-between text-xs">
+                                      <span className="text-gray-600">
+                                        Hours Progress
+                                      </span>
+                                      <span className="font-medium text-gray-900">
+                                        {student.hourProgress.completed} /{" "}
+                                        {student.hourProgress.total}h
+                                      </span>
+                                    </div>
+                                    <Progress
+                                      value={student.hourProgress.percent}
+                                      className="h-1.5"
+                                    />
+                                    <div className="text-xs text-gray-500">
+                                      {student.hourProgress.percent}% complete
+                                    </div>
                                   </div>
-                                  <Progress
-                                    value={student.hourProgress.percent}
-                                    className="h-1.5"
-                                  />
-                                  <div className="text-xs text-gray-500">
-                                    {student.hourProgress.percent}% complete
-                                  </div>
-                                </div>
-                              )}
+                                )}
                             </div>
                           </TableCell>
                           <TableCell className="w-40">
@@ -1139,11 +1162,8 @@ export default function StudentsPage() {
                                 )
                               )}
                             >
-                              {student.requirementsCompletion >= 100
-                                ? "Complete"
-                                : student.requirementsCompletion >= 50
-                                ? "In progress"
-                                : "Needs work"}
+                              {student.requirements}/
+                              {templatesData?.requirementTemplates?.length || 0}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
@@ -1455,13 +1475,26 @@ export default function StudentsPage() {
                       </div>
                     </div>
                     {(() => {
-                      const progress = getStudentProgress(selectedStudentData.data.id);
-                      const totalHours = selectedStudentData.data.practicums[0]?.totalHours || progress.total || 0;
-                      const completedHours = progress.completed || selectedStudentData.data.practicums[0]?.completedHours || 0;
-                      const percent = totalHours > 0
-                        ? Math.min(100, Math.round((completedHours / totalHours) * 100))
-                        : 0;
-                      
+                      const progress = getStudentProgress(
+                        selectedStudentData.data.id
+                      );
+                      const totalHours =
+                        selectedStudentData.data.practicums[0]?.totalHours ||
+                        progress.total ||
+                        0;
+                      const completedHours =
+                        progress.completed ||
+                        selectedStudentData.data.practicums[0]
+                          ?.completedHours ||
+                        0;
+                      const percent =
+                        totalHours > 0
+                          ? Math.min(
+                              100,
+                              Math.round((completedHours / totalHours) * 100)
+                            )
+                          : 0;
+
                       if (totalHours > 0) {
                         return (
                           <div className="mt-4 pt-4 border-t space-y-2">
@@ -1477,7 +1510,8 @@ export default function StudentsPage() {
                             <div className="flex items-center justify-between text-xs text-gray-600">
                               <span>{percent}% complete</span>
                               <span>
-                                {Math.max(0, totalHours - completedHours)}h remaining
+                                {Math.max(0, totalHours - completedHours)}h
+                                remaining
                               </span>
                             </div>
                           </div>
@@ -1676,12 +1710,21 @@ export default function StudentsPage() {
                                 {(() => {
                                   const requirements =
                                     requirementsData?.requirements || [];
-                                  const templates =
-                                    templatesData?.requirementTemplates || [];
                                   const approvedCount = requirements.filter(
-                                    (r: any) => r.status === "approved"
+                                    (r: any) => {
+                                      const title =
+                                        r.title ||
+                                        r.template?.title ||
+                                        r.templateTitle ||
+                                        "";
+                                      return (
+                                        r.status === "approved" &&
+                                        !isExcludedRequirementTitle(title)
+                                      );
+                                    }
                                   ).length;
-                                  const totalCount = templates.length;
+                                  const totalCount =
+                                    includedRequirementTemplates.length;
                                   return `${approvedCount}/${totalCount}`;
                                 })()}
                               </span>
@@ -1690,12 +1733,21 @@ export default function StudentsPage() {
                               value={(() => {
                                 const requirements =
                                   requirementsData?.requirements || [];
-                                const templates =
-                                  templatesData?.requirementTemplates || [];
                                 const approvedCount = requirements.filter(
-                                  (r: any) => r.status === "approved"
+                                  (r: any) => {
+                                    const title =
+                                      r.title ||
+                                      r.template?.title ||
+                                      r.templateTitle ||
+                                      "";
+                                    return (
+                                      r.status === "approved" &&
+                                      !isExcludedRequirementTitle(title)
+                                    );
+                                  }
                                 ).length;
-                                const totalCount = templates.length;
+                                const totalCount =
+                                  includedRequirementTemplates.length;
                                 return totalCount > 0
                                   ? (approvedCount / totalCount) * 100
                                   : 0;
@@ -1706,12 +1758,21 @@ export default function StudentsPage() {
                               {(() => {
                                 const requirements =
                                   requirementsData?.requirements || [];
-                                const templates =
-                                  templatesData?.requirementTemplates || [];
                                 const approvedCount = requirements.filter(
-                                  (r: any) => r.status === "approved"
+                                  (r: any) => {
+                                    const title =
+                                      r.title ||
+                                      r.template?.title ||
+                                      r.templateTitle ||
+                                      "";
+                                    return (
+                                      r.status === "approved" &&
+                                      !isExcludedRequirementTitle(title)
+                                    );
+                                  }
                                 ).length;
-                                const totalCount = templates.length;
+                                const totalCount =
+                                  includedRequirementTemplates.length;
                                 const percentage =
                                   totalCount > 0
                                     ? (approvedCount / totalCount) * 100
@@ -1732,7 +1793,17 @@ export default function StudentsPage() {
                             </div>
                             <span className="text-2xl font-bold text-green-600">
                               {requirementsData?.requirements?.filter(
-                                (r: any) => r.status === "approved"
+                                (r: any) => {
+                                  const title =
+                                    r.title ||
+                                    r.template?.title ||
+                                    r.templateTitle ||
+                                    "";
+                                  return (
+                                    r.status === "approved" &&
+                                    !isExcludedRequirementTitle(title)
+                                  );
+                                }
                               ).length || 0}
                             </span>
                           </CardContent>
@@ -1748,7 +1819,17 @@ export default function StudentsPage() {
                             </div>
                             <span className="text-2xl font-bold text-yellow-600">
                               {requirementsData?.requirements?.filter(
-                                (r: any) => r.status === "submitted"
+                                (r: any) => {
+                                  const title =
+                                    r.title ||
+                                    r.template?.title ||
+                                    r.templateTitle ||
+                                    "";
+                                  return (
+                                    r.status === "submitted" &&
+                                    !isExcludedRequirementTitle(title)
+                                  );
+                                }
                               ).length || 0}
                             </span>
                           </CardContent>
