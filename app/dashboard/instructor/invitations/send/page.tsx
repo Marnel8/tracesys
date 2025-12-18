@@ -146,25 +146,39 @@ export default function SendInvitationPage() {
     const instructorDepartmentId = (user as any)?.departmentId;
     const instructorProgram = (user as any)?.program;
 
-    if (recipients.length === 1 && !isBulk) {
-      await createInvitation.mutateAsync({
-        email: recipients[0].email,
-        role: data.role,
-        departmentId: instructorDepartmentId || data.departmentId,
-        sectionId: data.sectionId,
-        program: instructorProgram || data.program,
-      });
-    } else {
-      await createBulkInvitations.mutateAsync({
-        emails: recipients.map((r) => r.email),
-        role: data.role,
-        departmentId: instructorDepartmentId || data.departmentId,
-        sectionId: data.sectionId,
-        program: instructorProgram || data.program,
-      });
+    try {
+      if (recipients.length === 1 && !isBulk) {
+        await createInvitation.mutateAsync({
+          email: recipients[0].email,
+          role: data.role,
+          departmentId: instructorDepartmentId || data.departmentId,
+          sectionId: data.sectionId,
+          program: instructorProgram || data.program,
+        });
+        router.push("/dashboard/instructor/invitations");
+      } else {
+        await createBulkInvitations.mutateAsync({
+          emails: recipients.map((r) => r.email),
+          role: data.role,
+          departmentId: instructorDepartmentId || data.departmentId,
+          sectionId: data.sectionId,
+          program: instructorProgram || data.program,
+        });
+        router.push("/dashboard/instructor/invitations");
+      }
+    } catch (error: any) {
+      // Error is already handled by the mutation's onError callback
+      // But we can set a more specific error message if needed
+      const errorMessage =
+        error?.response?.data?.message || error?.response?.data?.error?.message;
+      // Only set error if we have a meaningful message (not the generic axios error)
+      if (
+        errorMessage &&
+        !errorMessage.includes("Request failed with status code")
+      ) {
+        setRecipientError(errorMessage);
+      }
     }
-
-    router.push("/dashboard/instructor/invitations");
   };
 
   return (
@@ -243,13 +257,19 @@ export default function SendInvitationPage() {
                         form.setValue("role", value as any)
                       }
                     >
-                      <SelectTrigger className="invitation-select-trigger">
-                        <SelectValue placeholder="Select role" />
+                      <SelectTrigger
+                        className="invitation-select-trigger"
+                        disabled
+                      >
+                        <SelectValue
+                          placeholder="Select role"
+                          defaultValue="student"
+                        />
+                        <SelectContent>
+                          <SelectItem value="student">Student</SelectItem>
+                          {/* <SelectItem value="instructor">Instructor</SelectItem> */}
+                        </SelectContent>
                       </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="student">Student</SelectItem>
-                        <SelectItem value="instructor">Instructor</SelectItem>
-                      </SelectContent>
                     </Select>
                   </div>
 

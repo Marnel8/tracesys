@@ -56,7 +56,12 @@ const instructorSignupSchema = z
     department: z.string().min(1, "Please select a department"),
     instructorId: z.string().min(1, "Instructor ID is required"),
     program: z.string().optional(),
-    password: z.string().min(8, "Password must be at least 8 characters"),
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .refine((value) => /[a-z]/.test(value) && /[A-Z]/.test(value), {
+        message: "Password must contain both uppercase and lowercase letters",
+      }),
     confirmPassword: z.string().min(1, "Please confirm your password"),
     address: z.string().optional(),
     bio: z.string().optional(),

@@ -87,7 +87,14 @@ export const useCreateInvitation = () => {
 			toast.success("Invitation sent successfully");
 		},
 		onError: (error: any) => {
-			toast.error(error.response?.data?.error?.message || "Failed to create invitation");
+			// Backend returns error directly in data, not nested under error
+			const errorMessage = error.response?.data?.message || error.response?.data?.error?.message || "Failed to create invitation";
+			// Only show toast if we have a meaningful message (not the generic axios error)
+			if (errorMessage && !errorMessage.includes("Request failed with status code")) {
+				toast.error(errorMessage);
+			}
+			// Re-throw to allow component to handle it
+			throw error;
 		},
 	});
 };
@@ -102,10 +109,20 @@ export const useCreateBulkInvitations = () => {
 		},
 		onSuccess: (data) => {
 			queryClient.invalidateQueries({ queryKey: ["invitations"] });
-			toast.success(`${data.data.count} invitation(s) sent successfully`);
+			const successCount = data.data?.count || data.data?.invitations?.length || 0;
+			if (successCount > 0) {
+				toast.success(`${successCount} invitation(s) sent successfully`);
+			}
 		},
 		onError: (error: any) => {
-			toast.error(error.response?.data?.error?.message || "Failed to create invitations");
+			// Backend returns error directly in data, not nested under error
+			const errorMessage = error.response?.data?.message || error.response?.data?.error?.message || "Failed to create invitations";
+			// Only show toast if we have a meaningful message (not the generic axios error)
+			if (errorMessage && !errorMessage.includes("Request failed with status code")) {
+				toast.error(errorMessage);
+			}
+			// Re-throw to allow component to handle it
+			throw error;
 		},
 	});
 };

@@ -40,7 +40,15 @@ import {
   X,
   FileText,
   CalendarIcon,
+  Filter,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Card,
   CardContent,
@@ -55,6 +63,7 @@ import { cn } from "@/lib/utils";
 export default function SummaryOfRequirementsPage() {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedSectionId, setSelectedSectionId] = useState<string>("all");
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [isCommentDialogOpen, setIsCommentDialogOpen] = useState(false);
   const [commentText, setCommentText] = useState("");
@@ -119,19 +128,76 @@ export default function SummaryOfRequirementsPage() {
   const updateDueDate = useUpdateRequirementDueDate();
   const createRequirement = useCreateRequirementFromTemplate();
 
-  // Filter students locally instead of refetching
-  const students = useMemo(() => {
+  // Extract unique sections for filter dropdown
+  const sections = useMemo(() => {
     const allStudents = studentsData?.data?.students ?? [];
-    if (!searchTerm.trim()) {
-      return allStudents;
-    }
-    const searchLower = searchTerm.toLowerCase();
-    return allStudents.filter((student: any) => {
-      const fullName = `${student.firstName} ${student.lastName}`.toLowerCase();
-      const email = (student.email || "").toLowerCase();
-      return fullName.includes(searchLower) || email.includes(searchLower);
+    const sectionMap = new Map<
+      string,
+      {
+        sectionId: string;
+        sectionName: string;
+        courseName: string;
+        courseCode: string;
+        academicYear: string;
+      }
+    >();
+
+    allStudents.forEach((student: any) => {
+      const enrollment = student.enrollments?.[0];
+      const section = enrollment?.section;
+
+      if (section && !sectionMap.has(section.id)) {
+        const course = section.course;
+        sectionMap.set(section.id, {
+          sectionId: section.id,
+          sectionName: section.name || "Unknown Section",
+          courseName: course?.name || course?.code || "-",
+          courseCode: course?.code || "-",
+          academicYear: section.academicYear || "-",
+        });
+      }
     });
-  }, [studentsData, searchTerm]);
+
+    return Array.from(sectionMap.values()).sort((a, b) =>
+      a.sectionName.localeCompare(b.sectionName)
+    );
+  }, [studentsData]);
+
+  // Filter students by search term and selected section
+  const filteredStudents = useMemo(() => {
+    const allStudents = studentsData?.data?.students ?? [];
+
+    let filtered = allStudents;
+
+    // Filter by section
+    if (selectedSectionId !== "all") {
+      filtered = filtered.filter((student: any) => {
+        const enrollment = student.enrollments?.[0];
+        const section = enrollment?.section;
+        return section?.id === selectedSectionId;
+      });
+    }
+
+    // Filter by search term
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter((student: any) => {
+        const fullName =
+          `${student.firstName} ${student.lastName}`.toLowerCase();
+        const email = (student.email || "").toLowerCase();
+        const sectionName = (student.computed?.sectionName || "").toLowerCase();
+        const courseName = (student.computed?.courseName || "").toLowerCase();
+        return (
+          fullName.includes(searchLower) ||
+          email.includes(searchLower) ||
+          sectionName.includes(searchLower) ||
+          courseName.includes(searchLower)
+        );
+      });
+    }
+
+    return filtered;
+  }, [studentsData, searchTerm, selectedSectionId]);
 
   const requirements = useMemo(() => {
     return requirementsData?.requirements ?? [];
@@ -347,25 +413,47 @@ export default function SummaryOfRequirementsPage() {
             <CardTitle className="text-xl sm:text-2xl">
               Student Requirements & Reports
             </CardTitle>
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <Input
-                placeholder="Search students..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <Input
+                  placeholder="Search students..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select
+                value={selectedSectionId}
+                onValueChange={setSelectedSectionId}
+              >
+                <SelectTrigger className="w-full sm:w-[200px]">
+                  <Filter className="mr-2 h-4 w-4" />
+                  <SelectValue placeholder="Filter by section" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Sections</SelectItem>
+                  {sections.map((section) => (
+                    <SelectItem
+                      key={section.sectionId}
+                      value={section.sectionId}
+                    >
+                      {section.sectionName} ({section.courseCode})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          {students.length === 0 ? (
+          {filteredStudents.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-gray-500">No students found</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {students.map((student: any) => {
+              {filteredStudents.map((student: any) => {
                 const progress = getProgress(student.id);
                 const studentReqs = studentRequirementsMap.get(student.id);
                 const studentReports = studentReportsMap.get(student.id);

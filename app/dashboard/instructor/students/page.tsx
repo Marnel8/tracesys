@@ -200,6 +200,11 @@ export default function StudentsPage() {
       limit: 10,
     });
 
+  // Fetch all attendance records for progress calculation
+  const { data: allAttendanceData } = useAttendance({
+    limit: 10000, // Fetch all records for accurate progress calculation
+  });
+
   // Fetch requirements data for the selected student
   const { data: requirementsData, isLoading: isLoadingRequirements } =
     useRequirements({
@@ -472,6 +477,73 @@ export default function StudentsPage() {
 
   const serverStudents = (data as any)?.data?.students ?? [];
 
+  // Calculate hour progress for each student
+  const studentProgressMap = useMemo(() => {
+    const records: any[] = allAttendanceData?.attendance || [];
+
+    // Group records by studentId
+    const studentMap = new Map<
+      string,
+      {
+        completed: number;
+        total: number;
+        percent: number;
+      }
+    >();
+
+    records.forEach((record) => {
+      const studentId = record.studentId;
+      const practicum = record.practicum;
+      const totalHours = practicum?.totalHours || 0;
+
+      if (!studentMap.has(studentId)) {
+        studentMap.set(studentId, {
+          completed: 0,
+          total: totalHours,
+          percent: 0,
+        });
+      }
+
+      const progress = studentMap.get(studentId)!;
+
+      // Only count approved records with valid hours
+      if (
+        record.approvalStatus === "Approved" &&
+        ["present", "late", "excused"].includes(
+          record.status?.toLowerCase() || ""
+        ) &&
+        record.hours != null
+      ) {
+        progress.completed += Number(record.hours || 0);
+      }
+    });
+
+    // Calculate percentages
+    studentMap.forEach((progress, studentId) => {
+      progress.completed = Math.round(progress.completed * 100) / 100;
+      progress.percent =
+        progress.total > 0
+          ? Math.min(
+              100,
+              Math.round((progress.completed / progress.total) * 100)
+            )
+          : 0;
+    });
+
+    return studentMap;
+  }, [allAttendanceData]);
+
+  // Helper function to get student progress
+  const getStudentProgress = (studentId: string) => {
+    return (
+      studentProgressMap.get(studentId) || {
+        completed: 0,
+        total: 0,
+        percent: 0,
+      }
+    );
+  };
+
   const normalizedStudents = useMemo(() => {
     const totalRequirements = templatesData?.requirementTemplates?.length || 0;
 
@@ -552,6 +624,11 @@ export default function StudentsPage() {
           ? (approvedRequirements / totalRequirements) * 100
           : 0;
 
+      // Get hour progress for this student
+      const progress = getStudentProgress(s.id);
+      // Use practicum totalHours if available, otherwise use progress total
+      const totalHours = practicum?.totalHours || progress.total || 0;
+
       return {
         id: s.id,
         name: `${s.firstName} ${s.lastName}`,
@@ -568,9 +645,19 @@ export default function StudentsPage() {
         studentId: s.studentId,
         academicYear: academicYear,
         semester: semester,
+        hourProgress: {
+          completed: progress.completed,
+          total: totalHours,
+          percent: totalHours > 0
+            ? Math.min(
+                100,
+                Math.round((progress.completed / totalHours) * 100)
+              )
+            : 0,
+        },
       };
     });
-  }, [serverStudents, templatesData]);
+  }, [serverStudents, templatesData, studentProgressMap]);
 
   // Get unique sections from the data for dynamic filter options
   const availableSections = useMemo(() => {
@@ -976,16 +1063,37 @@ export default function StudentsPage() {
                       {filteredStudents.map((student: any) => (
                         <TableRow key={student.id}>
                           <TableCell>
-                            <div className="space-y-1">
-                              <div className="font-medium text-gray-900">
-                                {student.name}
+                            <div className="space-y-2">
+                              <div className="space-y-1">
+                                <div className="font-medium text-gray-900">
+                                  {student.name}
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                  {student.studentId}
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  {student.email}
+                                </div>
                               </div>
-                              <div className="text-sm text-gray-600">
-                                {student.studentId}
-                              </div>
-                              <div className="text-sm text-muted-foreground">
-                                {student.email}
-                              </div>
+                              {student.hourProgress && student.hourProgress.total > 0 && (
+                                <div className="space-y-1 pt-1 border-t">
+                                  <div className="flex items-center justify-between text-xs">
+                                    <span className="text-gray-600">
+                                      Hours Progress
+                                    </span>
+                                    <span className="font-medium text-gray-900">
+                                      {student.hourProgress.completed} / {student.hourProgress.total}h
+                                    </span>
+                                  </div>
+                                  <Progress
+                                    value={student.hourProgress.percent}
+                                    className="h-1.5"
+                                  />
+                                  <div className="text-xs text-gray-500">
+                                    {student.hourProgress.percent}% complete
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell className="w-40">
@@ -1346,6 +1454,37 @@ export default function StudentsPage() {
                         </p>
                       </div>
                     </div>
+                    {(() => {
+                      const progress = getStudentProgress(selectedStudentData.data.id);
+                      const totalHours = selectedStudentData.data.practicums[0]?.totalHours || progress.total || 0;
+                      const completedHours = progress.completed || selectedStudentData.data.practicums[0]?.completedHours || 0;
+                      const percent = totalHours > 0
+                        ? Math.min(100, Math.round((completedHours / totalHours) * 100))
+                        : 0;
+                      
+                      if (totalHours > 0) {
+                        return (
+                          <div className="mt-4 pt-4 border-t space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-gray-600">
+                                Hours Progress:
+                              </span>
+                              <span className="text-sm font-semibold">
+                                {completedHours} / {totalHours}h
+                              </span>
+                            </div>
+                            <Progress value={percent} className="h-2" />
+                            <div className="flex items-center justify-between text-xs text-gray-600">
+                              <span>{percent}% complete</span>
+                              <span>
+                                {Math.max(0, totalHours - completedHours)}h remaining
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
                     {selectedStudentData.data.practicums[0].agency && (
                       <div className="mt-4 pt-4 border-t">
                         <h4 className="font-medium mb-2">Agency Details</h4>

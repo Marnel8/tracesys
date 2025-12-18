@@ -15,6 +15,7 @@ export interface Agency {
 	isActive: boolean;
 	latitude?: number;
 	longitude?: number;
+	isSchoolAffiliated?: boolean;
 	createdAt: string;
 	updatedAt: string;
 	supervisors?: Supervisor[];
@@ -73,6 +74,7 @@ export interface AgencyFormData {
 	isActive?: boolean;
 	latitude?: number;
 	longitude?: number;
+	isSchoolAffiliated?: boolean;
 }
 
 export interface AgencyFilters {

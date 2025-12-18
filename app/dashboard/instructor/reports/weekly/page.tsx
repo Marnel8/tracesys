@@ -61,6 +61,7 @@ import {
 } from "@/hooks/report/useReport";
 import { useAuth } from "@/hooks/auth/useAuth";
 import { InstructorStatsCard } from "@/components/instructor-stats-card";
+import { useLogReportView } from "@/hooks/report/useReport";
 
 export default function WeeklyReportsPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -74,6 +75,7 @@ export default function WeeklyReportsPage() {
   const [currentPage, setCurrentPage] = useState(1);
 
   const { user } = useAuth();
+  const { mutate: logReportView } = useLogReportView();
 
   // Debounce search term
   useEffect(() => {
@@ -137,6 +139,11 @@ export default function WeeklyReportsPage() {
   }, [weeklyReports]);
 
   const handleApprove = (id: string, rating: number, feedback: string) => {
+    // Log a report view so the student receives a notification in their navbar
+    if (id) {
+      logReportView(id);
+    }
+
     approveReport(
       {
         id,
@@ -155,6 +162,11 @@ export default function WeeklyReportsPage() {
   };
 
   const handleReturn = (id: string, feedback: string) => {
+    // Log a report view so the student receives a notification in their navbar
+    if (id) {
+      logReportView(id);
+    }
+
     rejectReport(
       {
         id,

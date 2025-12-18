@@ -23,7 +23,12 @@ import { toast } from "sonner";
 
 const instructorLoginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(1, "Password is required"),
+  password: z
+    .string()
+    .min(1, "Password is required")
+    .refine((value) => /[a-z]/.test(value) && /[A-Z]/.test(value), {
+      message: "Password must contain both uppercase and lowercase letters",
+    }),
 });
 
 type InstructorLoginForm = z.infer<typeof instructorLoginSchema>;
@@ -31,7 +36,7 @@ type InstructorLoginForm = z.infer<typeof instructorLoginSchema>;
 // Helper function to validate redirect path (prevent open redirects)
 function validateRedirectPath(path: string | null): string {
   if (!path) return "/dashboard/instructor";
-  
+
   // Only allow internal paths (starting with /)
   // Reject external URLs, protocol-relative URLs, and paths with //
   if (
@@ -43,12 +48,15 @@ function validateRedirectPath(path: string | null): string {
   ) {
     return "/dashboard/instructor";
   }
-  
+
   // Only allow specific dashboard paths
-  if (path.startsWith("/dashboard/instructor") || path.startsWith("/dashboard/student")) {
+  if (
+    path.startsWith("/dashboard/instructor") ||
+    path.startsWith("/dashboard/student")
+  ) {
     return path;
   }
-  
+
   // Default to instructor dashboard for any other internal path
   return "/dashboard/instructor";
 }
@@ -66,13 +74,13 @@ function LoginForm() {
       setGoogleSigningIn(true);
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
       const redirectParam = searchParams.get("redirect");
-      
+
       let oauthUrl = `${apiUrl}/api/v1/auth/google?role=instructor`;
-      
+
       if (redirectParam) {
         oauthUrl += `&redirect=${encodeURIComponent(redirectParam)}`;
       }
-      
+
       // Redirect to server OAuth endpoint
       window.location.href = oauthUrl;
     } catch (error: any) {
@@ -120,19 +128,19 @@ function LoginForm() {
       }
 
       toast.success("Signed in successfully");
-      
+
       // Get redirect path from URL params and validate it (prevent open redirects)
       const redirectParam = searchParams.get("redirect");
       const redirectPath = validateRedirectPath(redirectParam);
-      
+
       // Wait for cookies to be set by the browser before redirect
       // The server sets cookies via Set-Cookie headers in the login response.
       // We need to give the browser time to process them before the middleware runs.
       // Note: We can't check httpOnly cookies from JavaScript, but since the login
       // was successful, the server has sent Set-Cookie headers. We just need to
       // wait for the browser to process them.
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
       // Use window.location.href for full page reload to ensure cookies are included
       // This ensures a fresh request where cookies will be available to middleware
       window.location.href = redirectPath;
@@ -322,14 +330,16 @@ function LoginForm() {
 
 export default function InstructorLoginPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Loading...</p>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p className="text-gray-600">Loading...</p>
+          </div>
         </div>
-      </div>
-    }>
+      }
+    >
       <LoginForm />
     </Suspense>
   );

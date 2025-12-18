@@ -130,8 +130,7 @@ export default function SectionsPage() {
   // Filter sections to only show those from courses in the instructor's department
   const filteredSections = instructorDepartmentId
     ? (sectionsData?.sections || []).filter(
-        (section) =>
-          section.course?.departmentId === instructorDepartmentId
+        (section) => section.course?.departmentId === instructorDepartmentId
       )
     : sectionsData?.sections || [];
 
@@ -141,7 +140,6 @@ export default function SectionsPage() {
   const handleCreateSection = async () => {
     if (
       !newSection.name.trim() ||
-      !newSection.code.trim() ||
       !newSection.courseId ||
       !newSection.year ||
       !newSection.semester
@@ -206,7 +204,6 @@ export default function SectionsPage() {
   const handleUpdateSection = async () => {
     if (
       !editSection.name.trim() ||
-      !editSection.code.trim() ||
       !editSection.courseId ||
       !editSection.year ||
       !editSection.semester

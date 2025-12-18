@@ -136,19 +136,23 @@ export function useInstructorReportNotifications(instructorId?: string) {
     if (!reports.length) return [];
 
     const filtered = reports.filter((report: Report) => {
-      // Check if already read
+      // If the report was submitted AFTER the last check time, always treat it as unread,
+      // even if it was previously marked as read (covers re-submissions).
+      if (lastCheckTime && report.submittedDate) {
+        const reportDate = new Date(report.submittedDate);
+        const lastCheck = new Date(lastCheckTime);
+        if (reportDate > lastCheck) {
+          return true;
+        }
+      }
+
+      // For reports submitted on or before the last check time, use the readIds list.
       if (readIds.includes(report.id)) {
         return false;
       }
 
-      // Check if submitted after last check time (or if no last check time, consider it new)
-      if (lastCheckTime && report.submittedDate) {
-        const reportDate = new Date(report.submittedDate);
-        const lastCheck = new Date(lastCheckTime);
-        return reportDate > lastCheck;
-      }
-
-      // If no last check time or no submittedDate, consider all unread reports as new
+      // If we don't have a lastCheckTime or submittedDate, consider the report unread
+      // unless it was explicitly marked as read.
       return true;
     });
 

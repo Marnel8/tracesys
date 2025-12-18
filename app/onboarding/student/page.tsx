@@ -36,7 +36,7 @@ const profileSchema = z.object({
     .min(20, "Age must be at least 20")
     .max(80, "Age must be at most 80"),
   phone: z.string().min(10),
-  gender: z.enum(["male", "female", "other"]),
+  sex: z.enum(["male", "female"]),
   studentId: z.string().min(1, "Student ID is required"),
 });
 
@@ -113,7 +113,7 @@ function StudentOnboardingContent() {
       await api.put(`/student/${user.id}`, {
         age: data.age,
         phone: data.phone,
-        gender: data.gender,
+        gender: data.sex,
         studentId: data.studentId,
       });
 
@@ -286,28 +286,27 @@ function StudentOnboardingContent() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="gender">Gender</Label>
+                      <Label htmlFor="sex">Sex</Label>
                       <Select
-                        value={profileForm.watch("gender") ?? undefined}
+                        value={profileForm.watch("sex") ?? undefined}
                         onValueChange={(value) =>
                           profileForm.setValue(
-                            "gender",
-                            value as ProfileFormData["gender"]
+                            "sex",
+                            value as ProfileFormData["sex"]
                           )
                         }
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Select gender" />
+                          <SelectValue placeholder="Select sex" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="male">Male</SelectItem>
                           <SelectItem value="female">Female</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
                         </SelectContent>
                       </Select>
-                      {profileForm.formState.errors.gender && (
+                      {profileForm.formState.errors.sex && (
                         <p className="text-sm text-red-600">
-                          {profileForm.formState.errors.gender.message}
+                          {profileForm.formState.errors.sex.message}
                         </p>
                       )}
                     </div>

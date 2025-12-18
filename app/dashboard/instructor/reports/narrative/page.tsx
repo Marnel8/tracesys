@@ -29,13 +29,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -47,13 +40,13 @@ import {
   MessageSquare,
   Calendar,
   Clock,
-  Star,
   FileText,
 } from "lucide-react";
 import { useNarrativeReports } from "@/hooks/report/useNarrativeReport";
 import {
   useApproveReport,
   useRejectReport,
+  useLogReportView,
   Report,
 } from "@/hooks/report/useReport";
 import { useAuth } from "@/hooks/auth/useAuth";
@@ -66,7 +59,6 @@ export default function NarrativeReportsPage() {
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
   const [reviewFeedback, setReviewFeedback] = useState("");
-  const [reviewRating, setReviewRating] = useState("");
 
   const { user } = useAuth();
 
@@ -89,32 +81,29 @@ export default function NarrativeReportsPage() {
 
   const stats = useMemo(() => {
     const reports = narrativeReports;
-    const ratedReports = reports.filter((r: any) => r.rating);
     return {
       pending: reports.filter((r) => r.status === "submitted").length,
       approved: reports.filter((r) => r.status === "approved").length,
       returned: reports.filter((r) => r.status === "rejected").length,
-      averageRating:
-        ratedReports.length > 0
-          ? ratedReports.reduce(
-              (acc: number, r: any) => acc + (r.rating || 0),
-              0
-            ) / ratedReports.length
-          : 0,
     };
   }, [narrativeReports]);
 
   const { mutate: approveReport, isPending: isApproving } = useApproveReport();
   const { mutate: rejectReport, isPending: isRejecting } = useRejectReport();
+  const { mutate: logReportView } = useLogReportView();
 
-  const handleApprove = (id: string, rating: number, feedback: string) => {
+  const handleApprove = (id: string, feedback: string) => {
+    // Log a report view so the student receives a notification in their navbar
+    if (id) {
+      logReportView(id);
+    }
+
     approveReport(
-      { id, rating, feedback: feedback || null },
+      { id, feedback: feedback || null },
       {
         onSuccess: () => {
           setIsReviewDialogOpen(false);
           setReviewFeedback("");
-          setReviewRating("");
           setSelectedReport(null);
         },
       }
@@ -122,6 +111,11 @@ export default function NarrativeReportsPage() {
   };
 
   const handleReturn = (id: string, feedback: string) => {
+    // Log a report view so the student receives a notification in their navbar
+    if (id) {
+      logReportView(id);
+    }
+
     rejectReport(
       { id, reason: feedback },
       {
@@ -155,17 +149,6 @@ export default function NarrativeReportsPage() {
       default:
         return "bg-gray-100 text-gray-800";
     }
-  };
-
-  const renderStars = (rating: number) => {
-    return Array.from({ length: 5 }, (_, i) => (
-      <Star
-        key={i}
-        className={`w-4 h-4 ${
-          i < rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
-        }`}
-      />
-    ));
   };
 
   const getFullFileUrl = (fileUrl: string) => {
@@ -234,17 +217,7 @@ export default function NarrativeReportsPage() {
                 className="pl-10"
               />
             </div>
-            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-              <SelectTrigger className="w-full md:w-40">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="submitted">Submitted</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
-              </SelectContent>
-            </Select>
+            {/* Status filter removed */}
           </div>
 
           {/* Reports Table */}
@@ -256,7 +229,6 @@ export default function NarrativeReportsPage() {
                   <TableHead>Title</TableHead>
                   <TableHead>Hours</TableHead>
                   <TableHead>Submitted</TableHead>
-                  <TableHead>Rating</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -318,20 +290,6 @@ export default function NarrativeReportsPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {report.rating ? (
-                          <div className="flex items-center gap-1">
-                            {renderStars(report.rating)}
-                            <span className="text-sm text-gray-600 ml-1">
-                              {report.rating}/5
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-gray-400">
-                            Not rated
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
                         <Badge
                           variant="secondary"
                           className={getStatusColor(report.status)}
@@ -365,7 +323,12 @@ export default function NarrativeReportsPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => setSelectedReport(report)}
+                                onClick={() => {
+                                  setSelectedReport(report);
+                                  if (report.id) {
+                                    logReportView(report.id);
+                                  }
+                                }}
                               >
                                 <Eye className="w-4 h-4" />
                               </Button>
@@ -469,8 +432,7 @@ export default function NarrativeReportsPage() {
                                     Review Narrative Report
                                   </DialogTitle>
                                   <DialogDescription>
-                                    Provide feedback and rating for this
-                                    narrative report.
+                                    Provide feedback for this narrative report.
                                   </DialogDescription>
                                 </DialogHeader>
                                 <div className="space-y-4">
@@ -487,36 +449,6 @@ export default function NarrativeReportsPage() {
                                     <p className="text-sm text-gray-600">
                                       Hours: {selectedReport?.hoursLogged || 0}h
                                     </p>
-                                  </div>
-                                  <div>
-                                    <Label htmlFor="rating">
-                                      Rating (1-5 stars)
-                                    </Label>
-                                    <Select
-                                      value={reviewRating}
-                                      onValueChange={setReviewRating}
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="Select rating" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="1">
-                                          1 Star - Poor
-                                        </SelectItem>
-                                        <SelectItem value="2">
-                                          2 Stars - Fair
-                                        </SelectItem>
-                                        <SelectItem value="3">
-                                          3 Stars - Good
-                                        </SelectItem>
-                                        <SelectItem value="4">
-                                          4 Stars - Very Good
-                                        </SelectItem>
-                                        <SelectItem value="5">
-                                          5 Stars - Excellent
-                                        </SelectItem>
-                                      </SelectContent>
-                                    </Select>
                                   </div>
                                   <div>
                                     <Label htmlFor="feedback">Feedback</Label>
@@ -557,11 +489,10 @@ export default function NarrativeReportsPage() {
                                     onClick={() =>
                                       handleApprove(
                                         selectedReport?.id || "",
-                                        Number.parseInt(reviewRating),
                                         reviewFeedback
                                       )
                                     }
-                                    disabled={!reviewRating || isApproving}
+                                    disabled={isApproving}
                                   >
                                     {isApproving
                                       ? "Approving..."

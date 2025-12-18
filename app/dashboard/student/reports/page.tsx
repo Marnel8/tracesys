@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/auth/useAuth";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import {
   Popover,
@@ -66,6 +67,7 @@ const formatDateOnly = (date: Date): string => {
 };
 
 export default function ReportsPage() {
+  const isMobile = useIsMobile();
   const [reportTitle, setReportTitle] = useState("");
   const [reportContent, setReportContent] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -76,6 +78,7 @@ export default function ReportsPage() {
   const [hoursLogged, setHoursLogged] = useState<number | "">("");
   const [reportType, setReportType] = useState<ReportType>("weekly");
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  const [editingReportId, setEditingReportId] = useState<string | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [reportTypeFilter, setReportTypeFilter] = useState<ReportType | "all">(
     "all"
@@ -149,6 +152,34 @@ export default function ReportsPage() {
     setIsViewDialogOpen(true);
   };
 
+  const startEditReport = (report: any) => {
+    setEditingReportId(report.id);
+    setReportType(report.type as ReportType);
+    setReportTitle(report.title || "");
+    setReportContent(report.content || "");
+
+    if (report.type === "weekly") {
+      const start = report.startDate ? new Date(report.startDate) : undefined;
+      const end = report.endDate ? new Date(report.endDate) : undefined;
+      setDateRange({ from: start, to: end });
+    } else {
+      setDateRange({ from: undefined, to: undefined });
+    }
+
+    const hours =
+      typeof report.hoursLogged === "number"
+        ? report.hoursLogged
+        : typeof totalApprovedHours === "number" &&
+          !Number.isNaN(totalApprovedHours)
+        ? totalApprovedHours
+        : "";
+    setHoursLogged(hours);
+
+    setSelectedFiles([]);
+    // Scroll to top of form so the student sees the editing state
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const getFullFileUrl = (fileUrl: string) => {
     // Construct full URL using the API base URL
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
@@ -177,7 +208,43 @@ export default function ReportsPage() {
     if (!reportContent || !reportTitle) return;
     if (reportType === "weekly" && (!dateRange?.from || !dateRange?.to)) return;
 
-    // Narrative reports submit directly via narrative endpoint (multipart)
+    // Editing existing report: resubmit instead of creating a new one
+    if (editingReportId) {
+      submitReport(
+        {
+          id: editingReportId,
+          payload: {
+            title: reportTitle,
+            content: reportContent,
+            startDate:
+              reportType === "weekly" && dateRange?.from
+                ? formatDateOnly(dateRange.from)
+                : undefined,
+            endDate:
+              reportType === "weekly" && dateRange?.to
+                ? formatDateOnly(dateRange.to)
+                : undefined,
+            hoursLogged:
+              typeof hoursLogged === "number" ? hoursLogged : undefined,
+            file: selectedFiles[0] || null,
+          },
+        },
+        {
+          onSuccess: () => {
+            setEditingReportId(null);
+            setReportTitle("");
+            setReportContent("");
+            setSelectedFiles([]);
+            setDateRange({ from: undefined, to: undefined });
+            setHoursLogged("");
+            setReportType("weekly");
+          },
+        }
+      );
+      return;
+    }
+
+    // New narrative reports submit directly via narrative endpoint (multipart)
     if (reportType === "narrative") {
       createNarrativeReport(
         {
@@ -189,6 +256,7 @@ export default function ReportsPage() {
         },
         {
           onSuccess: () => {
+            setEditingReportId(null);
             setReportTitle("");
             setReportContent("");
             setSelectedFiles([]);
@@ -218,30 +286,36 @@ export default function ReportsPage() {
       },
       {
         onSuccess: (newReport) => {
-          submitReport({
-            id: newReport.id,
-            payload: {
-              title: reportTitle,
-              content: reportContent,
-              startDate:
-                reportType === "weekly" && dateRange?.from
-                  ? formatDateOnly(dateRange.from)
-                  : undefined,
-              endDate:
-                reportType === "weekly" && dateRange?.to
-                  ? formatDateOnly(dateRange.to)
-                  : undefined,
-              hoursLogged:
-                typeof hoursLogged === "number" ? hoursLogged : undefined,
-              file: selectedFiles[0] || null,
+          submitReport(
+            {
+              id: newReport.id,
+              payload: {
+                title: reportTitle,
+                content: reportContent,
+                startDate:
+                  reportType === "weekly" && dateRange?.from
+                    ? formatDateOnly(dateRange.from)
+                    : undefined,
+                endDate:
+                  reportType === "weekly" && dateRange?.to
+                    ? formatDateOnly(dateRange.to)
+                    : undefined,
+                hoursLogged:
+                  typeof hoursLogged === "number" ? hoursLogged : undefined,
+                file: selectedFiles[0] || null,
+              },
             },
-          });
-          setReportTitle("");
-          setReportContent("");
-          setSelectedFiles([]);
-          setDateRange({ from: undefined, to: undefined });
-          setHoursLogged("");
-          setReportType("weekly");
+            {
+              onSuccess: () => {
+                setReportTitle("");
+                setReportContent("");
+                setSelectedFiles([]);
+                setDateRange({ from: undefined, to: undefined });
+                setHoursLogged("");
+                setReportType("weekly");
+              },
+            }
+          );
         },
       }
     );
@@ -365,7 +439,7 @@ export default function ReportsPage() {
                               defaultMonth={dateRange?.from || new Date()}
                               selected={dateRange}
                               onSelect={setDateRange}
-                              numberOfMonths={2}
+                              numberOfMonths={isMobile ? 1 : 2}
                             />
                           </PopoverContent>
                         </Popover>
@@ -517,12 +591,17 @@ export default function ReportsPage() {
                   >
                     <Upload className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
                     {isSubmitting || isCreating || isCreatingNarrative
-                      ? "Submitting..."
+                      ? editingReportId
+                        ? "Resubmitting..."
+                        : "Submitting..."
+                      : editingReportId
+                      ? "Resubmit Report"
                       : "Submit Report"}
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => {
+                      setEditingReportId(null);
                       setReportTitle("");
                       setReportContent("");
                       setSelectedFiles([]);
@@ -652,11 +731,11 @@ export default function ReportsPage() {
                         </div>
                       )}
 
-                      <div className="flex flex-col sm:flex-row gap-2">
+                      <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
                         <Button
                           size="sm"
                           variant="outline"
-                          className="flex-1 text-xs border border-gray-300 text-gray-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50"
+                          className="w-full sm:w-auto text-xs border border-gray-300 text-gray-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50"
                           onClick={() => handleViewReport(report.id)}
                         >
                           <Eye className="w-3 h-3 mr-1" />
@@ -666,7 +745,7 @@ export default function ReportsPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="flex-1 text-xs border border-gray-300 text-gray-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50"
+                            className="w-full sm:w-auto text-xs border border-gray-300 text-gray-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50"
                             onClick={() =>
                               handleDownloadReport(
                                 report.fileUrl,
@@ -681,6 +760,17 @@ export default function ReportsPage() {
                                 : "Download Report"}
                             </span>
                             <span className="xs:hidden">Download</span>
+                          </Button>
+                        )}
+                        {report.status === "rejected" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full sm:w-auto text-xs border border-red-300 text-red-700 transition-all duration-300 hover:border-red-400 hover:bg-red-50/50"
+                            onClick={() => startEditReport(report)}
+                          >
+                            <Upload className="w-3 h-3 mr-1" />
+                            Edit &amp; Resubmit
                           </Button>
                         )}
                       </div>

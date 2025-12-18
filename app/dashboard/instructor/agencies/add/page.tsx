@@ -53,6 +53,7 @@ const agencySchema = z.object({
   lunchStartTime: z.string().optional(),
   lunchEndTime: z.string().optional(),
   isActive: z.boolean(),
+  isSchoolAffiliated: z.boolean().optional(),
   latitude: z.preprocess(
     (val) =>
       val === "" || val === null || val === undefined || isNaN(Number(val))
@@ -128,6 +129,7 @@ export default function AddAgencyPage() {
       lunchStartTime: "",
       lunchEndTime: "",
       isActive: true,
+      isSchoolAffiliated: false,
       latitude: undefined,
       longitude: undefined,
     },
@@ -418,6 +420,30 @@ export default function AddAgencyPage() {
                 <p className="text-sm text-gray-500">
                   Active agencies are available for practicum placements.
                 </p>
+
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Controller
+                      name="isSchoolAffiliated"
+                      control={control}
+                      render={({ field }) => (
+                        <Switch
+                          id="isSchoolAffiliated"
+                          checked={field.value || false}
+                          onCheckedChange={field.onChange}
+                        />
+                      )}
+                    />
+                    <Label htmlFor="isSchoolAffiliated">
+                      School Affiliated / Inside School
+                    </Label>
+                  </div>
+                  <p className="text-sm text-gray-500">
+                    Check if this agency is school-affiliated or inside the
+                    school. Requirements like MOA will not be visible to interns
+                    at school-affiliated agencies.
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </div>

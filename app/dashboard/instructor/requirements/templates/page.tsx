@@ -90,6 +90,7 @@ type NewTemplate = {
   maxFileSize: number; // in MB
   instructions: string;
   isActive: boolean;
+  appliesToSchoolAffiliated?: boolean;
 };
 
 // Server-driven data via hooks
@@ -133,6 +134,7 @@ export default function RequirementTemplatesPage() {
     maxFileSize: 5,
     instructions: "",
     isActive: true,
+    appliesToSchoolAffiliated: true,
   });
 
   const handleCreateTemplate = () => {
@@ -143,11 +145,12 @@ export default function RequirementTemplatesPage() {
         category: newTemplate.category,
         priority: "medium" as RequirementPriority,
         isRequired: newTemplate.isRequired,
-        instructions: newTemplate.instructions || "",
-        allowedFileTypes: newTemplate.allowedFileTypes,
-        maxFileSize: newTemplate.maxFileSize,
-        isActive: newTemplate.isActive,
-        templateFile: newTemplateFile || undefined,
+          instructions: newTemplate.instructions || "",
+          allowedFileTypes: newTemplate.allowedFileTypes,
+          maxFileSize: newTemplate.maxFileSize,
+          isActive: newTemplate.isActive,
+          appliesToSchoolAffiliated: newTemplate.appliesToSchoolAffiliated !== undefined ? newTemplate.appliesToSchoolAffiliated : true,
+          templateFile: newTemplateFile || undefined,
       },
       {
         onSuccess: () => {
@@ -180,6 +183,7 @@ export default function RequirementTemplatesPage() {
             : [],
           maxFileSize: selectedTemplate.maxFileSize,
           isActive: selectedTemplate.isActive,
+          appliesToSchoolAffiliated: selectedTemplate.appliesToSchoolAffiliated !== undefined ? selectedTemplate.appliesToSchoolAffiliated : true,
           templateFile: editTemplateFile || undefined,
         },
       },
@@ -214,6 +218,7 @@ export default function RequirementTemplatesPage() {
       maxFileSize: 5,
       instructions: "",
       isActive: true,
+      appliesToSchoolAffiliated: true,
     });
   };
 
@@ -448,6 +453,26 @@ export default function RequirementTemplatesPage() {
                 />
                 <Label htmlFor="isActive">Template is active</Label>
               </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="appliesToSchoolAffiliated"
+                  checked={newTemplate.appliesToSchoolAffiliated !== undefined ? newTemplate.appliesToSchoolAffiliated : true}
+                  onCheckedChange={(checked) =>
+                    setNewTemplate({
+                      ...newTemplate,
+                      appliesToSchoolAffiliated: checked as boolean,
+                    })
+                  }
+                />
+                <Label htmlFor="appliesToSchoolAffiliated">
+                  Applies to school-affiliated agencies
+                </Label>
+              </div>
+              <p className="text-sm text-gray-500 ml-6">
+                If checked, this requirement will be visible to students at school-affiliated agencies. 
+                Uncheck this for requirements like MOA that should only apply to non-school-affiliated agencies.
+              </p>
 
               {/* Template file upload removed: no file field in server model */}
             </div>
@@ -837,6 +862,26 @@ export default function RequirementTemplatesPage() {
                 />
                 <Label htmlFor="edit-isActive">Template is active</Label>
               </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="edit-appliesToSchoolAffiliated"
+                  checked={selectedTemplate.appliesToSchoolAffiliated !== undefined ? selectedTemplate.appliesToSchoolAffiliated : true}
+                  onCheckedChange={(checked) =>
+                    setSelectedTemplate({
+                      ...selectedTemplate,
+                      appliesToSchoolAffiliated: checked as boolean,
+                    })
+                  }
+                />
+                <Label htmlFor="edit-appliesToSchoolAffiliated">
+                  Applies to school-affiliated agencies
+                </Label>
+              </div>
+              <p className="text-sm text-gray-500 ml-6">
+                If checked, this requirement will be visible to students at school-affiliated agencies. 
+                Uncheck this for requirements like MOA that should only apply to non-school-affiliated agencies.
+              </p>
             </div>
           )}
           <DialogFooter className="flex flex-col gap-3 sm:flex-row sm:justify-end">

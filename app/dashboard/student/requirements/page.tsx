@@ -29,6 +29,7 @@ import {
 } from "@/hooks/requirement/useRequirement";
 import { useAuth } from "@/hooks/auth/useAuth";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useStudent } from "@/hooks/student/useStudent";
 
 export default function RequirementsPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -42,6 +43,7 @@ export default function RequirementsPage() {
   );
 
   const { user } = useAuth();
+  const { data: studentData } = useStudent(user?.id || "");
   const { data: templatesData, isLoading: isLoadingTemplates } =
     useRequirementTemplates({
       page: 1,
@@ -57,11 +59,31 @@ export default function RequirementsPage() {
       studentId: user?.id,
     });
 
+  // Get student's agency affiliation status
+  const studentRecord: any = studentData?.data;
+  const practicum = studentRecord?.practicums?.[0];
+  const agency = practicum?.agency;
+  const isSchoolAffiliated = agency?.isSchoolAffiliated || false;
+
   const templates = useMemo(() => {
-    const list = templatesData?.requirementTemplates || [];
+    let list = templatesData?.requirementTemplates || [];
+    
+    // Filter templates based on agency school affiliation
+    // If agency is school-affiliated, only show templates where appliesToSchoolAffiliated is true
+    // If agency is NOT school-affiliated, show all templates
+    list = list.filter((t: any) => {
+      if (isSchoolAffiliated) {
+        // School-affiliated agencies only see templates that apply to them
+        return t.appliesToSchoolAffiliated !== false; // Default to true if undefined (backward compatible)
+      } else {
+        // Non-school-affiliated agencies see all templates
+        return true;
+      }
+    });
+    
     if (selectedCategory === "all") return list;
     return list.filter((t: any) => t.category === selectedCategory);
-  }, [templatesData, selectedCategory]);
+  }, [templatesData, selectedCategory, isSchoolAffiliated]);
 
   const requirements = useMemo(() => {
     const list = requirementsData?.requirements || [];

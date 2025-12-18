@@ -11,12 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import {
-  Bell,
-  Check,
-  FileText,
-  Eye,
-} from "lucide-react";
+import { Bell, Check, FileText, Eye } from "lucide-react";
 import { useInstructorReportNotifications } from "@/hooks/report/useInstructorReportNotifications";
 import { useInstructorRequirementNotifications } from "@/hooks/requirement/useInstructorRequirementNotifications";
 import { useAuth } from "@/hooks/auth/useAuth";
@@ -26,7 +21,9 @@ import type { Requirement } from "@/hooks/requirement/useRequirement";
 function formatTimestamp(timestamp: string) {
   const date = new Date(timestamp);
   const now = new Date();
-  const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+  const diffInMinutes = Math.floor(
+    (now.getTime() - date.getTime()) / (1000 * 60)
+  );
 
   // Handle future dates (edge case)
   if (diffInMinutes < 0) return "Just now";
@@ -108,8 +105,10 @@ export function InstructorNotifications({
   } = useInstructorRequirementNotifications(effectiveInstructorId);
 
   // Create sets of unread IDs for quick lookup
-  const unreadReportIds = new Set(unreadReports.map((r) => r.id));
-  const unreadRequirementIds = new Set(unreadRequirements.map((r) => r.id));
+  const unreadReportIds = new Set(unreadReports.map((r: Report) => r.id));
+  const unreadRequirementIds = new Set(
+    unreadRequirements.map((r: Requirement) => r.id)
+  );
 
   // Combined unread count
   const totalUnreadCount = reportUnreadCount + requirementUnreadCount;
@@ -117,7 +116,7 @@ export function InstructorNotifications({
   const handleReportClick = (report: Report) => {
     markReportAsRead(report.id);
     setIsOpen(false);
-    router.push("/dashboard/instructor/reports");
+    router.push("/dashboard/instructor/reports/narrative");
   };
 
   const handleRequirementClick = (requirement: Requirement) => {
@@ -128,7 +127,7 @@ export function InstructorNotifications({
 
   const handleViewAllReports = () => {
     setIsOpen(false);
-    router.push("/dashboard/instructor/reports");
+    router.push("/dashboard/instructor/reports/summary");
   };
 
   const handleViewAllRequirements = () => {
@@ -153,11 +152,17 @@ export function InstructorNotifications({
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-[90vw] sm:w-[400px] md:w-[450px] max-w-[90vw]">
+      <DropdownMenuContent
+        align="end"
+        className="w-[90vw] sm:w-[400px] md:w-[450px] max-w-[90vw]"
+      >
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <div className="p-3 border-b">
             <TabsList className="grid w-full grid-cols-2 gap-1">
-              <TabsTrigger value="reports" className="text-[10px] sm:text-xs px-1 sm:px-2">
+              <TabsTrigger
+                value="reports"
+                className="text-[10px] sm:text-xs px-1 sm:px-2"
+              >
                 <span className="truncate">Reports</span>
                 {reportUnreadCount > 0 && (
                   <Badge className="ml-1 h-4 px-1 sm:px-1.5 text-[10px] sm:text-xs bg-red-500">
@@ -165,7 +170,10 @@ export function InstructorNotifications({
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="requirements" className="text-[10px] sm:text-xs px-1 sm:px-2">
+              <TabsTrigger
+                value="requirements"
+                className="text-[10px] sm:text-xs px-1 sm:px-2"
+              >
                 <span className="truncate">Requirements</span>
                 {requirementUnreadCount > 0 && (
                   <Badge className="ml-1 h-4 px-1 sm:px-1.5 text-[10px] sm:text-xs bg-red-500">
@@ -219,10 +227,12 @@ export function InstructorNotifications({
                 </div>
               ) : (
                 <div className="space-y-1">
-                  {reports.map((report) => {
+                  {reports.map((report: Report) => {
                     const isUnread = unreadReportIds.has(report.id);
                     const studentName = report.student
-                      ? `${report.student.firstName || ""} ${report.student.lastName || ""}`.trim() || "Student"
+                      ? `${report.student.firstName || ""} ${
+                          report.student.lastName || ""
+                        }`.trim() || "Student"
                       : "Student";
                     return (
                       <div
@@ -243,15 +253,14 @@ export function InstructorNotifications({
                               <p className="text-sm font-medium text-gray-900 truncate">
                                 {report.title || "Untitled Report"}
                               </p>
-                              <Badge
-                                variant="outline"
-                                className="text-xs"
-                              >
+                              <Badge variant="outline" className="text-xs">
                                 {getReportTypeLabel(report.type)}
                               </Badge>
                             </div>
                             <p className="text-xs text-gray-700 mb-2 line-clamp-1">
-                              {studentName} submitted a {getReportTypeLabel(report.type).toLowerCase()} report
+                              {studentName} submitted a{" "}
+                              {getReportTypeLabel(report.type).toLowerCase()}{" "}
+                              report
                             </p>
                             <div className="flex items-center justify-between">
                               <span className="text-xs text-gray-400">
@@ -327,10 +336,12 @@ export function InstructorNotifications({
                 </div>
               ) : (
                 <div className="space-y-1">
-                  {requirements.map((requirement) => {
+                  {requirements.map((requirement: Requirement) => {
                     const isUnread = unreadRequirementIds.has(requirement.id);
                     const studentName = requirement.student
-                      ? `${requirement.student.firstName || ""} ${requirement.student.lastName || ""}`.trim() || "Student"
+                      ? `${requirement.student.firstName || ""} ${
+                          requirement.student.lastName || ""
+                        }`.trim() || "Student"
                       : "Student";
                     return (
                       <div
@@ -353,7 +364,9 @@ export function InstructorNotifications({
                               </p>
                               <Badge
                                 variant="secondary"
-                                className={`text-xs ${getRequirementCategoryColor(requirement.category)}`}
+                                className={`text-xs ${getRequirementCategoryColor(
+                                  requirement.category
+                                )}`}
                               >
                                 {requirement.category}
                               </Badge>
@@ -396,4 +409,3 @@ export function InstructorNotifications({
     </DropdownMenu>
   );
 }
-

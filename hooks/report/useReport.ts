@@ -44,7 +44,7 @@ export interface ReportListResponse {
 	};
 }
 
-const ENDPOINTS = {
+export const REPORT_ENDPOINTS = {
 	list: "/reports",
 	detail: (id: string) => `/reports/${id}`,
 	fromTemplate: "/reports/from-template",
@@ -52,6 +52,8 @@ const ENDPOINTS = {
 	approve: (id: string) => `/reports/${id}/approve`,
 	reject: (id: string) => `/reports/${id}/reject`,
 	stats: (studentId: string) => `/reports/stats/${studentId}`,
+	viewLog: (id: string) => `/reports/${id}/view`,
+	studentViews: (studentId: string) => `/reports/views/student/${studentId}`,
 };
 
 export const reportKeys = {
@@ -89,7 +91,7 @@ export const useReports = (filters: {
 			if (typeof filters.weekNumber === "number") params.append("weekNumber", String(filters.weekNumber));
 			if (filters.startDate) params.append("startDate", filters.startDate);
 			if (filters.endDate) params.append("endDate", filters.endDate);
-			const res = await api.get(`${ENDPOINTS.list}?${params.toString()}`);
+			const res = await api.get(`${REPORT_ENDPOINTS.list}?${params.toString()}`);
 			return res.data.data as ReportListResponse;
 		},
 		placeholderData: (prev) => prev,
@@ -111,7 +113,7 @@ export const useCreateReportFromTemplate = () => {
 	const qc = useQueryClient();
 	return useMutation({
 		mutationFn: async (data: { templateId: string; studentId: string; practicumId?: string | null; dueDate?: string | null }) => {
-			const res = await api.post(ENDPOINTS.fromTemplate, data);
+			const res = await api.post(REPORT_ENDPOINTS.fromTemplate, data);
 			return res.data.data as Report;
 		},
 		onSuccess: () => {
@@ -128,7 +130,7 @@ export const useCreateReport = () => {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: async (data: { title: string; content?: string; type: ReportType; weekNumber?: number; startDate?: string; endDate?: string; practicumId?: string | null; dueDate?: string | null }) => {
-            const res = await api.post(ENDPOINTS.list, data);
+            const res = await api.post(REPORT_ENDPOINTS.list, data);
             return res.data.data as Report;
         },
         onSuccess: () => {
@@ -156,7 +158,7 @@ export const useSubmitReport = () => {
 			if (payload.learnings) form.append("learnings", payload.learnings);
 			if (payload.challenges) form.append("challenges", payload.challenges);
 			if (payload.file) form.append("submissionFile", payload.file);
-			const res = await api.post(ENDPOINTS.submit(id), form, {
+			const res = await api.post(REPORT_ENDPOINTS.submit(id), form, {
 				headers: { "Content-Type": "multipart/form-data" },
 			});
 			return res.data.data as Report;
@@ -176,7 +178,7 @@ export const useApproveReport = () => {
 	const qc = useQueryClient();
 	return useMutation({
 		mutationFn: async ({ id, feedback, rating }: { id: string; feedback?: string | null; rating?: number | null }) => {
-			const res = await api.put(ENDPOINTS.approve(id), { feedback: feedback ?? null, rating: rating ?? null });
+			const res = await api.put(REPORT_ENDPOINTS.approve(id), { feedback: feedback ?? null, rating: rating ?? null });
 			return res.data.data as Report;
 		},
 		onSuccess: (data) => {
@@ -194,7 +196,7 @@ export const useRejectReport = () => {
 	const qc = useQueryClient();
 	return useMutation({
 		mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
-			const res = await api.put(ENDPOINTS.reject(id), { reason });
+			const res = await api.put(REPORT_ENDPOINTS.reject(id), { reason });
 			return res.data.data as Report;
 		},
 		onSuccess: (data) => {
@@ -212,10 +214,27 @@ export const useReportStats = (studentId: string) => {
 	return useQuery({
 		queryKey: reportKeys.stats(studentId),
 		queryFn: async (): Promise<{ total: number; approved: number; submitted: number; rejected: number; draft: number }> => {
-			const res = await api.get(ENDPOINTS.stats(studentId));
+			const res = await api.get(REPORT_ENDPOINTS.stats(studentId));
 			return res.data.data;
 		},
 		enabled: !!studentId,
+	});
+};
+
+export const useLogReportView = () => {
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: async (id: string) => {
+			await api.post(REPORT_ENDPOINTS.viewLog(id));
+		},
+		onSuccess: () => {
+			// No need to invalidate report lists; this is only for notifications
+			qc.invalidateQueries({ queryKey: reportKeys.all });
+		},
+		onError: (err: any) => {
+			// Silently ignore in UI but log to console for debugging
+			console.error("Failed to log report view", err?.response?.data || err);
+		},
 	});
 };
 

@@ -41,6 +41,7 @@ import {
   Pin,
   Search,
   X,
+  CheckCircle,
 } from "lucide-react";
 import { InstructorStatsCard } from "@/components/instructor-stats-card";
 import { useForm, Controller } from "react-hook-form";
@@ -438,9 +439,9 @@ export default function AnnouncementsPage() {
                             <SelectItem value="section">
                               Specific Section
                             </SelectItem>
-                            <SelectItem value="course">
+                            {/* <SelectItem value="course">
                               Specific Course
-                            </SelectItem>
+                            </SelectItem> */}
                           </SelectContent>
                         </Select>
                       )}
@@ -866,6 +867,22 @@ export default function AnnouncementsPage() {
           isLoading={isLoadingStats}
         />
         <InstructorStatsCard
+          icon={Pin}
+          label="Pinned Announcements"
+          value={announcementStats?.pinnedAnnouncements || 0}
+          helperText="Featured posts"
+          trend={
+            announcementStats?.pinnedAnnouncements
+              ? {
+                  label: `${announcementStats.pinnedAnnouncements} pinned`,
+                  variant: "positive",
+                }
+              : undefined
+          }
+          isLoading={isLoadingStats}
+        />
+        <InstructorStatsCard
+          icon={CheckCircle}
           label="Published"
           value={announcementStats?.publishedAnnouncements || 0}
           helperText="Live to students"
@@ -875,17 +892,6 @@ export default function AnnouncementsPage() {
                   label: `${announcementStats.publishedAnnouncements} active`,
                   variant: "positive",
                 }
-              : undefined
-          }
-          isLoading={isLoadingStats}
-        />
-        <InstructorStatsCard
-          label="Drafts"
-          value={announcementStats?.draftAnnouncements || 0}
-          helperText="Waiting to publish"
-          trend={
-            announcementStats?.draftAnnouncements
-              ? { label: "Pending review", variant: "neutral" }
               : undefined
           }
           isLoading={isLoadingStats}

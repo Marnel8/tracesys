@@ -24,6 +24,7 @@ export interface RequirementTemplate {
 	allowedFileTypes?: string | string[] | null;
 	maxFileSize?: number | null;
 	isActive: boolean;
+	appliesToSchoolAffiliated?: boolean;
 	createdBy: string;
 	createdAt: string;
 	updatedAt: string;
@@ -39,6 +40,7 @@ export interface RequirementTemplateFormData {
 	allowedFileTypes?: string[]; // client uses array; server stores CSV
 	maxFileSize?: number | null;
 	isActive?: boolean;
+	appliesToSchoolAffiliated?: boolean;
 }
 
 export interface RequirementTemplateFilters {
@@ -139,6 +141,7 @@ export const useCreateRequirementTemplate = () => {
 			if (Array.isArray(data.allowedFileTypes)) form.append("allowedFileTypes", JSON.stringify(data.allowedFileTypes));
 			if (typeof data.maxFileSize === "number") form.append("maxFileSize", String(data.maxFileSize));
 			if (typeof data.isActive === "boolean") form.append("isActive", String(data.isActive));
+			if (typeof data.appliesToSchoolAffiliated === "boolean") form.append("appliesToSchoolAffiliated", String(data.appliesToSchoolAffiliated));
 			if (data.templateFile) form.append("templateFile", data.templateFile);
 
 			const response = await api.post(TEMPLATE_ENDPOINTS.requirementTemplates, form, {
@@ -171,6 +174,7 @@ export const useUpdateRequirementTemplate = () => {
 			if (data.priority) form.append("priority", data.priority);
 			if (typeof data.isRequired === "boolean") form.append("isRequired", String(data.isRequired));
 			if (typeof data.isActive === "boolean") form.append("isActive", String(data.isActive));
+			if (typeof data.appliesToSchoolAffiliated === "boolean") form.append("appliesToSchoolAffiliated", String(data.appliesToSchoolAffiliated));
 			if (data.instructions !== undefined) form.append("instructions", data.instructions ?? "");
 			if (Array.isArray(data.allowedFileTypes)) form.append("allowedFileTypes", JSON.stringify(data.allowedFileTypes));
 			if (typeof data.maxFileSize === "number") form.append("maxFileSize", String(data.maxFileSize));

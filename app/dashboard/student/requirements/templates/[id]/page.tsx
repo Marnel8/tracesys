@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { useRequirements } from "@/hooks/requirement/useRequirement";
 import { format } from "date-fns";
 import { Calendar } from "lucide-react";
+import { useStudent } from "@/hooks/student/useStudent";
 
 export default function RequirementTemplateDetailPage() {
   const params = useParams() as { id: string };
@@ -29,6 +30,7 @@ export default function RequirementTemplateDetailPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { user } = useAuth();
+  const { data: studentData } = useStudent(user?.id || "");
   const createReq = useCreateRequirementFromTemplate();
   const submitReq = useSubmitRequirement();
   const { data: myRequirements } = useRequirements({
@@ -36,6 +38,23 @@ export default function RequirementTemplateDetailPage() {
     page: 1,
     limit: 200,
   });
+
+  // Get student's agency affiliation status
+  const studentRecord: any = studentData?.data;
+  const practicum = studentRecord?.practicums?.[0];
+  const agency = practicum?.agency;
+  const isSchoolAffiliated = agency?.isSchoolAffiliated || false;
+
+  // Check if template should be accessible based on agency affiliation
+  const isTemplateAccessible = useMemo(() => {
+    if (!template) return true; // Allow loading state
+    // If agency is school-affiliated, only allow templates where appliesToSchoolAffiliated is true
+    if (isSchoolAffiliated) {
+      return template.appliesToSchoolAffiliated !== false; // Default to true if undefined (backward compatible)
+    }
+    // If agency is NOT school-affiliated, allow all templates
+    return true;
+  }, [template, isSchoolAffiliated]);
 
   const matchedRequirement = useMemo(() => {
     return (myRequirements?.requirements || []).find(
@@ -125,6 +144,44 @@ export default function RequirementTemplateDetailPage() {
       setIsSubmitting(false);
     }
   };
+
+  // Show error if template is not accessible
+  if (template && !isTemplateAccessible) {
+    return (
+      <div className="px-4 md:px-8 lg:px-16 py-8">
+        <div className="mb-6">
+          <div className="flex items-center gap-4 mb-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex items-center gap-2"
+              onClick={() => router.push("/dashboard/student/requirements")}
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span className="hidden sm:inline">Back to Requirements</span>
+            </Button>
+          </div>
+        </div>
+        <Card className="border border-red-200 bg-red-50">
+          <CardHeader>
+            <CardTitle className="text-xl text-red-900">Template Not Available</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-red-800">
+              This requirement template is not available for your agency. 
+              Some requirements like MOA are only applicable to non-school-affiliated agencies.
+            </p>
+            <Button
+              onClick={() => router.push("/dashboard/student/requirements")}
+              className="mt-4"
+            >
+              Go Back to Requirements
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="px-4 md:px-8 lg:px-16">

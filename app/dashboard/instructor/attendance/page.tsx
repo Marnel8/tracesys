@@ -50,6 +50,7 @@ import { useAttendance, AttendanceRecord } from "@/hooks/attendance";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { InstructorStatsCard } from "@/components/instructor-stats-card";
+import { Progress } from "@/components/ui/progress";
 
 // Helper functions for formatting data
 const formatTime = (dateString: string | null | undefined) => {
@@ -127,11 +128,78 @@ export default function AttendancePage() {
 
   const attendanceRecords = attendanceData?.attendance || [];
 
+  // Fetch all attendance records for progress calculation
+  const { data: allAttendanceData } = useAttendance({
+    limit: 10000, // Fetch all records for accurate progress calculation
+  });
+
+  // Calculate hour progress for each student
+  const studentProgressMap = useMemo(() => {
+    const records: AttendanceRecord[] = allAttendanceData?.attendance || [];
+
+    // Group records by studentId
+    const studentMap = new Map<
+      string,
+      {
+        completed: number;
+        total: number;
+        percent: number;
+      }
+    >();
+
+    records.forEach((record) => {
+      const studentId = record.studentId;
+      const practicum = record.practicum;
+      const totalHours = practicum?.totalHours || 0;
+
+      if (!studentMap.has(studentId)) {
+        studentMap.set(studentId, {
+          completed: 0,
+          total: totalHours,
+          percent: 0,
+        });
+      }
+
+      const progress = studentMap.get(studentId)!;
+
+      // Only count approved records with valid hours
+      if (
+        record.approvalStatus === "Approved" &&
+        ["present", "excused"].includes(record.status.toLowerCase()) &&
+        record.hours != null
+      ) {
+        progress.completed += Number(record.hours || 0);
+      }
+    });
+
+    // Calculate percentages
+    studentMap.forEach((progress, studentId) => {
+      progress.completed = Math.round(progress.completed * 100) / 100;
+      progress.percent =
+        progress.total > 0
+          ? Math.min(
+              100,
+              Math.round((progress.completed / progress.total) * 100)
+            )
+          : 0;
+    });
+
+    return studentMap;
+  }, [allAttendanceData]);
+
+  // Helper function to get student progress
+  const getStudentProgress = (studentId: string) => {
+    return (
+      studentProgressMap.get(studentId) || {
+        completed: 0,
+        total: 0,
+        percent: 0,
+      }
+    );
+  };
+
   // Calculate stats
   const stats = useMemo(() => {
-    const lateCount = attendanceRecords.filter(
-      (record) => record.status === "late"
-    ).length;
     const absentCount = attendanceRecords.filter(
       (record) => record.status === "absent"
     ).length;
@@ -143,7 +211,6 @@ export default function AttendancePage() {
       attendanceRecords.length > 0 ? totalHours / attendanceRecords.length : 0;
 
     return {
-      late: lateCount,
       absent: absentCount,
       avgHours: Math.round(avgHours * 10) / 10,
     };
@@ -201,9 +268,6 @@ export default function AttendancePage() {
       const presentCount = attendanceRecords.filter(
         (record) => record.status === "present"
       ).length;
-      const lateCount = attendanceRecords.filter(
-        (record) => record.status === "late"
-      ).length;
       const absentCount = attendanceRecords.filter(
         (record) => record.status === "absent"
       ).length;
@@ -230,7 +294,6 @@ export default function AttendancePage() {
       const summaryData = [
         { Metric: "Total Records", Value: totalRecords },
         { Metric: "Present", Value: presentCount },
-        { Metric: "Late", Value: lateCount },
         { Metric: "Absent", Value: absentCount },
         { Metric: "Excused", Value: excusedCount },
         { Metric: "Pending Approval", Value: pendingCount },
@@ -316,23 +379,12 @@ export default function AttendancePage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <InstructorStatsCard
-          icon={Clock}
-          label="Late"
-          value={stats.late}
-          helperText="Late arrivals"
-          trend={
-            stats.late > 0
-              ? { label: "Action needed", variant: "negative" }
-              : undefined
-          }
-        />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <InstructorStatsCard
           icon={XCircle}
           label="Absent"
           value={stats.absent}
-          helperText="Missing attendance"
+          helperText="Days marked absent"
           trend={
             stats.absent > 0
               ? { label: "Action needed", variant: "negative" }
@@ -375,7 +427,6 @@ export default function AttendancePage() {
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="present">Present</SelectItem>
                 <SelectItem value="absent">Absent</SelectItem>
-                <SelectItem value="late">Late</SelectItem>
                 <SelectItem value="excused">Excused</SelectItem>
               </SelectContent>
             </Select>
@@ -387,9 +438,8 @@ export default function AttendancePage() {
                 <SelectValue placeholder="Approval" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Approval</SelectItem>
+                {/* <SelectItem value="all">All Approval</SelectItem> */}
                 <SelectItem value="Pending">Pending</SelectItem>
-                <SelectItem value="Approved">Approved</SelectItem>
                 <SelectItem value="Declined">Declined</SelectItem>
               </SelectContent>
             </Select>
@@ -453,13 +503,42 @@ export default function AttendancePage() {
                   attendanceRecords.map((record) => (
                     <TableRow key={record.id}>
                       <TableCell>
-                        <div>
-                          <div className="font-medium text-gray-900">
-                            {getStudentName(record)}
+                        <div className="space-y-2">
+                          <div>
+                            <div className="font-medium text-gray-900">
+                              {getStudentName(record)}
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              {getStudentId(record)}
+                            </div>
                           </div>
-                          <div className="text-sm text-gray-600">
-                            {getStudentId(record)}
-                          </div>
+                          {(() => {
+                            const progress = getStudentProgress(
+                              record.studentId
+                            );
+                            if (progress.total > 0) {
+                              return (
+                                <div className="space-y-1">
+                                  <div className="flex items-center justify-between text-xs">
+                                    <span className="text-gray-600">
+                                      Hours Progress
+                                    </span>
+                                    <span className="font-medium text-gray-900">
+                                      {progress.completed} / {progress.total}h
+                                    </span>
+                                  </div>
+                                  <Progress
+                                    value={progress.percent}
+                                    className="h-1.5"
+                                  />
+                                  <div className="text-xs text-gray-500">
+                                    {progress.percent}% complete
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -612,26 +691,23 @@ export default function AttendancePage() {
                           >
                             {record.status}
                           </Badge>
-                          {record.approvalStatus && (
-                            <Badge
-                              variant={
-                                record.approvalStatus === "Approved"
-                                  ? "default"
-                                  : record.approvalStatus === "Pending"
-                                  ? "secondary"
-                                  : "destructive"
-                              }
-                              className={
-                                record.approvalStatus === "Approved"
-                                  ? "bg-green-100 text-green-800"
-                                  : record.approvalStatus === "Pending"
-                                  ? "bg-yellow-100 text-yellow-800"
-                                  : "bg-red-100 text-red-800"
-                              }
-                            >
-                              {record.approvalStatus}
-                            </Badge>
-                          )}
+                          {record.approvalStatus &&
+                            record.approvalStatus !== "Approved" && (
+                              <Badge
+                                variant={
+                                  record.approvalStatus === "Pending"
+                                    ? "secondary"
+                                    : "destructive"
+                                }
+                                className={
+                                  record.approvalStatus === "Pending"
+                                    ? "bg-yellow-100 text-yellow-800"
+                                    : "bg-red-100 text-red-800"
+                                }
+                              >
+                                {record.approvalStatus}
+                              </Badge>
+                            )}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
@@ -719,6 +795,40 @@ export default function AttendancePage() {
                         {selectedLog.status}
                       </Badge>
                     </div>
+                    {(() => {
+                      const progress = getStudentProgress(
+                        selectedLog.studentId
+                      );
+                      if (progress.total > 0) {
+                        return (
+                          <div className="pt-2 border-t space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium">
+                                Hours Progress:
+                              </span>
+                              <span className="text-sm font-semibold">
+                                {progress.completed} / {progress.total}h
+                              </span>
+                            </div>
+                            <Progress
+                              value={progress.percent}
+                              className="h-2"
+                            />
+                            <div className="flex items-center justify-between text-xs text-gray-600">
+                              <span>{progress.percent}% complete</span>
+                              <span>
+                                {Math.max(
+                                  0,
+                                  progress.total - progress.completed
+                                )}
+                                h remaining
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
                   </CardContent>
                 </Card>
 
@@ -895,15 +1005,11 @@ export default function AttendancePage() {
                             variant={
                               selectedLog.timeInRemarks === "Normal"
                                 ? "default"
-                                : selectedLog.timeInRemarks === "Late"
-                                ? "secondary"
                                 : "destructive"
                             }
                             className={
                               selectedLog.timeInRemarks === "Normal"
                                 ? "bg-green-100 text-green-800"
-                                : selectedLog.timeInRemarks === "Late"
-                                ? "bg-yellow-100 text-yellow-800"
                                 : "bg-red-100 text-red-800"
                             }
                           >
