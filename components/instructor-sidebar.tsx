@@ -195,6 +195,12 @@ export function InstructorSidebar() {
       icon: MessageSquare,
       url: "/dashboard/instructor/announcements",
     },
+    // Archives is a dedicated page for managing soft-deleted items
+    {
+      title: "Archives",
+      icon: FileText,
+      url: "/dashboard/instructor/archives",
+    },
     // {
     // 	title: "Analytics",
     // 	icon: BarChart3,

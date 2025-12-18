@@ -99,7 +99,9 @@ export const useDeleteSection = () => {
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: sectionKeys.lists() });
-			toast.success("Section deleted successfully");
+			// Invalidate archive queries so the archives page shows the newly archived item
+			queryClient.invalidateQueries({ queryKey: ["instructor-archives", "section"] });
+			toast.success("Section moved to Archives");
 		},
 		onError: (error: any) => {
 			toast.error(error.response?.data?.message || "Failed to delete section");

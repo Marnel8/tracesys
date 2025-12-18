@@ -466,6 +466,8 @@ export const useDeleteStudent = () => {
 			// Invalidate students query to refresh the list
 			queryClient.invalidateQueries({ queryKey: ["students"] });
 			queryClient.invalidateQueries({ queryKey: ["students-by-teacher"] });
+			// Invalidate archive queries so the archives page shows the newly archived item
+			queryClient.invalidateQueries({ queryKey: ["instructor-archives", "student"] });
 			// Invalidate requirement queries since deleting a student also deletes their requirements
 			queryClient.invalidateQueries({ queryKey: requirementKeys.all });
 		},

@@ -91,7 +91,6 @@ import {
   useStudentsByTeacher,
   useStudent,
   useUpdateStudent,
-  useDeleteStudent,
   type UpdateStudentParams,
 } from "@/hooks/student/useStudent";
 import { useAgencies } from "@/hooks/agency";
@@ -103,6 +102,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { cn } from "@/lib/utils";
+import { useSoftDelete } from "@/hooks/useSoftDelete";
 
 const STUDENT_STATUS_BADGE: Record<string, string> = {
   Active: "invitation-status-pill--success",
@@ -202,7 +202,11 @@ export default function StudentsPage() {
     selectedStudentId || ""
   );
   const updateStudentMutation = useUpdateStudent();
-  const deleteStudentMutation = useDeleteStudent();
+  const { softDelete, softDeleteMutation } = useSoftDelete({
+    entityType: "student",
+    invalidateKeys: [["students-by-teacher"], ["students"]],
+    successMessage: "Student moved to Archives",
+  });
 
   // Fetch attendance records for the selected student
   const { data: attendanceData, isLoading: isLoadingAttendance } =
@@ -367,13 +371,12 @@ export default function StudentsPage() {
     if (!selectedStudentId || deleteConfirmation !== "yes") return;
 
     try {
-      await deleteStudentMutation.mutateAsync(selectedStudentId);
-      toast.success("Student deleted successfully");
+      await softDelete(selectedStudentId);
       setDeleteAlertOpen(false);
       setDeleteConfirmation(null);
       setSelectedStudentId(null);
     } catch (error: any) {
-      toast.error(error.message || "Failed to delete student");
+      toast.error(error.message || "Failed to move student to Archives");
     }
   };
 
@@ -2407,10 +2410,10 @@ export default function StudentsPage() {
               }}
               className="bg-red-600 hover:bg-red-700 text-white"
               disabled={
-                deleteStudentMutation.isPending || deleteConfirmation !== "yes"
+                softDeleteMutation.isPending || deleteConfirmation !== "yes"
               }
             >
-              {deleteStudentMutation.isPending ? (
+              {softDeleteMutation.isPending ? (
                 <>
                   <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
                   Deleting...

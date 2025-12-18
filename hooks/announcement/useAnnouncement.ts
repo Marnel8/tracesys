@@ -164,7 +164,9 @@ export const useDeleteAnnouncement = () => {
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: announcementKeys.lists() });
 			queryClient.invalidateQueries({ queryKey: announcementKeys.stats() });
-			toast.success("Announcement deleted successfully");
+			// Invalidate archive queries so the archives page shows the newly archived item
+			queryClient.invalidateQueries({ queryKey: ["instructor-archives", "announcement"] });
+			toast.success("Announcement moved to Archives");
 		},
 		onError: (error: any) => {
 			toast.error(error.response?.data?.message || "Failed to delete announcement");

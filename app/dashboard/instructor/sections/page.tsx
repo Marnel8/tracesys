@@ -113,7 +113,7 @@ export default function SectionsPage() {
     data: sectionsData,
     isLoading: sectionsLoading,
     error: sectionsError,
-  } = useSections();
+  } = useSections({ status: "active" });
   const { data: coursesData, isLoading: coursesLoading } = useCourses();
   const createSectionMutation = useCreateSection();
   const updateSectionMutation = useUpdateSection();

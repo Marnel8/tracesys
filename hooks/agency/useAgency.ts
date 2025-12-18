@@ -163,7 +163,9 @@ export const useDeleteAgency = () => {
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: agencyKeys.lists() });
-			toast.success("Agency deleted successfully");
+			// Invalidate archive queries so the archives page shows the newly archived item
+			queryClient.invalidateQueries({ queryKey: ["instructor-archives", "agency"] });
+			toast.success("Agency moved to Archives");
 		},
 		onError: (error: any) => {
 			toast.error(error.response?.data?.message || "Failed to delete agency");
