@@ -79,6 +79,26 @@ const practicumSchema = z
 
 type PracticumFormData = z.infer<typeof practicumSchema>;
 
+const profileSchema = z.object({
+  firstName: z
+    .string()
+    .min(1, "First name is required")
+    .regex(/^[a-zA-Z\s'-]+$/, "First name can only contain letters, spaces, hyphens, and apostrophes"),
+  lastName: z
+    .string()
+    .min(1, "Last name is required")
+    .regex(/^[a-zA-Z\s'-]+$/, "Last name can only contain letters, spaces, hyphens, and apostrophes"),
+  email: z.string().email("Please enter a valid email address"),
+  phone: z
+    .string()
+    .min(1, "Phone number is required")
+    .regex(/^[\d\s\-()+]*$/, "Phone number can only contain numbers, spaces, hyphens, parentheses, and plus sign"),
+  address: z.string().optional(),
+  bio: z.string().optional(),
+});
+
+type ProfileFormData = z.infer<typeof profileSchema>;
+
 export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isEditingPracticum, setIsEditingPracticum] = useState(false);
@@ -90,22 +110,23 @@ export default function ProfilePage() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string>("");
 
-  const [profileData, setProfileData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    address: "",
-    studentId: "",
-    course: "",
-    year: "",
-    section: "",
-    supervisor: "",
-    company: "",
-    position: "",
-    startDate: "",
-    endDate: "",
-    bio: "",
+  // Profile form
+  const {
+    register: registerProfile,
+    handleSubmit: handleProfileSubmit,
+    reset: resetProfile,
+    formState: { errors: profileErrors },
+    watch: watchProfile,
+  } = useForm<ProfileFormData>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      address: "",
+      bio: "",
+    },
   });
 
   // Hooks must be declared before any early return
@@ -277,13 +298,13 @@ export default function ProfilePage() {
     }
   };
 
-  const computedStudentId = studentRecord?.studentId || profileData.studentId;
-  const computedCourse = course?.name || course?.code || profileData.course;
-  const computedYear = section?.year || profileData.year;
-  const computedSection = section?.name || profileData.section;
-  const computedCompany = agency?.name || profileData.company;
-  const computedPosition = practicum?.position || profileData.position;
-  const computedSupervisor = supervisor?.name || profileData.supervisor;
+  const computedStudentId = studentRecord?.studentId || user?.studentId || "";
+  const computedCourse = course?.name || course?.code || "";
+  const computedYear = section?.year || "";
+  const computedSection = section?.name || "";
+  const computedCompany = agency?.name || "";
+  const computedPosition = practicum?.position || "";
+  const computedSupervisor = supervisor?.name || "";
   const formatDate = (d?: any) => {
     try {
       if (!d) return "";
@@ -294,9 +315,8 @@ export default function ProfilePage() {
       return "";
     }
   };
-  const computedStartDate =
-    formatDate(practicum?.startDate) || profileData.startDate;
-  const computedEndDate = formatDate(practicum?.endDate) || profileData.endDate;
+  const computedStartDate = formatDate(practicum?.startDate) || "";
+  const computedEndDate = formatDate(practicum?.endDate) || "";
 
   // Format dates for display in a more readable format
   const formatDisplayDate = (dateStr: string) => {
@@ -318,21 +338,19 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (user) {
-      setProfileData((prev) => ({
-        ...prev,
+      resetProfile({
         firstName: user.firstName || "",
         lastName: user.lastName || "",
         email: user.email || "",
         phone: user.phone || "",
         address: user.address || "",
-        studentId: user.studentId || "",
         bio: user.bio || "",
-      }));
+      });
       if ((user as any).avatar) {
         setAvatarPreview((user as any).avatar as string);
       }
     }
-  }, [user]);
+  }, [user, resetProfile]);
 
   if (isUserLoading) {
     return (
@@ -515,17 +533,17 @@ export default function ProfilePage() {
   console.log("Requirements stats data:", requirementStatsData);
   console.log("Reports data:", reportsData);
 
-  const handleSave = async () => {
+  const onProfileSubmit = async (data: ProfileFormData) => {
     if (!user?.id) return;
     try {
       await editUserMutation.mutateAsync({
         id: user.id,
-        firstName: profileData.firstName,
-        lastName: profileData.lastName,
-        email: profileData.email,
-        phone: profileData.phone,
-        address: profileData.address,
-        bio: profileData.bio,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        phone: data.phone,
+        address: data.address,
+        bio: data.bio,
         ...(avatarFile ? { avatar: avatarFile } : {}),
       });
       toastHook({ title: "Profile updated" });
@@ -550,23 +568,17 @@ export default function ProfilePage() {
     reader.readAsDataURL(file);
   };
 
-  const handleInputChange = (field: string, value: string) => {
-    setProfileData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
 
   const handleDownloadPDF = () => {
     // Use the same data preparation as print function
-    const studentName = `${profileData.firstName} ${profileData.lastName}`;
-    const studentId = computedStudentId || profileData.studentId;
-    const course = computedCourse || profileData.course;
-    const company = computedCompany || profileData.company;
-    const position = computedPosition || profileData.position;
-    const supervisor = computedSupervisor || profileData.supervisor;
-    const startDate = computedStartDate || profileData.startDate;
-    const endDate = computedEndDate || profileData.endDate;
+    const studentName = `${watchProfile("firstName")} ${watchProfile("lastName")}`;
+    const studentId = computedStudentId;
+    const course = computedCourse;
+    const company = computedCompany;
+    const position = computedPosition;
+    const supervisor = computedSupervisor;
+    const startDate = computedStartDate;
+    const endDate = computedEndDate;
 
     // Calculate total hours with 2 decimal places
     const totalHours = dtrRecords.reduce(
@@ -1114,7 +1126,7 @@ export default function ProfilePage() {
             </p>
           </div>
           <Button
-            onClick={isEditing ? handleSave : () => setIsEditing(true)}
+            onClick={() => setIsEditing(true)}
             disabled={isEditing && editUserMutation.isPending}
             className={
               isEditing
@@ -1171,17 +1183,17 @@ export default function ProfilePage() {
                 <Avatar className="w-32 h-32 mx-auto">
                   <AvatarImage src={avatarPreview || "/placeholder-user.jpg"} />
                   <AvatarFallback className="text-2xl">
-                    {profileData.firstName[0]}
-                    {profileData.lastName[0]}
+                    {watchProfile("firstName")?.[0]}
+                    {watchProfile("lastName")?.[0]}
                   </AvatarFallback>
                 </Avatar>
                 <div>
                   <h3 className="font-semibold text-lg">
-                    {profileData.firstName} {profileData.lastName}
+                    {watchProfile("firstName")} {watchProfile("lastName")}
                   </h3>
-                  <p className="text-gray-600">{profileData.studentId}</p>
+                  <p className="text-gray-600">{computedStudentId}</p>
                   <Badge variant="secondary" className="mt-2">
-                    {profileData.year} Student
+                    {computedYear} Student
                   </Badge>
                 </div>
                 {isEditing && (
@@ -1220,28 +1232,33 @@ export default function ProfilePage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <form onSubmit={handleProfileSubmit(onProfileSubmit)} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="firstName">First Name</Label>
                       <Input
                         id="firstName"
-                        value={profileData.firstName}
-                        onChange={(e) =>
-                          handleInputChange("firstName", e.target.value)
-                        }
+                        {...registerProfile("firstName")}
                         disabled={!isEditing}
                       />
+                      {isEditing && profileErrors.firstName && (
+                        <p className="text-xs text-red-600">
+                          {profileErrors.firstName.message}
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="lastName">Last Name</Label>
                       <Input
                         id="lastName"
-                        value={profileData.lastName}
-                        onChange={(e) =>
-                          handleInputChange("lastName", e.target.value)
-                        }
+                        {...registerProfile("lastName")}
                         disabled={!isEditing}
                       />
+                      {isEditing && profileErrors.lastName && (
+                        <p className="text-xs text-red-600">
+                          {profileErrors.lastName.message}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -1251,14 +1268,17 @@ export default function ProfilePage() {
                       <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                       <Input
                         id="email"
-                        value={profileData.email}
-                        onChange={(e) =>
-                          handleInputChange("email", e.target.value)
-                        }
+                        type="email"
+                        {...registerProfile("email")}
                         disabled={!isEditing}
                         className="pl-10"
                       />
                     </div>
+                    {isEditing && profileErrors.email && (
+                      <p className="text-xs text-red-600">
+                        {profileErrors.email.message}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -1267,14 +1287,16 @@ export default function ProfilePage() {
                       <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                       <Input
                         id="phone"
-                        value={profileData.phone}
-                        onChange={(e) =>
-                          handleInputChange("phone", e.target.value)
-                        }
+                        {...registerProfile("phone")}
                         disabled={!isEditing}
                         className="pl-10"
                       />
                     </div>
+                    {isEditing && profileErrors.phone && (
+                      <p className="text-xs text-red-600">
+                        {profileErrors.phone.message}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -1283,27 +1305,54 @@ export default function ProfilePage() {
                       <MapPin className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
                       <Textarea
                         id="address"
-                        value={profileData.address}
-                        onChange={(e) =>
-                          handleInputChange("address", e.target.value)
-                        }
+                        {...registerProfile("address")}
                         disabled={!isEditing}
                         className="pl-10 min-h-[80px] resize-none"
                       />
                     </div>
+                    {isEditing && profileErrors.address && (
+                      <p className="text-xs text-red-600">
+                        {profileErrors.address.message}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="bio">Bio</Label>
                     <Textarea
                       id="bio"
-                      value={profileData.bio}
-                      onChange={(e) => handleInputChange("bio", e.target.value)}
+                      {...registerProfile("bio")}
                       disabled={!isEditing}
                       placeholder="Tell us about yourself..."
                       className="min-h-[100px] resize-none"
                     />
+                    {isEditing && profileErrors.bio && (
+                      <p className="text-xs text-red-600">
+                        {profileErrors.bio.message}
+                      </p>
+                    )}
                   </div>
+
+                  {isEditing && (
+                    <Button
+                      type="submit"
+                      disabled={editUserMutation.isPending}
+                      className="w-full"
+                    >
+                      {editUserMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-4 h-4 mr-2" />
+                          Save Changes
+                        </>
+                      )}
+                    </Button>
+                  )}
+                  </form>
                 </CardContent>
               </Card>
             </div>

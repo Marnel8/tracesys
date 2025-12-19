@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import {
   Card,
   CardContent,
@@ -43,6 +46,73 @@ import { useCourses } from "@/hooks/course";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
+// Zod schemas with strict validation
+const profileSchema = z.object({
+  firstName: z
+    .string()
+    .min(1, "First name is required")
+    .regex(
+      /^[a-zA-Z\s'-]+$/,
+      "First name can only contain letters, spaces, hyphens, and apostrophes"
+    ),
+  lastName: z
+    .string()
+    .min(1, "Last name is required")
+    .regex(
+      /^[a-zA-Z\s'-]+$/,
+      "Last name can only contain letters, spaces, hyphens, and apostrophes"
+    ),
+  middleName: z
+    .string()
+    .regex(
+      /^[a-zA-Z\s'-]*$/,
+      "Middle name can only contain letters, spaces, hyphens, and apostrophes"
+    )
+    .optional(),
+  email: z.string().email("Please enter a valid email address"),
+  phone: z
+    .string()
+    .min(1, "Phone number is required")
+    .regex(
+      /^[\d\s\-()+]*$/,
+      "Phone number can only contain numbers, spaces, hyphens, parentheses, and plus sign"
+    ),
+  address: z.string().optional(),
+  bio: z.string().optional(),
+  instructorId: z
+    .string()
+    .regex(
+      /^[a-zA-Z0-9\-]*$/,
+      "Instructor ID can only contain letters, numbers, and hyphens"
+    )
+    .optional(),
+  gender: z.enum(["male", "female", "other", ""]).optional(),
+  age: z
+    .number()
+    .refine((val) => val === 0 || (val >= 22 && val <= 80), {
+      message: "Age must be between 22 and 80",
+    })
+    .optional(),
+  departmentId: z.string().optional(),
+  program: z.string().optional(),
+});
+
+const passwordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Current password is required"),
+    newPassword: z
+      .string()
+      .min(6, "New password must be at least 6 characters long"),
+    confirmPassword: z.string().min(1, "Please confirm your password"),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "New passwords do not match",
+    path: ["confirmPassword"],
+  });
+
+type ProfileFormData = z.infer<typeof profileSchema>;
+type PasswordFormData = z.infer<typeof passwordSchema>;
+
 export default function SettingsPage() {
   const { user, isLoading: userLoading } = useAuth();
   const editUserMutation = useEditUser();
@@ -50,23 +120,51 @@ export default function SettingsPage() {
   const { mutate: logout, isPending: isLoggingOut } = useLogout();
   const router = useRouter();
 
-  const [profile, setProfile] = useState({
-    firstName: "",
-    lastName: "",
-    middleName: "",
-    email: "",
-    phone: "",
-    address: "",
-    bio: "",
-    instructorId: "",
-    role: "",
-    gender: "",
-    age: 0,
-    departmentId: "",
-    program: "",
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
+
+  // Profile form
+  const {
+    register: registerProfile,
+    handleSubmit: handleProfileSubmit,
+    control: profileControl,
+    watch: watchProfile,
+    reset: resetProfile,
+    setValue: setProfileValue,
+    formState: { errors: profileErrors },
+  } = useForm<ProfileFormData>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      middleName: "",
+      email: "",
+      phone: "",
+      address: "",
+      bio: "",
+      instructorId: "",
+      gender: "",
+      age: 0,
+      departmentId: "",
+      program: "",
+    },
   });
 
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
+  const watchedDepartmentId = watchProfile("departmentId");
+
+  // Password form
+  const {
+    register: registerPassword,
+    handleSubmit: handlePasswordSubmit,
+    formState: { errors: passwordErrors },
+    reset: resetPassword,
+  } = useForm<PasswordFormData>({
+    resolver: zodResolver(passwordSchema),
+    defaultValues: {
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    },
+  });
 
   // Fetch departments and courses
   const { data: departmentsData, isLoading: departmentsLoading } =
@@ -96,48 +194,106 @@ export default function SettingsPage() {
     loginAlerts: true,
   });
 
-  const [passwordForm, setPasswordForm] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-  });
+  // Track if form has been initialized to prevent multiple resets
+  const [formInitialized, setFormInitialized] = useState(false);
 
-  // Update profile state when user data loads
+  // Update profile form when user data loads (wait for departments to be ready)
   useEffect(() => {
-    if (user) {
-      const departmentId = (user as any)?.departmentId || "";
-      const program = (user as any)?.program || "";
+    if (user && !userLoading && !departmentsLoading && !formInitialized) {
+      // Handle both direct user object and nested user.user structure
+      const userData = (user as any)?.user || user;
 
-      setProfile({
-        firstName: user.firstName || "",
-        lastName: user.lastName || "",
-        middleName: user.middleName || "",
-        email: user.email || "",
-        phone: user.phone || "",
-        address: user.address || "",
-        bio: user.bio || "",
-        instructorId: user.instructorId || "",
-        role: user.role || "",
-        gender: user.gender || "",
-        age: user.age || 0,
-        departmentId: departmentId,
-        program: program,
+      // Handle null/undefined values properly
+      const departmentId = userData?.departmentId
+        ? String(userData.departmentId)
+        : "";
+      const program = userData?.program ? String(userData.program) : "";
+
+      const formValues = {
+        firstName: userData.firstName || "",
+        lastName: userData.lastName || "",
+        middleName: userData.middleName || "",
+        email: userData.email || "",
+        phone: userData.phone || "",
+        address: userData.address || "",
+        bio: userData.bio || "",
+        instructorId: userData.instructorId || "",
+        gender: userData.gender || "",
+        age: userData.age || 0,
+        departmentId: departmentId || undefined,
+        program: program || undefined,
+      };
+
+      // Reset form with user data
+      resetProfile(formValues, {
+        keepDefaultValues: false,
       });
 
-      setSelectedDepartmentId(departmentId);
+      // Update selected department ID for course fetching
+      if (departmentId) {
+        setSelectedDepartmentId(departmentId);
+      } else {
+        setSelectedDepartmentId("");
+      }
 
-      if (user.avatar) {
-        setAvatarPreview(user.avatar);
+      // Update avatar preview
+      if (userData.avatar) {
+        setAvatarPreview(userData.avatar);
+      } else {
+        setAvatarPreview("");
+      }
+
+      setFormInitialized(true);
+    }
+  }, [user, userLoading, departmentsLoading, formInitialized, resetProfile]);
+
+  // Set program value after courses load (if department is selected)
+  useEffect(() => {
+    if (
+      user &&
+      !userLoading &&
+      !coursesLoading &&
+      selectedDepartmentId &&
+      formInitialized
+    ) {
+      const userData = (user as any)?.user || user;
+      const program = userData?.program ? String(userData.program) : "";
+
+      // Only set if program exists and matches a course
+      if (program) {
+        const programExists = courses.some(
+          (course: any) => String(course.code) === program
+        );
+        if (programExists) {
+          setProfileValue("program", program);
+        }
       }
     }
-  }, [user]);
+  }, [
+    user,
+    userLoading,
+    coursesLoading,
+    selectedDepartmentId,
+    formInitialized,
+    courses,
+    setProfileValue,
+  ]);
 
-  // Update selectedDepartmentId when profile.departmentId changes
+  // Reset form initialization flag when user changes (e.g., after edit)
   useEffect(() => {
-    if (profile.departmentId && profile.departmentId !== selectedDepartmentId) {
-      setSelectedDepartmentId(profile.departmentId);
+    if (user && editUserMutation.isSuccess) {
+      setFormInitialized(false);
     }
-  }, [profile.departmentId]);
+  }, [user, editUserMutation.isSuccess]);
+
+  // Update selectedDepartmentId when watched departmentId changes
+  useEffect(() => {
+    if (watchedDepartmentId && watchedDepartmentId !== selectedDepartmentId) {
+      setSelectedDepartmentId(watchedDepartmentId);
+    } else if (!watchedDepartmentId && selectedDepartmentId) {
+      setSelectedDepartmentId("");
+    }
+  }, [watchedDepartmentId, selectedDepartmentId]);
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -151,34 +307,28 @@ export default function SettingsPage() {
     }
   };
 
-  const handleProfileUpdate = async () => {
+  const onProfileSubmit = async (data: ProfileFormData) => {
     if (!user?.id) {
       toast.error("User not found. Please try logging in again.");
-      return;
-    }
-
-    // Validate age range
-    if (profile.age && (profile.age < 22 || profile.age > 80)) {
-      toast.error("Age must be between 22 and 80");
       return;
     }
 
     try {
       const updateData: any = {
         id: user.id,
-        firstName: profile.firstName,
-        lastName: profile.lastName,
-        middleName: profile.middleName,
-        email: profile.email,
-        phone: profile.phone,
-        address: profile.address,
-        bio: profile.bio,
-        instructorId: profile.instructorId,
-        role: profile.role,
-        gender: profile.gender,
-        age: profile.age,
-        departmentId: profile.departmentId ? profile.departmentId : undefined,
-        program: profile.program ? profile.program : undefined,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        middleName: data.middleName,
+        email: data.email,
+        phone: data.phone,
+        address: data.address,
+        bio: data.bio,
+        instructorId: data.instructorId,
+        role: user.role,
+        gender: data.gender,
+        age: data.age,
+        departmentId: data.departmentId ? data.departmentId : undefined,
+        program: data.program ? data.program : undefined,
       };
 
       if (avatarFile) {
@@ -205,38 +355,15 @@ export default function SettingsPage() {
     toast.info("Security settings will be implemented soon.");
   };
 
-  const handleChangePassword = async () => {
-    if (
-      !passwordForm.currentPassword ||
-      !passwordForm.newPassword ||
-      !passwordForm.confirmPassword
-    ) {
-      toast.error("Please fill in all password fields");
-      return;
-    }
-
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      toast.error("New passwords do not match");
-      return;
-    }
-
-    if (passwordForm.newPassword.length < 6) {
-      toast.error("New password must be at least 6 characters long");
-      return;
-    }
-
+  const onPasswordSubmit = async (data: PasswordFormData) => {
     try {
       await changePasswordMutation.mutateAsync({
-        currentPassword: passwordForm.currentPassword,
-        newPassword: passwordForm.newPassword,
+        currentPassword: data.currentPassword,
+        newPassword: data.newPassword,
       });
 
       toast.success("Password changed successfully!");
-      setPasswordForm({
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      });
+      resetPassword();
     } catch (error: any) {
       toast.error(
         error.message || "Failed to change password. Please try again."
@@ -291,302 +418,385 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center gap-6">
-                <Avatar className="w-20 h-20">
-                  <AvatarImage
-                    src={avatarPreview || "/placeholder.svg?height=80&width=80"}
-                    alt="Profile"
-                  />
-                  <AvatarFallback className="text-lg">
-                    {profile.firstName?.[0]}
-                    {profile.lastName?.[0]}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <input
-                    type="file"
-                    id="avatar-upload"
-                    accept="image/*"
-                    onChange={handleAvatarChange}
-                    className="hidden"
-                  />
-                  <Button
-                    variant="outline"
-                    className="mb-2"
-                    onClick={() =>
-                      document.getElementById("avatar-upload")?.click()
-                    }
-                  >
-                    <Camera className="w-4 h-4 mr-2" />
-                    Change Photo
-                  </Button>
-                  <p className="text-sm text-gray-600">
-                    JPG, GIF or PNG. 1MB max.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="firstName">First Name *</Label>
-                  <Input
-                    id="firstName"
-                    value={profile.firstName}
-                    onChange={(e) =>
-                      setProfile({ ...profile, firstName: e.target.value })
-                    }
-                    disabled={editUserMutation.isPending}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lastName">Last Name *</Label>
-                  <Input
-                    id="lastName"
-                    value={profile.lastName}
-                    onChange={(e) =>
-                      setProfile({ ...profile, lastName: e.target.value })
-                    }
-                    disabled={editUserMutation.isPending}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="middleName">Middle Name</Label>
-                <Input
-                  id="middleName"
-                  value={profile.middleName}
-                  onChange={(e) =>
-                    setProfile({ ...profile, middleName: e.target.value })
-                  }
-                  disabled={editUserMutation.isPending}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="email">Email Address *</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={profile.email}
-                  onChange={(e) =>
-                    setProfile({ ...profile, email: e.target.value })
-                  }
-                  disabled={editUserMutation.isPending}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number *</Label>
-                <Input
-                  id="phone"
-                  value={profile.phone}
-                  onChange={(e) =>
-                    setProfile({ ...profile, phone: e.target.value })
-                  }
-                  disabled={editUserMutation.isPending}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="age">Age</Label>
-                  <Input
-                    id="age"
-                    type="number"
-                    min={22}
-                    max={80}
-                    value={profile.age || ""}
-                    onChange={(e) => {
-                      const value =
-                        e.target.value === "" ? 0 : parseInt(e.target.value);
-                      setProfile({ ...profile, age: isNaN(value) ? 0 : value });
-                    }}
-                    onBlur={(e) => {
-                      const value = parseInt(e.target.value) || 0;
-                      if (value > 0) {
-                        const clampedValue =
-                          value < 22 ? 22 : value > 80 ? 80 : value;
-                        setProfile({ ...profile, age: clampedValue });
+              <form
+                onSubmit={handleProfileSubmit(onProfileSubmit)}
+                className="space-y-6"
+              >
+                <div className="flex items-center gap-6">
+                  <Avatar className="w-20 h-20">
+                    <AvatarImage
+                      src={
+                        avatarPreview || "/placeholder.svg?height=80&width=80"
                       }
-                    }}
+                      alt="Profile"
+                    />
+                    <AvatarFallback className="text-lg">
+                      {watchProfile("firstName")?.[0]}
+                      {watchProfile("lastName")?.[0]}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <input
+                      type="file"
+                      id="avatar-upload"
+                      accept="image/*"
+                      onChange={handleAvatarChange}
+                      className="hidden"
+                    />
+                    <Button
+                      variant="outline"
+                      className="mb-2"
+                      onClick={() =>
+                        document.getElementById("avatar-upload")?.click()
+                      }
+                    >
+                      <Camera className="w-4 h-4 mr-2" />
+                      Change Photo
+                    </Button>
+                    <p className="text-sm text-gray-600">
+                      JPG, GIF or PNG. 1MB max.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="firstName">First Name *</Label>
+                    <Input
+                      id="firstName"
+                      {...registerProfile("firstName")}
+                      disabled={editUserMutation.isPending}
+                    />
+                    {profileErrors.firstName && (
+                      <p className="text-sm text-red-600">
+                        {profileErrors.firstName.message}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lastName">Last Name *</Label>
+                    <Input
+                      id="lastName"
+                      {...registerProfile("lastName")}
+                      disabled={editUserMutation.isPending}
+                    />
+                    {profileErrors.lastName && (
+                      <p className="text-sm text-red-600">
+                        {profileErrors.lastName.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="middleName">Middle Name</Label>
+                  <Input
+                    id="middleName"
+                    {...registerProfile("middleName")}
                     disabled={editUserMutation.isPending}
                   />
-                  <p className="text-sm text-gray-600">
-                    Age must be between 22 and 80
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="gender">Gender</Label>
-                  <Select
-                    value={profile.gender}
-                    onValueChange={(value) =>
-                      setProfile({ ...profile, gender: value })
-                    }
-                    disabled={editUserMutation.isPending}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select gender" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="male">Male</SelectItem>
-                      <SelectItem value="female">Female</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="instructorId">Instructor ID</Label>
-                <Input
-                  id="instructorId"
-                  value={profile.instructorId}
-                  onChange={(e) =>
-                    setProfile({ ...profile, instructorId: e.target.value })
-                  }
-                  disabled={editUserMutation.isPending}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="department">Department</Label>
-                <Select
-                  value={profile.departmentId}
-                  onValueChange={(value) => {
-                    setProfile({
-                      ...profile,
-                      departmentId: value,
-                      program: "",
-                    });
-                    setSelectedDepartmentId(value);
-                  }}
-                  disabled={editUserMutation.isPending || departmentsLoading}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {departmentsLoading ? (
-                      <SelectItem value="loading" disabled>
-                        Loading departments...
-                      </SelectItem>
-                    ) : departments.length > 0 ? (
-                      departments.map((dept) => (
-                        <SelectItem key={dept.id} value={dept.id}>
-                          {dept.name}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="no-departments" disabled>
-                        No departments available
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="program">Program</Label>
-                <div className="flex gap-2">
-                  <Select
-                    value={profile.program || undefined}
-                    onValueChange={(value) =>
-                      setProfile({ ...profile, program: value })
-                    }
-                    disabled={
-                      !selectedDepartmentId ||
-                      editUserMutation.isPending ||
-                      coursesLoading
-                    }
-                  >
-                    <SelectTrigger className="flex-1">
-                      <SelectValue
-                        placeholder={
-                          !selectedDepartmentId
-                            ? "Select department first"
-                            : coursesLoading
-                            ? "Loading programs..."
-                            : "Select program (optional)"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {coursesLoading ? (
-                        <SelectItem value="loading" disabled>
-                          Loading programs...
-                        </SelectItem>
-                      ) : courses.length > 0 ? (
-                        courses.map((course: any) => (
-                          <SelectItem key={course.id} value={course.code}>
-                            {course.code} - {course.name}
-                          </SelectItem>
-                        ))
-                      ) : selectedDepartmentId ? (
-                        <SelectItem value="no-programs" disabled>
-                          No programs available for this department
-                        </SelectItem>
-                      ) : (
-                        <SelectItem value="select-dept" disabled>
-                          Select a department first
-                        </SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                  {profile.program && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setProfile({ ...profile, program: "" })}
-                      disabled={editUserMutation.isPending}
-                    >
-                      Clear
-                    </Button>
+                  {profileErrors.middleName && (
+                    <p className="text-sm text-red-600">
+                      {profileErrors.middleName.message}
+                    </p>
                   )}
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="address">Address</Label>
-                <Textarea
-                  id="address"
-                  value={profile.address}
-                  onChange={(e) =>
-                    setProfile({ ...profile, address: e.target.value })
-                  }
-                  rows={2}
-                  disabled={editUserMutation.isPending}
-                />
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email Address *</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    {...registerProfile("email")}
+                    disabled={editUserMutation.isPending}
+                  />
+                  {profileErrors.email && (
+                    <p className="text-sm text-red-600">
+                      {profileErrors.email.message}
+                    </p>
+                  )}
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="bio">Bio</Label>
-                <Textarea
-                  id="bio"
-                  value={profile.bio}
-                  onChange={(e) =>
-                    setProfile({ ...profile, bio: e.target.value })
-                  }
-                  rows={3}
-                  disabled={editUserMutation.isPending}
-                />
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone Number *</Label>
+                  <Input
+                    id="phone"
+                    {...registerProfile("phone")}
+                    disabled={editUserMutation.isPending}
+                  />
+                  {profileErrors.phone && (
+                    <p className="text-sm text-red-600">
+                      {profileErrors.phone.message}
+                    </p>
+                  )}
+                </div>
 
-              <Button
-                onClick={handleProfileUpdate}
-                disabled={editUserMutation.isPending || userLoading}
-                className="bg-primary-500 hover:bg-primary-600"
-              >
-                {editUserMutation.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Updating...
-                  </>
-                ) : (
-                  "Save Changes"
-                )}
-              </Button>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="age">Age</Label>
+                    <Input
+                      id="age"
+                      type="number"
+                      inputMode="numeric"
+                      min={22}
+                      max={80}
+                      {...registerProfile("age", { valueAsNumber: true })}
+                      disabled={editUserMutation.isPending}
+                    />
+                    {profileErrors.age && (
+                      <p className="text-sm text-red-600">
+                        {profileErrors.age.message}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="gender">Gender</Label>
+                    <Controller
+                      name="gender"
+                      control={profileControl}
+                      render={({ field }) => (
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          disabled={editUserMutation.isPending}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select gender" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="male">Male</SelectItem>
+                            <SelectItem value="female">Female</SelectItem>
+                            <SelectItem value="other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                    {profileErrors.gender && (
+                      <p className="text-sm text-red-600">
+                        {profileErrors.gender.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="instructorId">Instructor ID</Label>
+                  <Input
+                    id="instructorId"
+                    {...registerProfile("instructorId")}
+                    disabled={editUserMutation.isPending}
+                  />
+                  {profileErrors.instructorId && (
+                    <p className="text-sm text-red-600">
+                      {profileErrors.instructorId.message}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="department">Department</Label>
+                  <Controller
+                    name="departmentId"
+                    control={profileControl}
+                    render={({ field }) => {
+                      const currentValue = field.value
+                        ? String(field.value)
+                        : undefined;
+                      // Check if the value exists in departments
+                      const valueExists = currentValue
+                        ? departments.some(
+                            (dept) => String(dept.id) === currentValue
+                          )
+                        : false;
+
+                      return (
+                        <Select
+                          key={`dept-${formInitialized}-${
+                            currentValue || "empty"
+                          }`}
+                          value={valueExists ? currentValue : undefined}
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                            setSelectedDepartmentId(value || "");
+                            // Reset program when department changes
+                            setProfileValue("program", undefined);
+                          }}
+                          disabled={
+                            editUserMutation.isPending || departmentsLoading
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select department" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {departmentsLoading ? (
+                              <SelectItem value="loading" disabled>
+                                Loading departments...
+                              </SelectItem>
+                            ) : departments.length > 0 ? (
+                              departments.map((dept) => (
+                                <SelectItem
+                                  key={dept.id}
+                                  value={String(dept.id)}
+                                >
+                                  {dept.name}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="no-departments" disabled>
+                                No departments available
+                              </SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      );
+                    }}
+                  />
+                  {profileErrors.departmentId && (
+                    <p className="text-sm text-red-600">
+                      {profileErrors.departmentId.message}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="program">Program</Label>
+                  <div className="flex gap-2">
+                    <Controller
+                      name="program"
+                      control={profileControl}
+                      render={({ field }) => {
+                        const currentValue = field.value
+                          ? String(field.value)
+                          : undefined;
+                        // Check if the value exists in courses
+                        const valueExists = currentValue
+                          ? courses.some(
+                              (course: any) =>
+                                String(course.code) === currentValue
+                            )
+                          : false;
+
+                        return (
+                          <Select
+                            key={`program-${formInitialized}-${selectedDepartmentId}-${
+                              currentValue || "empty"
+                            }`}
+                            value={valueExists ? currentValue : undefined}
+                            onValueChange={(value) => {
+                              field.onChange(value);
+                            }}
+                            disabled={
+                              !selectedDepartmentId ||
+                              editUserMutation.isPending ||
+                              coursesLoading
+                            }
+                          >
+                            <SelectTrigger className="flex-1">
+                              <SelectValue
+                                placeholder={
+                                  !selectedDepartmentId
+                                    ? "Select department first"
+                                    : coursesLoading
+                                    ? "Loading programs..."
+                                    : "Select program (optional)"
+                                }
+                              />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {coursesLoading ? (
+                                <SelectItem value="loading" disabled>
+                                  Loading programs...
+                                </SelectItem>
+                              ) : courses.length > 0 ? (
+                                courses.map((course: any) => (
+                                  <SelectItem
+                                    key={course.id}
+                                    value={String(course.code)}
+                                  >
+                                    {course.code} - {course.name}
+                                  </SelectItem>
+                                ))
+                              ) : selectedDepartmentId ? (
+                                <SelectItem value="no-programs" disabled>
+                                  No programs available for this department
+                                </SelectItem>
+                              ) : (
+                                <SelectItem value="select-dept" disabled>
+                                  Select a department first
+                                </SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        );
+                      }}
+                    />
+                    {watchProfile("program") && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setProfileValue("program", undefined);
+                        }}
+                        disabled={editUserMutation.isPending}
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                  {profileErrors.program && (
+                    <p className="text-sm text-red-600">
+                      {profileErrors.program.message}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="address">Address</Label>
+                  <Textarea
+                    id="address"
+                    {...registerProfile("address")}
+                    rows={2}
+                    disabled={editUserMutation.isPending}
+                  />
+                  {profileErrors.address && (
+                    <p className="text-sm text-red-600">
+                      {profileErrors.address.message}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="bio">Bio</Label>
+                  <Textarea
+                    id="bio"
+                    {...registerProfile("bio")}
+                    rows={3}
+                    disabled={editUserMutation.isPending}
+                  />
+                  {profileErrors.bio && (
+                    <p className="text-sm text-red-600">
+                      {profileErrors.bio.message}
+                    </p>
+                  )}
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={editUserMutation.isPending || userLoading}
+                  className="bg-primary-500 hover:bg-primary-600"
+                >
+                  {editUserMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    "Save Changes"
+                  )}
+                </Button>
+              </form>
             </CardContent>
           </Card>
 
@@ -602,71 +812,72 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="currentPassword">Current Password *</Label>
-                <Input
-                  id="currentPassword"
-                  type="password"
-                  value={passwordForm.currentPassword}
-                  onChange={(e) =>
-                    setPasswordForm({
-                      ...passwordForm,
-                      currentPassword: e.target.value,
-                    })
-                  }
-                  disabled={changePasswordMutation.isPending}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="newPassword">New Password *</Label>
-                <Input
-                  id="newPassword"
-                  type="password"
-                  value={passwordForm.newPassword}
-                  onChange={(e) =>
-                    setPasswordForm({
-                      ...passwordForm,
-                      newPassword: e.target.value,
-                    })
-                  }
-                  disabled={changePasswordMutation.isPending}
-                />
-                <p className="text-sm text-gray-600">
-                  Password must be at least 6 characters long
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm New Password *</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={passwordForm.confirmPassword}
-                  onChange={(e) =>
-                    setPasswordForm({
-                      ...passwordForm,
-                      confirmPassword: e.target.value,
-                    })
-                  }
-                  disabled={changePasswordMutation.isPending}
-                />
-              </div>
-
-              <Button
-                onClick={handleChangePassword}
-                disabled={changePasswordMutation.isPending}
-                className="bg-primary-500 hover:bg-primary-600"
+              <form
+                onSubmit={handlePasswordSubmit(onPasswordSubmit)}
+                className="space-y-6"
               >
-                {changePasswordMutation.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Changing Password...
-                  </>
-                ) : (
-                  "Change Password"
-                )}
-              </Button>
+                <div className="space-y-2">
+                  <Label htmlFor="currentPassword">Current Password *</Label>
+                  <Input
+                    id="currentPassword"
+                    type="password"
+                    {...registerPassword("currentPassword")}
+                    disabled={changePasswordMutation.isPending}
+                  />
+                  {passwordErrors.currentPassword && (
+                    <p className="text-sm text-red-600">
+                      {passwordErrors.currentPassword.message}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="newPassword">New Password *</Label>
+                  <Input
+                    id="newPassword"
+                    type="password"
+                    {...registerPassword("newPassword")}
+                    disabled={changePasswordMutation.isPending}
+                  />
+                  {passwordErrors.newPassword && (
+                    <p className="text-sm text-red-600">
+                      {passwordErrors.newPassword.message}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">
+                    Confirm New Password *
+                  </Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    {...registerPassword("confirmPassword")}
+                    disabled={changePasswordMutation.isPending}
+                  />
+                  {passwordErrors.confirmPassword && (
+                    <p className="text-sm text-red-600">
+                      {passwordErrors.confirmPassword.message}
+                    </p>
+                  )}
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={changePasswordMutation.isPending}
+                  className="bg-primary-500 hover:bg-primary-600"
+                >
+                  {changePasswordMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Changing Password...
+                    </>
+                  ) : (
+                    "Change Password"
+                  )}
+                </Button>
+              </form>
             </CardContent>
           </Card>
 
