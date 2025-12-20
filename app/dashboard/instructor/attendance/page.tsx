@@ -436,7 +436,7 @@ export default function AttendancePage() {
                 <SelectValue placeholder="Gender" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Genders</SelectItem>
+                <SelectItem value="all">All Sex</SelectItem>
                 <SelectItem value="male">Male</SelectItem>
                 <SelectItem value="female">Female</SelectItem>
               </SelectContent>
