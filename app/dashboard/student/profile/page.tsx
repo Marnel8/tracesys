@@ -93,6 +93,9 @@ const profileSchema = z.object({
     .string()
     .min(1, "Phone number is required")
     .regex(/^[\d\s\-()+]*$/, "Phone number can only contain numbers, spaces, hyphens, parentheses, and plus sign"),
+  gender: z.enum(["male", "female", "other"], {
+    required_error: "Please select a gender",
+  }),
   address: z.string().optional(),
   bio: z.string().optional(),
 });
@@ -117,6 +120,7 @@ export default function ProfilePage() {
     reset: resetProfile,
     formState: { errors: profileErrors },
     watch: watchProfile,
+    setValue: setProfileValue,
   } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
@@ -124,6 +128,7 @@ export default function ProfilePage() {
       lastName: "",
       email: "",
       phone: "",
+      gender: "male" as const,
       address: "",
       bio: "",
     },
@@ -343,6 +348,7 @@ export default function ProfilePage() {
         lastName: user.lastName || "",
         email: user.email || "",
         phone: user.phone || "",
+        gender: (user.gender as "male" | "female" | "other") || "male",
         address: user.address || "",
         bio: user.bio || "",
       });
@@ -542,6 +548,7 @@ export default function ProfilePage() {
         lastName: data.lastName,
         email: data.email,
         phone: data.phone,
+        gender: data.gender,
         address: data.address,
         bio: data.bio,
         ...(avatarFile ? { avatar: avatarFile } : {}),
@@ -1116,45 +1123,13 @@ export default function ProfilePage() {
             </Button>
           </Link>
         </div>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
-              Profile
-            </h1>
-            <p className="text-gray-600 text-sm md:text-base">
-              Manage your personal information and track your progress.
-            </p>
-          </div>
-          <Button
-            onClick={() => setIsEditing(true)}
-            disabled={isEditing && editUserMutation.isPending}
-            className={
-              isEditing
-                ? "bg-transparent hover:bg-green-600 w-full sm:w-auto h-11 border border-green-500 text-green-500 transition-all duration-300 hover:border-green-400 hover:bg-green-50/50 "
-                : "h-11 border border-primary-500 bg-primary-50 px-6 text-primary-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50 w-full sm:w-auto"
-            }
-          >
-            {isEditing ? (
-              <>
-                {editUserMutation.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4 mr-2" />
-                    Save Changes
-                  </>
-                )}
-              </>
-            ) : (
-              <>
-                <Edit className="w-4 h-4 mr-2" />
-                Edit Profile
-              </>
-            )}
-          </Button>
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+            Profile
+          </h1>
+          <p className="text-gray-600 text-sm md:text-base">
+            Manage your personal information and track your progress.
+          </p>
         </div>
       </div>
 
@@ -1226,10 +1201,22 @@ export default function ProfilePage() {
             <div className="lg:col-span-2 space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <User className="w-5 h-5" />
-                    Personal Information
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                      <User className="w-5 h-5" />
+                      Personal Information
+                    </CardTitle>
+                    {!isEditing && (
+                      <Button
+                        onClick={() => setIsEditing(true)}
+                        variant="outline"
+                        size="sm"
+                      >
+                        <Edit className="w-4 h-4 mr-2" />
+                        Edit Profile
+                      </Button>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <form onSubmit={handleProfileSubmit(onProfileSubmit)} className="space-y-4">
@@ -1295,6 +1282,31 @@ export default function ProfilePage() {
                     {isEditing && profileErrors.phone && (
                       <p className="text-xs text-red-600">
                         {profileErrors.phone.message}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="gender">Gender</Label>
+                    <Select
+                      value={watchProfile("gender") ?? undefined}
+                      onValueChange={(value) =>
+                        setProfileValue("gender", value as "male" | "female" | "other")
+                      }
+                      disabled={!isEditing}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select gender" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="male">Male</SelectItem>
+                        <SelectItem value="female">Female</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {isEditing && profileErrors.gender && (
+                      <p className="text-xs text-red-600">
+                        {profileErrors.gender.message}
                       </p>
                     )}
                   </div>

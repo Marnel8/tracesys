@@ -105,6 +105,7 @@ export default function AttendancePage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedDate, setSelectedDate] = useState("");
+  const [selectedGender, setSelectedGender] = useState("all");
   const [selectedLog, setSelectedLog] = useState<AttendanceRecord | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
 
@@ -121,7 +122,16 @@ export default function AttendancePage() {
     date: selectedDate || undefined,
   });
 
-  const attendanceRecords = attendanceData?.attendance || [];
+  // Filter attendance records by gender (client-side)
+  const attendanceRecords = useMemo(() => {
+    const records = attendanceData?.attendance || [];
+    if (selectedGender === "all") return records;
+    return records.filter((record) => {
+      const studentGender = record.student?.gender;
+      if (!studentGender) return false; // Exclude records without gender data
+      return studentGender.toLowerCase() === selectedGender.toLowerCase();
+    });
+  }, [attendanceData?.attendance, selectedGender]);
 
   // Fetch all attendance records for progress calculation
   const { data: allAttendanceData } = useAttendance({
@@ -419,6 +429,16 @@ export default function AttendancePage() {
                 <SelectItem value="present">Present</SelectItem>
                 <SelectItem value="absent">Absent</SelectItem>
                 <SelectItem value="excused">Excused</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={selectedGender} onValueChange={setSelectedGender}>
+              <SelectTrigger className="w-full md:w-40">
+                <SelectValue placeholder="Gender" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Genders</SelectItem>
+                <SelectItem value="male">Male</SelectItem>
+                <SelectItem value="female">Female</SelectItem>
               </SelectContent>
             </Select>
             <Input
