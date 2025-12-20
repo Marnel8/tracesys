@@ -104,7 +104,6 @@ const shortenDeviceType = (deviceType: string) => {
 export default function AttendancePage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
-  const [selectedApprovalStatus, setSelectedApprovalStatus] = useState("all");
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedLog, setSelectedLog] = useState<AttendanceRecord | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -119,10 +118,6 @@ export default function AttendancePage() {
     limit: 50,
     search: searchTerm,
     status: selectedStatus === "all" ? undefined : (selectedStatus as any),
-    approvalStatus:
-      selectedApprovalStatus === "all"
-        ? undefined
-        : (selectedApprovalStatus as any),
     date: selectedDate || undefined,
   });
 
@@ -274,9 +269,6 @@ export default function AttendancePage() {
       const excusedCount = attendanceRecords.filter(
         (record) => record.status === "excused"
       ).length;
-      const pendingCount = attendanceRecords.filter(
-        (record) => record.approvalStatus === "Pending"
-      ).length;
       const approvedCount = attendanceRecords.filter(
         (record) => record.approvalStatus === "Approved"
       ).length;
@@ -296,7 +288,6 @@ export default function AttendancePage() {
         { Metric: "Present", Value: presentCount },
         { Metric: "Absent", Value: absentCount },
         { Metric: "Excused", Value: excusedCount },
-        { Metric: "Pending Approval", Value: pendingCount },
         { Metric: "Approved", Value: approvedCount },
         { Metric: "Declined", Value: declinedCount },
         { Metric: "Total Hours", Value: `${totalHours}h` },
@@ -428,19 +419,6 @@ export default function AttendancePage() {
                 <SelectItem value="present">Present</SelectItem>
                 <SelectItem value="absent">Absent</SelectItem>
                 <SelectItem value="excused">Excused</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select
-              value={selectedApprovalStatus}
-              onValueChange={setSelectedApprovalStatus}
-            >
-              <SelectTrigger className="w-full md:w-40">
-                <SelectValue placeholder="Approval" />
-              </SelectTrigger>
-              <SelectContent>
-                {/* <SelectItem value="all">All Approval</SelectItem> */}
-                <SelectItem value="Pending">Pending</SelectItem>
-                <SelectItem value="Declined">Declined</SelectItem>
               </SelectContent>
             </Select>
             <Input
@@ -692,18 +670,10 @@ export default function AttendancePage() {
                             {record.status}
                           </Badge>
                           {record.approvalStatus &&
-                            record.approvalStatus !== "Approved" && (
+                            record.approvalStatus === "Declined" && (
                               <Badge
-                                variant={
-                                  record.approvalStatus === "Pending"
-                                    ? "secondary"
-                                    : "destructive"
-                                }
-                                className={
-                                  record.approvalStatus === "Pending"
-                                    ? "bg-yellow-100 text-yellow-800"
-                                    : "bg-red-100 text-red-800"
-                                }
+                                variant="destructive"
+                                className="bg-red-100 text-red-800"
                               >
                                 {record.approvalStatus}
                               </Badge>

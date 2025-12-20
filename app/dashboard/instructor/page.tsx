@@ -1269,7 +1269,7 @@ export default function InstructorDashboard() {
               <CardDescription>Items requiring your attention</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex items-start gap-4 border border-primary-200 bg-white p-5 shadow-sm">
+              <div className="flex items-start flex-wrap gap-4 border border-primary-200 bg-white p-5 shadow-sm">
                 <div>
                   <h4 className="font-medium text-foreground">
                     Attendance Logs
@@ -1299,7 +1299,7 @@ export default function InstructorDashboard() {
                   </Button>
                 </div>
               </div>
-              <div className="flex items-start gap-4 border border-primary-200 bg-white p-5 shadow-sm">
+              <div className="flex items-start flex-wrap gap-4 border border-primary-200 bg-white p-5 shadow-sm">
                 <div>
                   <h4 className="font-medium text-foreground">
                     Weekly Reports
@@ -1329,7 +1329,7 @@ export default function InstructorDashboard() {
                   </Button>
                 </div>
               </div>
-              <div className="flex items-start gap-4 border border-primary-200 bg-white p-5 shadow-sm">
+              <div className="flex items-start flex-wrap gap-4 border border-primary-200 bg-white p-5 shadow-sm">
                 <div>
                   <h4 className="font-medium text-foreground">Requirements</h4>
                   <p className="text-sm text-muted-foreground">

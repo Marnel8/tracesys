@@ -769,7 +769,7 @@ export default function ProfilePage() {
 									<td>${record.date}</td>
 									<td>${record.day}</td>
 									<td style="background-color: #e0f2fe;">${
-                    record.morningTimeIn || record.timeIn || "N/A"
+                    record.morningTimeIn || "N/A"
                   }</td>
 									<td style="background-color: #e0f2fe;">${record.morningTimeOut || "N/A"}</td>
 									<td style="background-color: #dcfce7;">${record.afternoonTimeIn || "N/A"}</td>
@@ -1022,7 +1022,7 @@ export default function ProfilePage() {
 									<td>${record.date}</td>
 									<td>${record.day}</td>
 									<td style="background-color: #e0f2fe;">${
-                    record.morningTimeIn || record.timeIn || "N/A"
+                    record.morningTimeIn || "N/A"
                   }</td>
 									<td style="background-color: #e0f2fe;">${record.morningTimeOut || "N/A"}</td>
 									<td style="background-color: #dcfce7;">${record.afternoonTimeIn || "N/A"}</td>
@@ -1909,7 +1909,7 @@ export default function ProfilePage() {
                             {record.day}
                           </td>
                           <td className="border border-gray-300 px-3 py-2 text-xs sm:text-sm bg-primary-50">
-                            {record.morningTimeIn || record.timeIn || "N/A"}
+                            {record.morningTimeIn || "N/A"}
                           </td>
                           <td className="border border-gray-300 px-3 py-2 text-xs sm:text-sm bg-primary-50">
                             {record.morningTimeOut || "N/A"}

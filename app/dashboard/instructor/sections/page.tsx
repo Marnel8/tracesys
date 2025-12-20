@@ -341,7 +341,7 @@ export default function SectionsPage() {
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Section Name</Label>
+                  <Label htmlFor="name">Year/Section</Label>
                   <Input
                     id="name"
                     value={newSection.name}
@@ -351,7 +351,7 @@ export default function SectionsPage() {
                     placeholder="e.g., BSIT 4A"
                   />
                 </div>
-                <div className="space-y-2">
+                {/* <div className="space-y-2">
                   <Label htmlFor="code">Section Code</Label>
                   <Input
                     id="code"
@@ -360,6 +360,21 @@ export default function SectionsPage() {
                       setNewSection({ ...newSection, code: e.target.value })
                     }
                     placeholder="e.g., BSIT-4A"
+                  />
+                </div> */}
+                <div className="space-y-2">
+                  <Label htmlFor="maxStudents">Max Students</Label>
+                  <Input
+                    id="maxStudents"
+                    type="number"
+                    value={newSection.maxStudents}
+                    onChange={(e) =>
+                      setNewSection({
+                        ...newSection,
+                        maxStudents: parseInt(e.target.value) || 50,
+                      })
+                    }
+                    placeholder="50"
                   />
                 </div>
               </div>
@@ -415,19 +430,23 @@ export default function SectionsPage() {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="maxStudents">Max Students</Label>
-                  <Input
-                    id="maxStudents"
-                    type="number"
-                    value={newSection.maxStudents}
-                    onChange={(e) =>
-                      setNewSection({
-                        ...newSection,
-                        maxStudents: parseInt(e.target.value) || 50,
-                      })
+                  <Label htmlFor="academicYear">Academic Year</Label>
+                  <Select
+                    onValueChange={(value) =>
+                      setNewSection({ ...newSection, academicYear: value })
                     }
-                    placeholder="50"
-                  />
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select academic year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ACADEMIC_YEAR_OPTIONS.map((year) => (
+                        <SelectItem key={year.value} value={year.value}>
+                          {year.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -464,25 +483,6 @@ export default function SectionsPage() {
                       {SEMESTER_OPTIONS.map((semester) => (
                         <SelectItem key={semester.value} value={semester.value}>
                           {semester.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="academicYear">Academic Year</Label>
-                  <Select
-                    onValueChange={(value) =>
-                      setNewSection({ ...newSection, academicYear: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select academic year" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ACADEMIC_YEAR_OPTIONS.map((year) => (
-                        <SelectItem key={year.value} value={year.value}>
-                          {year.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -530,7 +530,7 @@ export default function SectionsPage() {
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="edit-name">Section Name</Label>
+                <Label htmlFor="edit-name">Year/Section</Label>
                 <Input
                   id="edit-name"
                   value={editSection.name}
@@ -541,6 +541,21 @@ export default function SectionsPage() {
                 />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="edit-maxStudents">Max Students</Label>
+                <Input
+                  id="edit-maxStudents"
+                  type="number"
+                  value={editSection.maxStudents}
+                  onChange={(e) =>
+                    setEditSection({
+                      ...editSection,
+                      maxStudents: parseInt(e.target.value) || 50,
+                    })
+                  }
+                  placeholder="50"
+                />
+              </div>
+              {/* <div className="space-y-2">
                 <Label htmlFor="edit-code">Section Code</Label>
                 <Input
                   id="edit-code"
@@ -550,7 +565,7 @@ export default function SectionsPage() {
                   }
                   placeholder="e.g., BSIT-4A"
                 />
-              </div>
+              </div> */}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -597,19 +612,24 @@ export default function SectionsPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-maxStudents">Max Students</Label>
-                <Input
-                  id="edit-maxStudents"
-                  type="number"
-                  value={editSection.maxStudents}
-                  onChange={(e) =>
-                    setEditSection({
-                      ...editSection,
-                      maxStudents: parseInt(e.target.value) || 50,
-                    })
+                <Label htmlFor="edit-academicYear">Academic Year</Label>
+                <Select
+                  onValueChange={(value) =>
+                    setEditSection({ ...editSection, academicYear: value })
                   }
-                  placeholder="50"
-                />
+                  value={editSection.academicYear}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select academic year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ACADEMIC_YEAR_OPTIONS.map((year) => (
+                      <SelectItem key={year.value} value={year.value}>
+                        {year.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -648,26 +668,6 @@ export default function SectionsPage() {
                     {SEMESTER_OPTIONS.map((semester) => (
                       <SelectItem key={semester.value} value={semester.value}>
                         {semester.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-academicYear">Academic Year</Label>
-                <Select
-                  onValueChange={(value) =>
-                    setEditSection({ ...editSection, academicYear: value })
-                  }
-                  value={editSection.academicYear}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select academic year" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ACADEMIC_YEAR_OPTIONS.map((year) => (
-                      <SelectItem key={year.value} value={year.value}>
-                        {year.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -843,8 +843,7 @@ export default function SectionsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Section Name</TableHead>
-                  <TableHead>Section Code</TableHead>
+                  <TableHead>Year/Section</TableHead>
                   <TableHead>Course</TableHead>
                   <TableHead>Year Level</TableHead>
                   <TableHead>Semester</TableHead>
@@ -908,11 +907,7 @@ export default function SectionsPage() {
                       <TableCell>
                         <div className="font-medium">{section.name}</div>
                       </TableCell>
-                      <TableCell>
-                        <div className="text-sm text-gray-600">
-                          {section.code}
-                        </div>
-                      </TableCell>
+
                       <TableCell>
                         <div className="text-sm text-gray-600">
                           {section.course?.name || "No course assigned"}

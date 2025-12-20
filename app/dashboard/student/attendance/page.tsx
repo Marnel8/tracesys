@@ -313,6 +313,7 @@ export default function AttendancePage() {
 
   // Compute available session for clock-in based on time and operating hours
   // Always returns a session on operating days - restriction is handled in handleClockIn
+  // IMPORTANT: If there's no morning clock-in yet, any clock-in is treated as afternoon
   const availableSessionForClockIn = useMemo(() => {
     // If not an operating day, no session available
     if (!isOperatingDay) {
@@ -340,6 +341,14 @@ export default function AttendancePage() {
       return null;
     }
 
+    // NEW LOGIC: If there's no morning clock-in yet, treat any clock-in as afternoon
+    // This allows students to clock in early (e.g., 11 AM) as afternoon if they missed morning
+    const hasMorningClockIn = !!todayAttendance?.morningTimeIn;
+    if (!hasMorningClockIn) {
+      return "afternoon";
+    }
+
+    // If morning is already clocked in (and completed), determine session based on time
     // Determine session based on current time and operating hours
     // The restriction for second session is handled in handleClockIn
     if (currentSession) {
@@ -378,7 +387,7 @@ export default function AttendancePage() {
         return currentTimeMinutes < midPoint ? "morning" : "afternoon";
       }
     }
-    // Default to morning
+    // Default to morning (only reached if morning is already clocked in)
     return "morning";
   }, [
     todayAttendance,
@@ -1083,8 +1092,8 @@ export default function AttendancePage() {
       return;
     }
 
-    // Use currentSession as fallback if availableSessionForClockIn is null
-    // This ensures buttons are always enabled and session is determined by time
+    // Use availableSessionForClockIn (which returns "afternoon" if no morning clock-in exists)
+    // Fallback to currentSession only if availableSessionForClockIn is null
     const sessionToUse = availableSessionForClockIn || currentSession;
 
     if (!sessionToUse) {
