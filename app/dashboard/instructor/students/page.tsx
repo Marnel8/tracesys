@@ -150,8 +150,8 @@ export default function StudentsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSection, setSelectedSection] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
-  const [selectedAcademicYear, setSelectedAcademicYear] = useState("current");
-  const [selectedSemester, setSelectedSemester] = useState("current");
+  const [selectedAcademicYearSemester, setSelectedAcademicYearSemester] =
+    useState("all");
   const [showAllStudents, setShowAllStudents] = useState(false);
   const [hasMounted, setHasMounted] = useState(false);
 
@@ -172,6 +172,22 @@ export default function StudentsPage() {
   const { user } = useAuth();
   const teacherId =
     (user as any)?.user?.id ?? (user as any)?.data?.id ?? (user as any)?.id;
+
+  // Get instructor's program/department
+  const instructorProgram = useMemo(() => {
+    const userData = (user as any)?.user || user;
+    return userData?.program || "";
+  }, [user]);
+
+  // Check if instructor is from BSIT program
+  const isBSITProgram = useMemo(() => {
+    const program = instructorProgram?.toLowerCase() || "";
+    return (
+      program === "bsit" ||
+      program === "bachelor of science in information technology" ||
+      program.includes("information technology")
+    );
+  }, [instructorProgram]);
 
   const { data, isLoading, error, refetch } = useStudentsByTeacher(teacherId, {
     page: 1,
@@ -708,40 +724,63 @@ export default function StudentsPage() {
     return Array.from(semesters).sort() as string[];
   }, [normalizedStudents]);
 
-  // Determine current academic year and semester (most recent)
-  const currentAcademicYear = useMemo(() => {
-    return availableAcademicYears.length > 0 ? availableAcademicYears[0] : "";
-  }, [availableAcademicYears]);
+  // Create combined academic year and semester options
+  const academicYearSemesterOptions = useMemo(() => {
+    const options: string[] = ["all"];
 
-  const currentSemester = useMemo(() => {
-    // Get the most common semester for the current academic year, or first available
-    if (availableSemesters.length === 0) return "";
-
-    // If we have a current academic year, find the most common semester for that year
-    if (currentAcademicYear) {
-      const semesterCounts = new Map<string, number>();
-      normalizedStudents
-        .filter((s: any) => s.academicYear === currentAcademicYear)
-        .forEach((s: any) => {
-          if (s.semester) {
-            semesterCounts.set(
-              s.semester,
-              (semesterCounts.get(s.semester) || 0) + 1
-            );
-          }
-        });
-
-      if (semesterCounts.size > 0) {
-        const mostCommon = Array.from(semesterCounts.entries()).sort(
-          (a, b) => b[1] - a[1]
-        )[0][0];
-        return mostCommon;
+    // Get all unique combinations of academic year and semester
+    const combinations = new Set<string>();
+    normalizedStudents.forEach((student: any) => {
+      if (student.academicYear && student.semester) {
+        combinations.add(`${student.academicYear}|${student.semester}`);
       }
-    }
+    });
 
-    // Fallback to first available semester
-    return availableSemesters[0] || "";
-  }, [availableSemesters, currentAcademicYear, normalizedStudents]);
+    // Sort combinations: academic year descending, then semester
+    const sortedCombinations = Array.from(combinations).sort((a, b) => {
+      const [yearA, semA] = a.split("|");
+      const [yearB, semB] = b.split("|");
+
+      // Compare years first (descending)
+      if (yearA !== yearB) {
+        return yearB.localeCompare(yearA);
+      }
+
+      // Then compare semesters (1st before 2nd)
+      const semOrder: Record<string, number> = {
+        "1st Semester": 1,
+        "2nd Semester": 2,
+      };
+      return (semOrder[semA] || 999) - (semOrder[semB] || 999);
+    });
+
+    // Add formatted options
+    sortedCombinations.forEach((combo) => {
+      const [year, semester] = combo.split("|");
+      options.push(combo);
+    });
+
+    return options;
+  }, [normalizedStudents]);
+
+  // Set default filter based on program (only once when data is loaded)
+  const [defaultSet, setDefaultSet] = useState(false);
+  useEffect(() => {
+    if (hasMounted && academicYearSemesterOptions.length > 1 && !defaultSet) {
+      // Default academic year and semester based on program
+      const defaultYear = "2025-2026";
+      const defaultSemester = isBSITProgram ? "2nd Semester" : "1st Semester";
+      const defaultOption = `${defaultYear}|${defaultSemester}`;
+
+      // Check if default option exists, otherwise use "all"
+      if (academicYearSemesterOptions.includes(defaultOption)) {
+        setSelectedAcademicYearSemester(defaultOption);
+      } else {
+        setSelectedAcademicYearSemester("all");
+      }
+      setDefaultSet(true);
+    }
+  }, [hasMounted, isBSITProgram, academicYearSemesterOptions, defaultSet]);
 
   const filteredStudents = useMemo(() => {
     return normalizedStudents.filter((student: any) => {
@@ -755,29 +794,14 @@ export default function StudentsPage() {
       const matchesStatus =
         selectedStatus === "all" || student.status === selectedStatus;
 
-      // Academic year and semester filtering
-      let matchesAcademicYear = true;
-      let matchesSemester = true;
+      // Combined academic year and semester filtering
+      let matchesAcademicYearSemester = true;
 
-      if (!showAllStudents) {
-        // Determine which academic year to filter by
-        const filterAcademicYear =
-          selectedAcademicYear === "current"
-            ? currentAcademicYear
-            : selectedAcademicYear;
-
-        // Determine which semester to filter by
-        const filterSemester =
-          selectedSemester === "current" ? currentSemester : selectedSemester;
-
-        matchesAcademicYear =
-          filterAcademicYear === "all" ||
-          !filterAcademicYear ||
-          student.academicYear === filterAcademicYear;
-
-        matchesSemester =
-          filterSemester === "all" ||
-          !filterSemester ||
+      if (!showAllStudents && selectedAcademicYearSemester !== "all") {
+        const [filterYear, filterSemester] =
+          selectedAcademicYearSemester.split("|");
+        matchesAcademicYearSemester =
+          student.academicYear === filterYear &&
           student.semester === filterSemester;
       }
 
@@ -785,8 +809,7 @@ export default function StudentsPage() {
         matchesSearch &&
         matchesSection &&
         matchesStatus &&
-        matchesAcademicYear &&
-        matchesSemester
+        matchesAcademicYearSemester
       );
     });
   }, [
@@ -794,11 +817,8 @@ export default function StudentsPage() {
     searchTerm,
     selectedSection,
     selectedStatus,
-    selectedAcademicYear,
-    selectedSemester,
+    selectedAcademicYearSemester,
     showAllStudents,
-    currentAcademicYear,
-    currentSemester,
   ]);
 
   // Get student name for delete confirmation
@@ -981,43 +1001,25 @@ export default function StudentsPage() {
                   </SelectContent>
                 </Select>
                 <Select
-                  value={selectedAcademicYear}
-                  onValueChange={setSelectedAcademicYear}
+                  value={selectedAcademicYearSemester}
+                  onValueChange={setSelectedAcademicYearSemester}
                   disabled={showAllStudents}
                 >
-                  <SelectTrigger className="invitation-select-trigger w-full sm:w-44">
-                    <SelectValue placeholder="Academic Year" />
+                  <SelectTrigger className="invitation-select-trigger w-full sm:w-56">
+                    <SelectValue placeholder="Academic Year & Semester" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="current">
-                      Current ({currentAcademicYear || "N/A"})
-                    </SelectItem>
-                    <SelectItem value="all">All Years</SelectItem>
-                    {availableAcademicYears.map((year) => (
-                      <SelectItem key={year} value={year}>
-                        {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={selectedSemester}
-                  onValueChange={setSelectedSemester}
-                  disabled={showAllStudents}
-                >
-                  <SelectTrigger className="invitation-select-trigger w-full sm:w-40">
-                    <SelectValue placeholder="Semester" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="current">
-                      Current ({currentSemester || "N/A"})
-                    </SelectItem>
-                    <SelectItem value="all">All Semesters</SelectItem>
-                    {availableSemesters.map((semester) => (
-                      <SelectItem key={semester} value={semester}>
-                        {semester}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="all">All Academic Years</SelectItem>
+                    {academicYearSemesterOptions
+                      .filter((option) => option !== "all")
+                      .map((option) => {
+                        const [year, semester] = option.split("|");
+                        return (
+                          <SelectItem key={option} value={option}>
+                            {year} - {semester}
+                          </SelectItem>
+                        );
+                      })}
                   </SelectContent>
                 </Select>
                 <div className="flex items-center space-x-2 px-3 py-2 h-10 border rounded-md bg-white hover:bg-gray-50 transition-colors">
@@ -1234,8 +1236,7 @@ export default function StudentsPage() {
                       setSearchTerm("");
                       setSelectedSection("all");
                       setSelectedStatus("all");
-                      setSelectedAcademicYear("current");
-                      setSelectedSemester("current");
+                      setSelectedAcademicYearSemester("all");
                       setShowAllStudents(false);
                     }}
                   >

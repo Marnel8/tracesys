@@ -41,6 +41,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 
 // Helper function to calculate expected attendance days
 function calculateExpectedAttendanceDays(
@@ -173,6 +174,61 @@ export default function InstructorDashboard() {
   }, [attendanceData, requirementsData, reportsData, students]);
 
   const templatesCount = templatesResp?.requirementTemplates?.length ?? 0;
+
+  // Calculate sex distribution per section
+  const sexDistributionBySection = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        male: number;
+        female: number;
+        other: number;
+      }
+    >();
+
+    for (const student of students) {
+      const enrollment = student?.enrollments?.[0];
+      const section = enrollment?.section;
+      const sectionKey: string | undefined = section?.id;
+      if (!sectionKey) continue;
+
+      if (!map.has(sectionKey)) {
+        map.set(sectionKey, {
+          id: section.id,
+          name: section.name,
+          male: 0,
+          female: 0,
+          other: 0,
+        });
+      }
+
+      const bucket = map.get(sectionKey)!;
+      const gender = (student.gender || "").toLowerCase();
+      if (gender === "male") {
+        bucket.male += 1;
+      } else if (gender === "female") {
+        bucket.female += 1;
+      } else {
+        bucket.other += 1;
+      }
+    }
+
+    return Array.from(map.values()).map((section) => {
+      const data = [
+        { name: "Male", value: section.male },
+        { name: "Female", value: section.female },
+      ];
+      // Always include both Male and Female, even if one is 0, to show complete picture
+      return {
+        id: section.id,
+        name: section.name,
+        data,
+        total: section.male + section.female + section.other,
+      };
+    });
+  }, [students]);
 
   const sectionsAgg = useMemo(() => {
     const map = new Map<
@@ -1257,6 +1313,103 @@ export default function InstructorDashboard() {
               </AccordionContent>
             </AccordionItem>
           </Accordion>
+        </Card>
+
+        {/* Sex Distribution by Section */}
+        <Card className="border border-primary-200 shadow-sm">
+          <CardHeader>
+            <CardTitle>Sex Distribution by Section</CardTitle>
+            <CardDescription>
+              Male and Female student distribution per section
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {sexDistributionBySection.length === 0 ? (
+              <div className="py-8 text-center">
+                <p className="text-sm text-muted-foreground">
+                  No section data available
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {sexDistributionBySection.map((section) => {
+                  const COLORS = ["#3B82F6", "#EC4899"]; // Blue for Male, Pink for Female
+                  const hasData = section.total > 0;
+
+                  return (
+                    <div
+                      key={section.id}
+                      className="flex flex-col items-center space-y-4"
+                    >
+                      <h4 className="text-sm font-medium text-foreground">
+                        {section.name}
+                      </h4>
+                      {hasData ? (
+                        <>
+                          <ResponsiveContainer width="100%" height={200}>
+                            <PieChart>
+                              <Pie
+                                data={section.data}
+                                cx="50%"
+                                cy="50%"
+                                labelLine={false}
+                                label={({ name, percent, value }) =>
+                                  value > 0
+                                    ? `${name}: ${(percent * 100).toFixed(0)}%`
+                                    : ""
+                                }
+                                outerRadius={70}
+                                fill="#8884d8"
+                                dataKey="value"
+                              >
+                                {section.data.map((entry, index) => (
+                                  <Cell
+                                    key={`cell-${index}`}
+                                    fill={COLORS[index % COLORS.length]}
+                                  />
+                                ))}
+                              </Pie>
+                              <Tooltip
+                                formatter={(value: number) => [
+                                  value,
+                                  "Students",
+                                ]}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
+                          <div className="flex gap-4 text-xs text-muted-foreground">
+                            {section.data.map((item, index) => (
+                              <div
+                                key={item.name}
+                                className="flex items-center gap-1"
+                              >
+                                <div
+                                  className="h-3 w-3 rounded-full"
+                                  style={{
+                                    backgroundColor:
+                                      COLORS[index % COLORS.length],
+                                  }}
+                                />
+                                <span>
+                                  {item.name}: {item.value}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="py-8 text-center">
+                          <p className="text-xs text-muted-foreground">
+                            No students in this section
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
         </Card>
 
         {/* Recent Activity & Pending Items */}

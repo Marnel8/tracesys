@@ -224,7 +224,7 @@ export default function StudentDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <Card className="border-2 border-primary-400 shadow-lg bg-gradient-to-br from-primary-50 to-white">
           <CardHeader className="pb-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between">
               <CardTitle className="text-xl font-bold flex items-center gap-3">
                 <div className="p-2 bg-primary-100 rounded-lg">
                   <AlertCircle className="w-6 h-6 text-primary-700" />
@@ -235,7 +235,7 @@ export default function StudentDashboard() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-primary-700 hover:text-primary-800 hover:bg-primary-100 font-medium"
+                  className="text-primary-700 hover:text-primary-800 hover:bg-primary-100 font-medium border border-primary-200"
                 >
                   View All
                 </Button>
