@@ -1331,7 +1331,7 @@ export default function InstructorDashboard() {
                 </p>
               </div>
             ) : (
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-6 md:grid-cols-2">
                 {sexDistributionBySection.map((section) => {
                   const COLORS = ["#3B82F6", "#EC4899"]; // Blue for Male, Pink for Female
                   const hasData = section.total > 0;

@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useQueryClient } from "@tanstack/react-query";
@@ -236,47 +236,32 @@ function StudentOnboardingContent() {
                   <div className="grid gap-6 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="age">Age</Label>
-                      <Input
-                        id="age"
-                        type="number"
-                        min={20}
-                        max={80}
-                        inputMode="numeric"
-                        onKeyDown={(e) => {
-                          // Prevent non-numeric keys except backspace, delete, tab, escape, enter, and arrow keys
-                          if (
-                            !/[0-9]/.test(e.key) &&
-                            ![
-                              "Backspace",
-                              "Delete",
-                              "Tab",
-                              "Escape",
-                              "Enter",
-                              "ArrowLeft",
-                              "ArrowRight",
-                              "ArrowUp",
-                              "ArrowDown",
-                            ].includes(e.key) &&
-                            !(e.ctrlKey || e.metaKey) // Allow Ctrl/Cmd combinations
-                          ) {
-                            e.preventDefault();
-                          }
-                        }}
-                        onInput={(e) => {
-                          // Ensure value stays within bounds
-                          const target = e.target as HTMLInputElement;
-                          const value = parseInt(target.value, 10);
-                          if (target.value && !isNaN(value)) {
-                            if (value < 20) {
-                              target.value = "20";
-                            } else if (value > 80) {
-                              target.value = "80";
-                            }
-                          }
-                        }}
-                        {...profileForm.register("age", {
-                          valueAsNumber: true,
-                        })}
+                      <Controller
+                        control={profileForm.control}
+                        name="age"
+                        render={({ field }) => (
+                          <Input
+                            id="age"
+                            type="number"
+                            inputMode="numeric"
+                            step="1"
+                            min={20}
+                            max={80}
+                            value={field.value ?? ""}
+                            onBlur={field.onBlur}
+                            ref={field.ref}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (value === "" || /^\d+$/.test(value)) {
+                                const parsed =
+                                  value === ""
+                                    ? undefined
+                                    : parseInt(value, 10);
+                                field.onChange(parsed);
+                              }
+                            }}
+                          />
+                        )}
                       />
                       {profileForm.formState.errors.age && (
                         <p className="text-sm text-red-600">

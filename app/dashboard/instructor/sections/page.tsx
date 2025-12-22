@@ -266,30 +266,6 @@ export default function SectionsPage() {
     });
   };
 
-  // Empty state component
-  const EmptyState = () => (
-    <div className="text-center py-12">
-      <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-        <BookOpen className="w-12 h-12 text-gray-400" />
-      </div>
-      <h3 className="text-lg font-semibold text-gray-900 mb-2">
-        No sections yet
-      </h3>
-      <p className="text-gray-500 mb-6 max-w-md mx-auto">
-        {instructorDepartmentId
-          ? "No sections found in your department. Get started by creating your first section."
-          : "Get started by creating your first section. Sections help you organize students and track their progress."}
-      </p>
-      <Button
-        onClick={() => setIsCreateDialogOpen(true)}
-        className="bg-primary-500 hover:bg-primary-600"
-      >
-        <Plus className="w-4 h-4 mr-2" />
-        Create Your First Section
-      </Button>
-    </div>
-  );
-
   // Error state component
   const ErrorState = () => (
     <div className="text-center py-12">
@@ -756,9 +732,7 @@ export default function SectionsPage() {
         </div>
       ) : sectionsError ? (
         <ErrorState />
-      ) : sections.length === 0 ? (
-        <EmptyState />
-      ) : (
+      ) : sections.length === 0 ? null : (
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {sections.map((section) => (
             <Card

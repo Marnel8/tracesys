@@ -52,8 +52,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const response = await api.get("/user/me");
       setUser(response.data);
     } catch (err: any) {
-      // Don't set error for 401 - it just means user is not logged in
-      if (err.response?.status !== 401) {
+      // Don't set error for 401/404 - it just means user is not logged in or not found
+      const status = err.response?.status;
+      if (status !== 401 && status !== 404) {
         setError(err);
         console.error("[AuthProvider] Error fetching user:", err);
       }
