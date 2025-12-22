@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -92,12 +92,23 @@ function StudentOnboardingContent() {
     resolver: zodResolver(agencySchema),
   });
 
+  // Note: During onboarding, student may not have enrollment yet
+  // So we'll show all agencies, but this will be filtered once they have an enrollment
+  // Alternatively, we could fetch the student's full record with enrollment to get instructorId
   const { data: agenciesData, isLoading: agenciesLoading } = useAgencies(
     {
       status: "active",
     },
     { enabled: isAuthenticated }
   );
+
+  // For onboarding, we show all agencies since student may not have enrollment/instructor yet
+  // Once they complete enrollment, the profile page will filter by instructorId
+  const filteredAgencies = useMemo(() => {
+    if (!agenciesData?.agencies) return [];
+    // During onboarding, show all agencies since we may not have instructorId yet
+    return agenciesData.agencies;
+  }, [agenciesData?.agencies]);
 
   const completeOnboarding = async () => {
     await queryClient.invalidateQueries({ queryKey: ["user"] });
@@ -168,7 +179,7 @@ function StudentOnboardingContent() {
     }
   };
 
-  const selectedAgency = agenciesData?.agencies?.find(
+  const selectedAgency = filteredAgencies?.find(
     (a) => a.id === agencyForm.watch("agencyId")
   );
 
@@ -378,8 +389,12 @@ function StudentOnboardingContent() {
                             <SelectItem value="loading" disabled>
                               Loading...
                             </SelectItem>
+                          ) : filteredAgencies.length === 0 ? (
+                            <SelectItem value="no-agencies" disabled>
+                              No agencies available
+                            </SelectItem>
                           ) : (
-                            agenciesData?.agencies?.map((agency) => (
+                            filteredAgencies.map((agency) => (
                               <SelectItem key={agency.id} value={agency.id}>
                                 {agency.name}
                               </SelectItem>

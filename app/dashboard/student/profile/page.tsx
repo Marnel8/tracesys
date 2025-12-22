@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -241,11 +241,29 @@ export default function ProfilePage() {
   const agency = practicum?.agency;
   const supervisor = practicum?.supervisor;
 
+  // Get student's instructor ID from enrollment section to filter agencies
+  const instructorId = useMemo(() => {
+    // Get instructorId from the student's enrollment section
+    const section = currentEnrollment?.section;
+    return section?.instructorId || section?.instructor?.id || "";
+  }, [currentEnrollment]);
+
   // Fetch agencies for practicum form
   const { data: agenciesData } = useAgencies(
     { status: "active" },
     { enabled: isEditingPracticum }
   );
+
+  // Filter agencies by instructorId (agencies created by their instructor)
+  const filteredAgencies = useMemo(() => {
+    if (!agenciesData?.agencies) return [];
+    if (!instructorId) return []; // Don't show any agencies if instructor ID is not available
+
+    // Filter agencies that were created by the student's instructor
+    return agenciesData.agencies.filter((agency) => {
+      return agency.instructorId === instructorId;
+    });
+  }, [agenciesData?.agencies, instructorId]);
 
   // Practicum form setup
   const practicumForm = useForm<PracticumFormData>({
@@ -1455,7 +1473,7 @@ export default function ProfilePage() {
                           <SelectValue placeholder="Select agency" />
                         </SelectTrigger>
                         <SelectContent>
-                          {agenciesData?.agencies?.map((agency) => (
+                          {filteredAgencies?.map((agency) => (
                             <SelectItem key={agency.id} value={agency.id}>
                               {agency.name}
                             </SelectItem>

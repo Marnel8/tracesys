@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -57,6 +57,7 @@ import {
 import { toast } from "sonner";
 import { Agency } from "@/data/agencies";
 import { InstructorStatsCard } from "@/components/instructor-stats-card";
+import { useAuth } from "@/hooks/auth/useAuth";
 
 export default function AgenciesPage() {
   const router = useRouter();
@@ -70,6 +71,13 @@ export default function AgenciesPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [agencyToDelete, setAgencyToDelete] = useState<Agency | null>(null);
 
+  // Get current instructor's ID
+  const { user } = useAuth();
+  const instructorId = useMemo(() => {
+    const userData = (user as any)?.user || user;
+    return userData?.id || "";
+  }, [user]);
+
   // Fetch data
   const { data: agenciesData, isLoading } = useAgencies({
     search: searchTerm || undefined,
@@ -77,14 +85,40 @@ export default function AgenciesPage() {
     branchType: branchTypeFilter,
   });
 
+  // Filter agencies by instructorId and exclude archived agencies
+  const filteredAgencies = useMemo(() => {
+    if (!agenciesData?.agencies) return [];
+    if (!instructorId) return []; // Don't show any agencies if instructor ID is not available
+
+    // Filter agencies that were created by this instructor
+    // Archived agencies have isActive: false and should only appear in the archives page
+    // When statusFilter is "all", only show active agencies (exclude archived ones)
+    // When statusFilter is "active", only show active agencies
+    // When statusFilter is "inactive", show inactive agencies (isActive: false)
+    return agenciesData.agencies.filter((agency) => {
+      const matchesInstructor = agency.instructorId === instructorId;
+
+      // Apply status filter - when "all", default to active agencies only to exclude archived ones
+      if (statusFilter === "all" || statusFilter === "active") {
+        return matchesInstructor && agency.isActive === true;
+      } else if (statusFilter === "inactive") {
+        // For inactive filter, show agencies with isActive: false
+        // Note: This may include archived agencies, but archived agencies should primarily
+        // be accessed through the archives page
+        return matchesInstructor && agency.isActive === false;
+      }
+
+      return matchesInstructor;
+    });
+  }, [agenciesData?.agencies, instructorId, statusFilter]);
+
   const deleteAgency = useDeleteAgency();
   const toggleStatus = useToggleAgencyStatus();
 
-  const totalAgencies = agenciesData?.pagination.totalItems || 0;
-  const activeAgencies =
-    agenciesData?.agencies.filter((a) => a.isActive).length || 0;
+  const totalAgencies = filteredAgencies.length;
+  const activeAgencies = filteredAgencies.filter((a) => a.isActive).length || 0;
   const mainBranches =
-    agenciesData?.agencies.filter((a) => a.branchType === "Main").length || 0;
+    filteredAgencies.filter((a) => a.branchType === "Main").length || 0;
 
   const handleSearch = (value: string) => {
     setSearchTerm(value);
@@ -202,7 +236,7 @@ export default function AgenciesPage() {
 
       {/* Agencies Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {agenciesData?.agencies.map((agency) => (
+        {filteredAgencies.map((agency) => (
           <Card key={agency.id} className="hover:shadow-lg transition-shadow">
             <CardHeader className="pb-3">
               <div className="flex justify-between items-start">
@@ -322,7 +356,7 @@ export default function AgenciesPage() {
             <div className="flex items-center justify-center py-8">
               <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : agenciesData?.agencies.length === 0 ? (
+          ) : filteredAgencies.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-500">No agencies found</p>
               <Button
@@ -351,7 +385,7 @@ export default function AgenciesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {agenciesData?.agencies.map((agency) => (
+                  {filteredAgencies.map((agency) => (
                     <TableRow key={agency.id}>
                       <TableCell>
                         <div className="font-medium">{agency.name}</div>

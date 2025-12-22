@@ -16,6 +16,8 @@ export interface Agency {
 	latitude?: number;
 	longitude?: number;
 	isSchoolAffiliated?: boolean;
+	departmentId?: string;
+	instructorId?: string;
 	createdAt: string;
 	updatedAt: string;
 	supervisors?: Supervisor[];
