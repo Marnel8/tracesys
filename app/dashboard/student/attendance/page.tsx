@@ -341,11 +341,76 @@ export default function AttendancePage() {
       return null;
     }
 
-    // NEW LOGIC: If there's no morning clock-in yet, treat any clock-in as afternoon
-    // This allows students to clock in early (e.g., 11 AM) as afternoon if they missed morning
+    // If there's no morning clock-in yet, determine session based on current time
+    // Use lunch start time, operating hours midpoint, or 11:00 AM as boundary
     const hasMorningClockIn = !!todayAttendance?.morningTimeIn;
     if (!hasMorningClockIn) {
-      return "afternoon";
+      const now = new Date();
+      const currentTimeMinutes = now.getHours() * 60 + now.getMinutes();
+
+      // Default boundary: 11:00 AM (660 minutes)
+      const DEFAULT_MORNING_BOUNDARY = 11 * 60; // 11:00 AM
+
+      // Check if lunch start time is available (use as boundary)
+      const lunchStart = parseTimeToMinutes(agencyLunchStartTime);
+      if (lunchStart !== null) {
+        // Handle lunch break that might span midnight
+        const lunchEnd = parseTimeToMinutes(agencyLunchEndTime);
+        if (lunchEnd !== null && lunchEnd < lunchStart) {
+          // Lunch spans midnight - morning is between lunch end and lunch start
+          if (
+            currentTimeMinutes > lunchEnd &&
+            currentTimeMinutes < lunchStart
+          ) {
+            return "morning";
+          } else {
+            return "afternoon";
+          }
+        } else {
+          // Normal lunch break - morning is before lunch start
+          return currentTimeMinutes < lunchStart ? "morning" : "afternoon";
+        }
+      }
+
+      // Check if operating hours are available (use midpoint as boundary)
+      const opening = parseTimeToMinutes(agencyOpeningTime);
+      const closing = parseTimeToMinutes(agencyClosingTime);
+      if (opening !== null && closing !== null) {
+        // Handle case where operating hours span midnight
+        if (closing < opening) {
+          const totalMinutes = 24 * 60 - opening + closing;
+          const midPoint = opening + totalMinutes / 2;
+          if (midPoint >= 24 * 60) {
+            const adjustedMidPoint = midPoint - 24 * 60;
+            if (
+              currentTimeMinutes >= opening ||
+              currentTimeMinutes <= adjustedMidPoint
+            ) {
+              return "morning";
+            } else {
+              return "afternoon";
+            }
+          } else {
+            if (
+              currentTimeMinutes >= opening &&
+              currentTimeMinutes < midPoint
+            ) {
+              return "morning";
+            } else {
+              return "afternoon";
+            }
+          }
+        } else {
+          // Normal case: operating hours within same day
+          const midPoint = opening + (closing - opening) / 2;
+          return currentTimeMinutes < midPoint ? "morning" : "afternoon";
+        }
+      }
+
+      // Fallback: use 11:00 AM as default boundary
+      return currentTimeMinutes < DEFAULT_MORNING_BOUNDARY
+        ? "morning"
+        : "afternoon";
     }
 
     // If morning is already clocked in (and completed), determine session based on time
@@ -1495,14 +1560,24 @@ export default function AttendancePage() {
       return;
     }
 
-    // Check if regular sessions are complete
-    if (!areRegularSessionsComplete) {
-      toast({
-        variant: "destructive",
-        title: "Regular sessions required",
-        description:
-          "You must complete both morning and afternoon sessions before clocking in for overtime.",
-      });
+    // Check if overtime can be clocked in
+    const overtimeSession = availableOvertimeSessionForClockIn;
+    if (!overtimeSession) {
+      if (!areRegularSessionsComplete) {
+        toast({
+          variant: "destructive",
+          title: "Regular sessions required",
+          description:
+            "You must complete both morning and afternoon sessions before clocking in for overtime.",
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Overtime unavailable",
+          description:
+            "Overtime session is not available. It may already be in progress or completed.",
+        });
+      }
       return;
     }
 
@@ -1609,10 +1684,9 @@ export default function AttendancePage() {
       return;
     }
 
-    // Check if overtime is clocked in
-    // This would need to be checked from the backend response
-    // For now, we'll allow it if regular sessions are complete
-    if (!areRegularSessionsComplete) {
+    // Check if overtime is clocked in (has overtimeTimeIn but no overtimeTimeOut)
+    const overtimeSession = availableOvertimeSessionForClockOut;
+    if (!overtimeSession) {
       toast({
         variant: "destructive",
         title: "Overtime not started",
@@ -1999,7 +2073,6 @@ export default function AttendancePage() {
                             !location ||
                             isOvertimeClockingOut ||
                             clockOutMutation.isPending ||
-                            !areRegularSessionsComplete ||
                             !availableOvertimeSessionForClockOut
                           )
                         }
