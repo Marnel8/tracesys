@@ -190,7 +190,7 @@ export default function DepartmentsPage() {
             Manage your academic departments and track their progress
           </p>
         </div>
-        {/* <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button
               variant="outline"
@@ -271,7 +271,7 @@ export default function DepartmentsPage() {
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog> */}
+        </Dialog>
       </div>
 
       {/* Overview Stats */}
