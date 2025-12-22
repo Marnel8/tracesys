@@ -85,30 +85,29 @@ export default function AgenciesPage() {
     branchType: branchTypeFilter,
   });
 
-  // Filter agencies by instructorId and exclude archived agencies
+  // Filter agencies - server now handles instructorId and active status filtering
+  // Keep client-side filtering as a safety net
   const filteredAgencies = useMemo(() => {
     if (!agenciesData?.agencies) return [];
     if (!instructorId) return []; // Don't show any agencies if instructor ID is not available
 
-    // Filter agencies that were created by this instructor
-    // Archived agencies have isActive: false and should only appear in the archives page
-    // When statusFilter is "all", only show active agencies (exclude archived ones)
-    // When statusFilter is "active", only show active agencies
-    // When statusFilter is "inactive", show inactive agencies (isActive: false)
+    // Server-side filtering should handle instructorId, but keep client-side as safety
+    // Apply status filter on client-side as well
     return agenciesData.agencies.filter((agency) => {
+      // Safety check: only show agencies belonging to this instructor
       const matchesInstructor = agency.instructorId === instructorId;
+      if (!matchesInstructor) return false;
 
-      // Apply status filter - when "all", default to active agencies only to exclude archived ones
+      // Apply status filter
       if (statusFilter === "all" || statusFilter === "active") {
-        return matchesInstructor && agency.isActive === true;
+        // When "all" or "active", only show active agencies (server should already filter this)
+        return agency.isActive === true;
       } else if (statusFilter === "inactive") {
-        // For inactive filter, show agencies with isActive: false
-        // Note: This may include archived agencies, but archived agencies should primarily
-        // be accessed through the archives page
-        return matchesInstructor && agency.isActive === false;
+        // When "inactive", show inactive agencies (note: archived agencies also have isActive: false)
+        return agency.isActive === false;
       }
 
-      return matchesInstructor;
+      return true;
     });
   }, [agenciesData?.agencies, instructorId, statusFilter]);
 
