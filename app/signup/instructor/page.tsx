@@ -36,13 +36,11 @@ const instructorSignupSchema = z
     firstName: z.string().min(2, "First name must be at least 2 characters"),
     lastName: z.string().min(2, "Last name must be at least 2 characters"),
     middleName: z.string().optional(),
-    email: z
-      .string()
-      .email("Please enter a valid email address")
-      .refine(
-        (email) => email.endsWith("@omsc.edu.ph"),
-        "Email must end with @omsc.edu.ph"
-      ),
+    email: z.string().email("Please enter a valid email address"),
+    // .refine(
+    //   (email) => email.endsWith("@omsc.edu.ph"),
+    //   "Email must end with @omsc.edu.ph"
+    // ),
     phone: z.string().min(10, "Contact number must be at least 10 digits"),
     age: z
       .number({
