@@ -394,7 +394,7 @@ export default function InstructorSignupPage() {
                       htmlFor="gender"
                       className="text-gray-700 font-medium"
                     >
-                      Gender *
+                      Sex *
                     </Label>
                     <Controller
                       name="gender"
@@ -410,7 +410,9 @@ export default function InstructorSignupPage() {
                           <SelectContent>
                             <SelectItem value="male">Male</SelectItem>
                             <SelectItem value="female">Female</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
+                            <SelectItem value="other">
+                              Prefer not to say
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                       )}
