@@ -48,6 +48,7 @@ export interface RequirementTemplateFilters {
 	status?: "all" | "active" | "inactive";
 	page?: number;
 	limit?: number;
+	createdBy?: string;
 }
 
 export interface RequirementTemplateListResponse {
@@ -95,6 +96,7 @@ export const useRequirementTemplates = (
 			if (filters.status && filters.status !== "all") params.append("status", filters.status);
 			if (filters.page) params.append("page", String(filters.page));
 			if (filters.limit) params.append("limit", String(filters.limit));
+			if (filters.createdBy) params.append("createdBy", filters.createdBy);
 
 			const response = await api.get(`${TEMPLATE_ENDPOINTS.requirementTemplates}?${params.toString()}`);
 			const data = response.data.data as RequirementTemplateListResponse;

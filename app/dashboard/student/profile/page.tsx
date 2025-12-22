@@ -83,16 +83,25 @@ const profileSchema = z.object({
   firstName: z
     .string()
     .min(1, "First name is required")
-    .regex(/^[a-zA-Z\s'-]+$/, "First name can only contain letters, spaces, hyphens, and apostrophes"),
+    .regex(
+      /^[a-zA-Z\s'-]+$/,
+      "First name can only contain letters, spaces, hyphens, and apostrophes"
+    ),
   lastName: z
     .string()
     .min(1, "Last name is required")
-    .regex(/^[a-zA-Z\s'-]+$/, "Last name can only contain letters, spaces, hyphens, and apostrophes"),
+    .regex(
+      /^[a-zA-Z\s'-]+$/,
+      "Last name can only contain letters, spaces, hyphens, and apostrophes"
+    ),
   email: z.string().email("Please enter a valid email address"),
   phone: z
     .string()
     .min(1, "Phone number is required")
-    .regex(/^[\d\s\-()+]*$/, "Phone number can only contain numbers, spaces, hyphens, parentheses, and plus sign"),
+    .regex(
+      /^[\d\s\-()+]*$/,
+      "Phone number can only contain numbers, spaces, hyphens, parentheses, and plus sign"
+    ),
   gender: z.enum(["male", "female", "other"], {
     required_error: "Please select a gender",
   }),
@@ -482,7 +491,10 @@ export default function ProfilePage() {
 
       // Calculate total hours (use provided hours or sum of sessions)
       let hours = a.hours || 0;
-      if (hours === 0 && (morningHours > 0 || afternoonHours > 0 || overtimeHours > 0)) {
+      if (
+        hours === 0 &&
+        (morningHours > 0 || afternoonHours > 0 || overtimeHours > 0)
+      ) {
         hours = morningHours + afternoonHours + overtimeHours;
       } else if (hours === 0 && a.timeIn && a.timeOut) {
         // Fallback to legacy calculation
@@ -511,9 +523,7 @@ export default function ProfilePage() {
           ? formatTime(a.afternoonTimeOut)
           : null,
         afternoonHours: Number(afternoonHours.toFixed(2)),
-        overtimeTimeIn: a.overtimeTimeIn
-          ? formatTime(a.overtimeTimeIn)
-          : null,
+        overtimeTimeIn: a.overtimeTimeIn ? formatTime(a.overtimeTimeIn) : null,
         overtimeTimeOut: a.overtimeTimeOut
           ? formatTime(a.overtimeTimeOut)
           : null,
@@ -575,10 +585,11 @@ export default function ProfilePage() {
     reader.readAsDataURL(file);
   };
 
-
   const handleDownloadPDF = () => {
     // Use the same data preparation as print function
-    const studentName = `${watchProfile("firstName")} ${watchProfile("lastName")}`;
+    const studentName = `${watchProfile("firstName")} ${watchProfile(
+      "lastName"
+    )}`;
     const studentId = computedStudentId;
     const course = computedCourse;
     const company = computedCompany;
@@ -775,9 +786,7 @@ export default function ProfilePage() {
 								<tr>
 									<td>${record.date}</td>
 									<td>${record.day}</td>
-									<td style="background-color: #e0f2fe;">${
-                    record.morningTimeIn || "N/A"
-                  }</td>
+									<td style="background-color: #e0f2fe;">${record.morningTimeIn || "N/A"}</td>
 									<td style="background-color: #e0f2fe;">${record.morningTimeOut || "N/A"}</td>
 									<td style="background-color: #dcfce7;">${record.afternoonTimeIn || "N/A"}</td>
 									<td style="background-color: #dcfce7;">${record.afternoonTimeOut || "N/A"}</td>
@@ -834,14 +843,16 @@ export default function ProfilePage() {
     const printWindow = window.open("", "_blank");
     if (printWindow) {
       // Use computed values for accurate information
-      const studentName = `${profileData.firstName} ${profileData.lastName}`;
-      const studentId = computedStudentId || profileData.studentId;
-      const course = computedCourse || profileData.course;
-      const company = computedCompany || profileData.company;
-      const position = computedPosition || profileData.position;
-      const supervisor = computedSupervisor || profileData.supervisor;
-      const startDate = computedStartDate || profileData.startDate;
-      const endDate = computedEndDate || profileData.endDate;
+      const studentName = `${watchProfile("firstName")} ${watchProfile(
+        "lastName"
+      )}`;
+      const studentId = computedStudentId;
+      const course = computedCourse;
+      const company = computedCompany;
+      const position = computedPosition;
+      const supervisor = computedSupervisor;
+      const startDate = computedStartDate;
+      const endDate = computedEndDate;
 
       // Calculate total hours with 2 decimal places
       const totalHours = dtrRecords.reduce(
@@ -1028,9 +1039,7 @@ export default function ProfilePage() {
 								<tr>
 									<td>${record.date}</td>
 									<td>${record.day}</td>
-									<td style="background-color: #e0f2fe;">${
-                    record.morningTimeIn || "N/A"
-                  }</td>
+									<td style="background-color: #e0f2fe;">${record.morningTimeIn || "N/A"}</td>
 									<td style="background-color: #e0f2fe;">${record.morningTimeOut || "N/A"}</td>
 									<td style="background-color: #dcfce7;">${record.afternoonTimeIn || "N/A"}</td>
 									<td style="background-color: #dcfce7;">${record.afternoonTimeOut || "N/A"}</td>
@@ -1219,151 +1228,157 @@ export default function ProfilePage() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <form onSubmit={handleProfileSubmit(onProfileSubmit)} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <form
+                    onSubmit={handleProfileSubmit(onProfileSubmit)}
+                    className="space-y-4"
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="firstName">First Name</Label>
+                        <Input
+                          id="firstName"
+                          {...registerProfile("firstName")}
+                          disabled={!isEditing}
+                        />
+                        {isEditing && profileErrors.firstName && (
+                          <p className="text-xs text-red-600">
+                            {profileErrors.firstName.message}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="lastName">Last Name</Label>
+                        <Input
+                          id="lastName"
+                          {...registerProfile("lastName")}
+                          disabled={!isEditing}
+                        />
+                        {isEditing && profileErrors.lastName && (
+                          <p className="text-xs text-red-600">
+                            {profileErrors.lastName.message}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
                     <div className="space-y-2">
-                      <Label htmlFor="firstName">First Name</Label>
-                      <Input
-                        id="firstName"
-                        {...registerProfile("firstName")}
-                        disabled={!isEditing}
-                      />
-                      {isEditing && profileErrors.firstName && (
+                      <Label htmlFor="email">Email Address</Label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <Input
+                          id="email"
+                          type="email"
+                          {...registerProfile("email")}
+                          disabled={!isEditing}
+                          className="pl-10"
+                        />
+                      </div>
+                      {isEditing && profileErrors.email && (
                         <p className="text-xs text-red-600">
-                          {profileErrors.firstName.message}
+                          {profileErrors.email.message}
                         </p>
                       )}
                     </div>
+
                     <div className="space-y-2">
-                      <Label htmlFor="lastName">Last Name</Label>
-                      <Input
-                        id="lastName"
-                        {...registerProfile("lastName")}
-                        disabled={!isEditing}
-                      />
-                      {isEditing && profileErrors.lastName && (
+                      <Label htmlFor="phone">Phone Number</Label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <Input
+                          id="phone"
+                          {...registerProfile("phone")}
+                          disabled={!isEditing}
+                          className="pl-10"
+                        />
+                      </div>
+                      {isEditing && profileErrors.phone && (
                         <p className="text-xs text-red-600">
-                          {profileErrors.lastName.message}
+                          {profileErrors.phone.message}
                         </p>
                       )}
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email Address</Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <Input
-                        id="email"
-                        type="email"
-                        {...registerProfile("email")}
+                    <div className="space-y-2">
+                      <Label htmlFor="gender">Gender</Label>
+                      <Select
+                        value={watchProfile("gender") ?? undefined}
+                        onValueChange={(value) =>
+                          setProfileValue(
+                            "gender",
+                            value as "male" | "female" | "other"
+                          )
+                        }
                         disabled={!isEditing}
-                        className="pl-10"
-                      />
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select gender" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="male">Male</SelectItem>
+                          <SelectItem value="female">Female</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {isEditing && profileErrors.gender && (
+                        <p className="text-xs text-red-600">
+                          {profileErrors.gender.message}
+                        </p>
+                      )}
                     </div>
-                    {isEditing && profileErrors.email && (
-                      <p className="text-xs text-red-600">
-                        {profileErrors.email.message}
-                      </p>
-                    )}
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number</Label>
-                    <div className="relative">
-                      <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <Input
-                        id="phone"
-                        {...registerProfile("phone")}
-                        disabled={!isEditing}
-                        className="pl-10"
-                      />
+                    <div className="space-y-2">
+                      <Label htmlFor="address">Address</Label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                        <Textarea
+                          id="address"
+                          {...registerProfile("address")}
+                          disabled={!isEditing}
+                          className="pl-10 min-h-[80px] resize-none"
+                        />
+                      </div>
+                      {isEditing && profileErrors.address && (
+                        <p className="text-xs text-red-600">
+                          {profileErrors.address.message}
+                        </p>
+                      )}
                     </div>
-                    {isEditing && profileErrors.phone && (
-                      <p className="text-xs text-red-600">
-                        {profileErrors.phone.message}
-                      </p>
-                    )}
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="gender">Gender</Label>
-                    <Select
-                      value={watchProfile("gender") ?? undefined}
-                      onValueChange={(value) =>
-                        setProfileValue("gender", value as "male" | "female" | "other")
-                      }
-                      disabled={!isEditing}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select gender" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="male">Male</SelectItem>
-                        <SelectItem value="female">Female</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {isEditing && profileErrors.gender && (
-                      <p className="text-xs text-red-600">
-                        {profileErrors.gender.message}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="address">Address</Label>
-                    <div className="relative">
-                      <MapPin className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                    <div className="space-y-2">
+                      <Label htmlFor="bio">Bio</Label>
                       <Textarea
-                        id="address"
-                        {...registerProfile("address")}
+                        id="bio"
+                        {...registerProfile("bio")}
                         disabled={!isEditing}
-                        className="pl-10 min-h-[80px] resize-none"
+                        placeholder="Tell us about yourself..."
+                        className="min-h-[100px] resize-none"
                       />
-                    </div>
-                    {isEditing && profileErrors.address && (
-                      <p className="text-xs text-red-600">
-                        {profileErrors.address.message}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="bio">Bio</Label>
-                    <Textarea
-                      id="bio"
-                      {...registerProfile("bio")}
-                      disabled={!isEditing}
-                      placeholder="Tell us about yourself..."
-                      className="min-h-[100px] resize-none"
-                    />
-                    {isEditing && profileErrors.bio && (
-                      <p className="text-xs text-red-600">
-                        {profileErrors.bio.message}
-                      </p>
-                    )}
-                  </div>
-
-                  {isEditing && (
-                    <Button
-                      type="submit"
-                      disabled={editUserMutation.isPending}
-                      className="w-full"
-                    >
-                      {editUserMutation.isPending ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        <>
-                          <Save className="w-4 h-4 mr-2" />
-                          Save Changes
-                        </>
+                      {isEditing && profileErrors.bio && (
+                        <p className="text-xs text-red-600">
+                          {profileErrors.bio.message}
+                        </p>
                       )}
-                    </Button>
-                  )}
+                    </div>
+
+                    {isEditing && (
+                      <Button
+                        type="submit"
+                        disabled={editUserMutation.isPending}
+                        className="w-full"
+                      >
+                        {editUserMutation.isPending ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-4 h-4 mr-2" />
+                            Save Changes
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </form>
                 </CardContent>
               </Card>
@@ -1456,7 +1471,9 @@ export default function ProfilePage() {
 
                     {selectedAgencyId && (
                       <div className="space-y-2">
-                        <Label htmlFor="supervisorId">Supervisor (Optional)</Label>
+                        <Label htmlFor="supervisorId">
+                          Supervisor (Optional)
+                        </Label>
                         <Select
                           value={practicumForm.watch("supervisorId") || ""}
                           onValueChange={(value) =>
@@ -1483,7 +1500,10 @@ export default function ProfilePage() {
                         </Select>
                         {practicumForm.formState.errors.supervisorId && (
                           <p className="text-sm text-red-600">
-                            {practicumForm.formState.errors.supervisorId.message}
+                            {
+                              practicumForm.formState.errors.supervisorId
+                                .message
+                            }
                           </p>
                         )}
                       </div>
@@ -1592,8 +1612,8 @@ export default function ProfilePage() {
                   <div className="text-center py-8 text-gray-500">
                     <Building className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                     <p className="text-sm">
-                      No practicum details found. Click "Add Practicum" to set up
-                      your practicum information.
+                      No practicum details found. Click "Add Practicum" to set
+                      up your practicum information.
                     </p>
                   </div>
                 )}
@@ -1690,20 +1710,26 @@ export default function ProfilePage() {
                       />
                     </div>
                   </div>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    {/* Preset Range Selector */}
-                    <select
+                  <div className="flex items-center gap-2">
+                    <Filter className="w-4 h-4 text-gray-500" />
+                    <Select
                       value={presetRange}
-                      onChange={(e) => handlePresetRange(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 min-w-[140px]"
+                      onValueChange={(value: string) =>
+                        handlePresetRange(value)
+                      }
                     >
-                      <option value="all">All Time</option>
-                      <option value="last7days">Last 7 Days</option>
-                      <option value="last30days">Last 30 Days</option>
-                      <option value="thisMonth">This Month</option>
-                      <option value="lastMonth">Last Month</option>
-                      <option value="custom">Custom Range</option>
-                    </select>
+                      <SelectTrigger className="w-32 sm:w-40 text-sm">
+                        <SelectValue placeholder="Select range" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Time</SelectItem>
+                        <SelectItem value="last7days">Last 7 Days</SelectItem>
+                        <SelectItem value="last30days">Last 30 Days</SelectItem>
+                        <SelectItem value="thisMonth">This Month</SelectItem>
+                        <SelectItem value="lastMonth">Last Month</SelectItem>
+                        <SelectItem value="custom">Custom Range</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
@@ -2037,8 +2063,7 @@ export default function ProfilePage() {
                         )}
 
                         {/* Overtime Session */}
-                        {(record.overtimeTimeIn ||
-                          record.overtimeTimeOut) && (
+                        {(record.overtimeTimeIn || record.overtimeTimeOut) && (
                           <div className="pb-2 border-b border-gray-200">
                             <div className="text-xs font-semibold text-orange-700 mb-1">
                               Overtime Session

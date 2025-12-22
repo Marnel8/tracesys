@@ -5,7 +5,8 @@ export type ArchiveEntityType =
   | "section"
   | "requirement"
   | "report"
-  | "announcement";
+  | "announcement"
+  | "requirementTemplate";
 
 export interface ArchiveItemBase {
   id: string;

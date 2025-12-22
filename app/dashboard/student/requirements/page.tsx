@@ -44,12 +44,17 @@ export default function RequirementsPage() {
 
   const { user } = useAuth();
   const { data: studentData } = useStudent(user?.id || "");
+  const studentRecord: any = studentData?.data;
+  const mainSection = studentRecord?.enrollments?.[0]?.section;
+  const instructorId =
+    mainSection?.instructor?.id || mainSection?.instructorId || undefined;
   const { data: templatesData, isLoading: isLoadingTemplates } =
     useRequirementTemplates({
       page: 1,
       limit: 100,
       search: debouncedSearchTerm || undefined,
       status: "active",
+      createdBy: instructorId,
     });
   const { data: requirementsData, isLoading: isLoadingRequirements } =
     useRequirements({
@@ -57,10 +62,10 @@ export default function RequirementsPage() {
       limit: 100,
       search: debouncedSearchTerm || undefined,
       studentId: user?.id,
+      instructorId,
     });
 
   // Get student's agency affiliation status
-  const studentRecord: any = studentData?.data;
   const practicum = studentRecord?.practicums?.[0];
   const agency = practicum?.agency;
   const isSchoolAffiliated = agency?.isSchoolAffiliated || false;

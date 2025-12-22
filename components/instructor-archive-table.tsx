@@ -32,6 +32,7 @@ import { agencyKeys } from "@/hooks/agency/useAgency";
 import { courseKeys } from "@/hooks/course/useCourse";
 import { sectionKeys } from "@/hooks/section/useSection";
 import { announcementKeys } from "@/hooks/announcement/useAnnouncement";
+import { requirementKeys } from "@/hooks/requirement/useRequirement";
 import { cn } from "@/lib/utils";
 
 export interface ArchiveColumn<T = any> {
@@ -99,6 +100,9 @@ export function InstructorArchiveTable<T = any>({
         case "announcement":
           queryClient.invalidateQueries({ queryKey: announcementKeys.lists() });
           queryClient.invalidateQueries({ queryKey: announcementKeys.stats() });
+          break;
+        case "requirement":
+          queryClient.invalidateQueries({ queryKey: requirementKeys.all });
           break;
       }
       

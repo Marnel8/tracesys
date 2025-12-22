@@ -1,10 +1,94 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { InstructorArchiveTable } from "@/components/instructor-archive-table";
+import {
+  InstructorArchiveTable,
+  ArchiveColumn,
+} from "@/components/instructor-archive-table";
 import { ARCHIVE_ENTITY_CONFIG } from "@/lib/instructor-archives/config";
+import type {
+  ArchiveEntityType,
+  ArchiveItem,
+} from "@/lib/instructor-archives/types";
+
+function getColumnsForEntityType(
+  entityType: ArchiveEntityType
+): ArchiveColumn[] {
+  switch (entityType) {
+    case "requirement":
+      return [
+        {
+          id: "name",
+          header: "Requirement Title",
+          cell: (item) => item.name,
+        },
+        {
+          id: "student",
+          header: "Student",
+          cell: (item) => {
+            const raw = item.raw as any;
+            if (raw?.student) {
+              return (
+                `${raw.student.firstName || ""} ${
+                  raw.student.lastName || ""
+                }`.trim() ||
+                raw.student.email ||
+                "Unknown"
+              );
+            }
+            return item.meta?.studentName || "Unknown";
+          },
+        },
+        {
+          id: "status",
+          header: "Status",
+          cell: (item) => {
+            const raw = item.raw as any;
+            const status = raw?.status || item.meta?.status || "Unknown";
+            return <span className="capitalize">{status}</span>;
+          },
+        },
+        {
+          id: "deletedAt",
+          header: "Deleted At",
+          cell: (item) =>
+            new Date(item.deletedAt).toLocaleString(undefined, {
+              dateStyle: "medium",
+              timeStyle: "short",
+            }),
+        },
+        {
+          id: "deletedBy",
+          header: "Deleted By",
+          cell: (item) => item.deletedBy ?? "Unknown",
+        },
+      ];
+    default:
+      return [
+        {
+          id: "name",
+          header: "Name",
+          cell: (item) => item.name,
+        },
+        {
+          id: "deletedAt",
+          header: "Deleted At",
+          cell: (item) =>
+            new Date(item.deletedAt).toLocaleString(undefined, {
+              dateStyle: "medium",
+              timeStyle: "short",
+            }),
+        },
+        {
+          id: "deletedBy",
+          header: "Deleted By",
+          cell: (item) => item.deletedBy ?? "Unknown",
+        },
+      ];
+  }
+}
 
 export default function InstructorArchivesPage() {
   return (
@@ -46,27 +130,7 @@ export default function InstructorArchivesPage() {
             <TabsContent key={config.tabValue} value={config.tabValue}>
               <InstructorArchiveTable
                 entityType={config.type}
-                columns={[
-                  {
-                    id: "name",
-                    header: "Name",
-                    cell: (item) => item.name,
-                  },
-                  {
-                    id: "deletedAt",
-                    header: "Deleted At",
-                    cell: (item) =>
-                      new Date(item.deletedAt).toLocaleString(undefined, {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      }),
-                  },
-                  {
-                    id: "deletedBy",
-                    header: "Deleted By",
-                    cell: (item) => item.deletedBy ?? "Unknown",
-                  },
-                ]}
+                columns={getColumnsForEntityType(config.type)}
               />
             </TabsContent>
           ))}

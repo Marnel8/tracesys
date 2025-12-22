@@ -32,6 +32,14 @@ export const ARCHIVE_ENTITY_CONFIG: ArchiveEntityConfig[] = [
     label: "Announcements",
     tabValue: "announcements",
   },
+  {
+    type: "requirement",
+    label: "Requirements",
+    tabValue: "requirements",
+  },
+  {
+    type: "requirementTemplate",
+    label: "Requirement Templates",
+    tabValue: "requirement-templates",
+  },
 ];
-
-

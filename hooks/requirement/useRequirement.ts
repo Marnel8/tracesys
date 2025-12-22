@@ -89,6 +89,7 @@ export const useRequirements = (filters: {
 	studentId?: string;
 	practicumId?: string;
 	includePending?: boolean;
+	instructorId?: string;
 } = {}) => {
 	return useQuery({
 		queryKey: requirementKeys.list(filters),
@@ -101,6 +102,7 @@ export const useRequirements = (filters: {
 			if (filters.studentId) params.append("studentId", filters.studentId);
 			if (filters.practicumId) params.append("practicumId", filters.practicumId);
 			if (filters.includePending) params.append("includePending", "true");
+			if (filters.instructorId) params.append("instructorId", filters.instructorId);
 			const res = await api.get(`${ENDPOINTS.list}?${params.toString()}`);
 			return res.data.data as RequirementListResponse;
 		},

@@ -61,6 +61,7 @@ import {
   Clock,
   FileImage,
   File,
+  Trash2,
 } from "lucide-react";
 import {
   useApproveRequirement,
@@ -84,6 +85,8 @@ import {
   useUpdateAllowLoginWithoutRequirements,
 } from "@/hooks/auth/useAuth";
 import { toast } from "sonner";
+import { useSoftDelete } from "@/hooks/useSoftDelete";
+import { requirementKeys } from "@/hooks/requirement/useRequirement";
 
 const humanizeBytes = (bytes?: number | null) => {
   if (!bytes && bytes !== 0) return "-";
@@ -125,11 +128,19 @@ export default function RequirementsPage() {
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [requirementToDelete, setRequirementToDelete] = useState<any>(null);
   const queryClient = useQueryClient();
 
   const { user } = useAuth();
   const updateAllowLoginWithoutRequirements =
     useUpdateAllowLoginWithoutRequirements();
+
+  const { softDelete, softDeleteMutation } = useSoftDelete({
+    entityType: "requirement",
+    invalidateKeys: [[...requirementKeys.all]],
+    successMessage: "Requirement moved to Archives",
+  });
 
   // Use state to prevent hydration mismatch - start with false and sync after mount
   const [allowLoginWithoutRequirements, setAllowLoginWithoutRequirements] =
@@ -153,11 +164,14 @@ export default function RequirementsPage() {
     setPage(1);
   }, [selectedStatus, debouncedSearch]);
 
+  const instructorId = (user as any)?.id;
+
   const { data, refetch } = useRequirements({
     page,
     limit,
     status: selectedStatus as any,
     search: debouncedSearch || undefined,
+    instructorId,
   });
 
   // Refetch requirements when page becomes visible (e.g., after submitting from another tab)
@@ -182,26 +196,31 @@ export default function RequirementsPage() {
     page: 1,
     limit: 1,
     status: "all" as any,
+    instructorId,
   });
   const { data: submittedStats } = useRequirements({
     page: 1,
     limit: 1,
     status: "submitted" as any,
+    instructorId,
   });
   const { data: approvedStats } = useRequirements({
     page: 1,
     limit: 1,
     status: "approved" as any,
+    instructorId,
   });
   const { data: rejectedStats } = useRequirements({
     page: 1,
     limit: 1,
     status: "rejected" as any,
+    instructorId,
   });
   const { data: inProgressStats } = useRequirements({
     page: 1,
     limit: 1,
     status: "in-progress" as any,
+    instructorId,
   });
   const { data: templatesResp } = useRequirementTemplates({
     page: 1,
@@ -213,6 +232,7 @@ export default function RequirementsPage() {
     page: 1,
     limit: 10000, // High limit to get all requirements for counting
     status: "all" as any,
+    instructorId,
   });
   const templatesCount = templatesResp?.requirementTemplates?.length ?? 0;
   const submittedCount = submittedStats?.pagination.totalItems ?? 0;
@@ -307,6 +327,23 @@ export default function RequirementsPage() {
       );
     } catch (error: any) {
       toast.error(error.message || "Failed to update setting");
+    }
+  };
+
+  const handleDeleteClick = (requirement: any) => {
+    setRequirementToDelete(requirement);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!requirementToDelete) return;
+    try {
+      await softDelete(requirementToDelete.id);
+      setIsDeleteDialogOpen(false);
+      setRequirementToDelete(null);
+      refetch();
+    } catch (error) {
+      // Error is handled by the mutation hook
     }
   };
 
@@ -419,7 +456,6 @@ export default function RequirementsPage() {
         return "bg-gray-100 text-gray-800 capitalize";
     }
   };
-
 
   return (
     <div className="space-y-6">
@@ -681,6 +717,14 @@ export default function RequirementsPage() {
                                   </DropdownMenuItem>
                                 </>
                               )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => handleDeleteClick(req)}
+                                className="text-red-600"
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Archive
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -840,6 +884,55 @@ export default function RequirementsPage() {
         student={selectedStudent}
         createComment={createComment}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Archive Requirement</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to archive this requirement? It will be
+              moved to the archives and can be restored later if needed.
+            </DialogDescription>
+          </DialogHeader>
+          {requirementToDelete && (
+            <div className="space-y-2 py-4">
+              <div>
+                <Label className="text-sm font-medium">Requirement:</Label>
+                <p className="text-sm text-gray-600">
+                  {requirementToDelete.title}
+                </p>
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Student:</Label>
+                <p className="text-sm text-gray-600">
+                  {`${requirementToDelete.student?.firstName ?? ""} ${
+                    requirementToDelete.student?.lastName ?? ""
+                  }`.trim()}
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setRequirementToDelete(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={softDeleteMutation.isPending}
+            >
+              {softDeleteMutation.isPending ? "Archiving..." : "Archive"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

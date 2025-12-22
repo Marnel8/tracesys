@@ -33,6 +33,8 @@ const ARCHIVE_ENDPOINTS = {
         return "/reports/archives";
       case "announcement":
         return "/announcement/archives";
+      case "requirementTemplate":
+        return "/requirement-template/archives";
       default:
         return `/${type}/archives`;
     }
@@ -53,6 +55,8 @@ const ARCHIVE_ENDPOINTS = {
         return `/reports/${id}/restore`;
       case "announcement":
         return `/announcement/${id}/restore`;
+      case "requirementTemplate":
+        return `/requirement-template/${id}/restore`;
       default:
         return `/${type}/${id}/restore`;
     }
@@ -73,6 +77,8 @@ const ARCHIVE_ENDPOINTS = {
         return `/reports/${id}/hard-delete`;
       case "announcement":
         return `/announcement/${id}/hard-delete`;
+      case "requirementTemplate":
+        return `/requirement-template/${id}/hard-delete`;
       default:
         return `/${type}/${id}/hard-delete`;
     }
@@ -82,6 +88,12 @@ const ARCHIVE_ENDPOINTS = {
       case "student":
         // Use the existing soft-delete (deactivate) endpoint.
         return `/student/${id}`;
+      case "requirement":
+        // Requirements use explicit archive endpoint under /requirements
+        return `/requirements/${id}/archive`;
+      case "requirementTemplate":
+        // Requirement templates use explicit archive endpoint
+        return `/requirement-template/${id}/archive`;
       default:
         // Generic pattern for future soft-delete endpoints.
         return `/${type}/${id}/archive`;

@@ -69,7 +69,6 @@ import {
   useRequirementTemplates,
   useCreateRequirementTemplate,
   useUpdateRequirementTemplate,
-  useDeleteRequirementTemplate,
   useToggleRequirementTemplateStatus,
 } from "@/hooks/requirement-template";
 import type {
@@ -77,6 +76,10 @@ import type {
   RequirementCategory,
   RequirementPriority,
 } from "@/hooks/requirement-template/useRequirementTemplate";
+
+import { useAuth } from "@/hooks/auth/useAuth";
+import { useSoftDelete } from "@/hooks/useSoftDelete";
+import { requirementTemplateKeys } from "@/hooks/requirement-template/useRequirementTemplate";
 
 // Use API types to ensure alignment with server response
 type RequirementTemplate = APIRequirementTemplate;
@@ -99,7 +102,16 @@ export default function RequirementTemplatesPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
-  const { data, isLoading } = useRequirementTemplates({ page, limit });
+  const { user } = useAuth();
+  const instructorId = (user as any)?.id || "";
+
+  const { data, isLoading } = useRequirementTemplates({
+    page,
+    limit,
+    createdBy: instructorId,
+    // Only show active (non-archived) templates in this table
+    status: "active",
+  });
   const templates =
     (data?.requirementTemplates as RequirementTemplate[] | undefined) || [];
   const pagination = data?.pagination;
@@ -108,6 +120,9 @@ export default function RequirementTemplatesPage() {
   const { data: allTemplatesData } = useRequirementTemplates({
     page: 1,
     limit: 1000,
+    createdBy: instructorId,
+    // Stats should also be based only on active templates
+    status: "active",
   });
   const allTemplates =
     (allTemplatesData?.requirementTemplates as
@@ -116,8 +131,13 @@ export default function RequirementTemplatesPage() {
 
   const createTemplate = useCreateRequirementTemplate();
   const updateTemplate = useUpdateRequirementTemplate();
-  const deleteTemplate = useDeleteRequirementTemplate();
   const toggleTemplateStatus = useToggleRequirementTemplateStatus();
+
+  const { softDelete: archiveTemplate } = useSoftDelete({
+    entityType: "requirementTemplate",
+    invalidateKeys: [[...requirementTemplateKeys.all]],
+    successMessage: "Requirement template moved to Archives",
+  });
 
   const [newTemplateFile, setNewTemplateFile] = useState<File | null>(null);
   const [editTemplateFile, setEditTemplateFile] = useState<File | null>(null);
@@ -197,8 +217,8 @@ export default function RequirementTemplatesPage() {
     );
   };
 
-  const handleDeleteTemplate = (id: string) => {
-    deleteTemplate.mutate(id);
+  const handleDeleteTemplate = async (id: string) => {
+    await archiveTemplate(id);
   };
 
   const handleToggleActive = (template: RequirementTemplate) => {
