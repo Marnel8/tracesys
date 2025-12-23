@@ -111,8 +111,7 @@ export default function CoursesPage() {
   const toggleStatus = useToggleCourseStatus();
   const createCourse = useCreateCourse();
   const totalCourses = filteredCourses.length;
-  const activeCourses =
-    filteredCourses.filter((c) => c.isActive).length || 0;
+  const activeCourses = filteredCourses.filter((c) => c.isActive).length || 0;
   const totalSections =
     filteredCourses.reduce(
       (total, course) => total + (course.sections?.length || 0),
@@ -205,7 +204,7 @@ export default function CoursesPage() {
             Manage your academic courses and track their progress
           </p>
         </div>
-        {/* <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button
               variant="outline"
@@ -294,7 +293,7 @@ export default function CoursesPage() {
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog> */}
+        </Dialog>
       </div>
 
       {/* Overview Stats */}
