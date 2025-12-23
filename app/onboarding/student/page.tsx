@@ -70,12 +70,19 @@ type AgencyFormData = z.infer<typeof agencySchema>;
 function StudentOnboardingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, isLoading: isUserLoading } = useAuth();
+  const {
+    user,
+    isLoading: isUserLoading,
+    error: authError,
+    refetch: refetchUser,
+  } = useAuth();
   const isAuthenticated = !!user;
   const queryClient = useQueryClient();
   const currentStep = parseInt(searchParams.get("step") || "1", 10);
   const [step, setStep] = useState(currentStep);
   const [loading, setLoading] = useState(false);
+  const [authRetryCount, setAuthRetryCount] = useState(0);
+  const [showAuthError, setShowAuthError] = useState(false);
 
   const updateStep = (newStep: number) => {
     setStep(newStep);
@@ -92,9 +99,8 @@ function StudentOnboardingContent() {
     resolver: zodResolver(agencySchema),
   });
 
-  // Note: During onboarding, student may not have enrollment yet
-  // So we'll show all agencies, but this will be filtered once they have an enrollment
-  // Alternatively, we could fetch the student's full record with enrollment to get instructorId
+  // Fetch agencies - backend will automatically filter by the student's instructor
+  // (from their enrollment section) if the user is a student
   const { data: agenciesData, isLoading: agenciesLoading } = useAgencies(
     {
       status: "active",
@@ -102,11 +108,10 @@ function StudentOnboardingContent() {
     { enabled: isAuthenticated }
   );
 
-  // For onboarding, we show all agencies since student may not have enrollment/instructor yet
-  // Once they complete enrollment, the profile page will filter by instructorId
+  // Agencies are already filtered by the backend based on the student's instructor
+  // (from their enrollment section)
   const filteredAgencies = useMemo(() => {
     if (!agenciesData?.agencies) return [];
-    // During onboarding, show all agencies since we may not have instructorId yet
     return agenciesData.agencies;
   }, [agenciesData?.agencies]);
 
@@ -191,17 +196,134 @@ function StudentOnboardingContent() {
     }
   }, [searchParams, step]);
 
+  // Retry authentication with delay to allow cookies to sync after OAuth redirect
   useEffect(() => {
     if (isUserLoading) return;
-    if (!user) {
-      router.replace("/login/student");
+
+    // Check if error is a 401 (authentication error)
+    // The error from useAuth is an Error object, so we check the message
+    const errorMessage = authError?.message || "";
+    const errorName = (authError as any)?.name || "";
+    const isAuthError =
+      authError &&
+      (errorName === "UnauthorizedError" ||
+        errorMessage.includes("Unauthorized") ||
+        errorMessage.includes("login") ||
+        errorMessage.includes("401") ||
+        errorMessage.includes("Please login") ||
+        errorMessage.includes("Please login to access"));
+
+    // If we have an auth error and haven't retried yet, wait a bit and retry
+    if (isAuthError && !user && authRetryCount < 3) {
+      const delay = authRetryCount === 0 ? 500 : 1000 * authRetryCount; // First retry after 500ms, then 1s, 2s
+      const timer = setTimeout(async () => {
+        console.log(
+          `[Onboarding] Retrying authentication (attempt ${
+            authRetryCount + 1
+          }/3)...`
+        );
+        setAuthRetryCount((prev) => prev + 1);
+        try {
+          await refetchUser();
+        } catch (err) {
+          console.error("[Onboarding] Auth retry failed:", err);
+        }
+      }, delay);
+
+      return () => clearTimeout(timer);
     }
-  }, [isUserLoading, user, router]);
+
+    // If we've exhausted retries or have a persistent error, show error
+    if (isAuthError && !user && authRetryCount >= 3) {
+      setShowAuthError(true);
+    }
+
+    // If no user after retries and not an auth error, redirect to login immediately
+    if (!user && !isUserLoading && !isAuthError) {
+      router.replace("/login/student?redirect=/onboarding/student");
+    }
+  }, [isUserLoading, user, authError, authRetryCount, refetchUser, router]);
 
   const firstName =
     (user as any)?.firstName || (user as any)?.name?.split(" ")[0] || "there";
 
-  if (isUserLoading || !user) {
+  // Show loading state while checking authentication
+  if (isUserLoading || (!user && authRetryCount < 3)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+          <p className="text-sm text-muted-foreground">
+            {authRetryCount > 0
+              ? `Connecting... (${authRetryCount}/3)`
+              : "Loading your profile..."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state if authentication failed after retries
+  if (showAuthError || (authError && !user && authRetryCount >= 3)) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader className="text-center">
+            <div className="flex justify-center mb-4">
+              <div className="h-12 w-12 rounded-full bg-yellow-100 flex items-center justify-center">
+                <span className="text-2xl text-yellow-600">!</span>
+              </div>
+            </div>
+            <CardTitle>Sign-in Error</CardTitle>
+            <CardDescription>
+              Something went wrong while signing you in. Please try again.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground text-center">
+              This might happen if your session expired or cookies couldn't be
+              set properly.
+            </p>
+            <div className="flex flex-col gap-3">
+              <Button
+                onClick={async () => {
+                  setAuthRetryCount(0);
+                  setShowAuthError(false);
+                  await refetchUser();
+                }}
+                className="w-full"
+              >
+                Try Again
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  router.push("/login/student?redirect=/onboarding/student")
+                }
+                className="w-full"
+              >
+                Back to Sign-in Options
+              </Button>
+            </div>
+            <div className="text-center pt-4 border-t">
+              <p className="text-xs text-muted-foreground">
+                Need help? Email{" "}
+                <a
+                  href="mailto:tracesys2025@gmail.com"
+                  className="text-primary hover:underline"
+                >
+                  tracesys2025@gmail.com
+                </a>
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // If no user and not loading, redirect to login
+  if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin" />
