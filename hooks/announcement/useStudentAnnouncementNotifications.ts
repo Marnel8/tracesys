@@ -75,18 +75,24 @@ function saveLastCheckTime(studentId?: string): void {
 /**
  * Hook for managing student announcement notifications
  * Tracks read/unread status client-side using localStorage
+ * Only shows announcements from the student's instructor
  */
-export function useStudentAnnouncementNotifications(studentId?: string) {
+export function useStudentAnnouncementNotifications(
+  studentId?: string,
+  instructorId?: string
+) {
   // Fetch published announcements for the student (only when studentId exists)
+  // Filter by instructorId to only show announcements from their instructor
   const { data: announcementsData, isLoading, error } = useAnnouncements(
     {
       status: "Published",
       userId: studentId,
+      authorId: instructorId, // Filter by instructor who created the announcement
       page: 1,
       limit: 20, // Get recent announcements
     },
     {
-      enabled: !!studentId, // Only fetch when studentId is provided
+      enabled: !!studentId && !!instructorId, // Only fetch when both studentId and instructorId are provided
       refetchOnWindowFocus: true, // Refetch when window regains focus
       refetchInterval: 30000, // Refetch every 30 seconds to check for new announcements
     }

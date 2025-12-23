@@ -75,17 +75,23 @@ function saveLastTemplateCheckTime(studentId?: string): void {
 /**
  * Hook for managing student template notifications
  * Tracks read/unread status client-side using localStorage
+ * Only shows templates from the student's instructor
  */
-export function useStudentTemplateNotifications(studentId?: string) {
+export function useStudentTemplateNotifications(
+  studentId?: string,
+  instructorId?: string
+) {
   // Fetch active templates for the student (only when studentId exists)
+  // Filter by instructorId to only show templates created by their instructor
   const { data: templatesData, isLoading, error } = useRequirementTemplates(
     {
       status: "active",
+      createdBy: instructorId, // Filter by instructor who created the template
       page: 1,
       limit: 20, // Get recent templates
     },
     {
-      enabled: !!studentId, // Only fetch when studentId is provided
+      enabled: !!studentId && !!instructorId, // Only fetch when both studentId and instructorId are provided
       refetchOnWindowFocus: true, // Refetch when window regains focus
       refetchInterval: 30000, // Refetch every 30 seconds to check for new templates
     }
