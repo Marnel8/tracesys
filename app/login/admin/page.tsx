@@ -240,42 +240,36 @@ function LoginForm() {
             </form>
 
             {/* Seeder Button */}
-            {(process.env.NODE_ENV === "development" ||
-              process.env.NEXT_PUBLIC_ENABLE_ADMIN_SEEDER === "true") && (
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-secondary-50 px-2 text-muted-foreground">
-                    Development Tools
-                  </span>
-                </div>
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
               </div>
-            )}
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-secondary-50 px-2 text-muted-foreground">
+                  Admin Tools
+                </span>
+              </div>
+            </div>
 
-            {(process.env.NODE_ENV === "development" ||
-              process.env.NEXT_PUBLIC_ENABLE_ADMIN_SEEDER === "true") && (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full border border-amber-300 text-amber-700 bg-amber-50 transition-all duration-300 hover:border-amber-400 hover:bg-amber-50/50"
-                onClick={handleSeedAdmin}
-                disabled={isSeeding}
-              >
-                {isSeeding ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating Admin Account...
-                  </>
-                ) : (
-                  <>
-                    <Shield className="mr-2 h-4 w-4" />
-                    Seed Admin Account
-                  </>
-                )}
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full border border-amber-300 text-amber-700 bg-amber-50 transition-all duration-300 hover:border-amber-400 hover:bg-amber-50/50"
+              onClick={handleSeedAdmin}
+              disabled={isSeeding}
+            >
+              {isSeeding ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating Admin Account...
+                </>
+              ) : (
+                <>
+                  <Shield className="mr-2 h-4 w-4" />
+                  Seed Admin Account
+                </>
+              )}
+            </Button>
 
             <div className="text-center space-y-2">
               <Link
