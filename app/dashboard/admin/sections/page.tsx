@@ -156,6 +156,9 @@ export default function AdminSectionsPage() {
   };
 
   const getCourseOptions = () => {
+    if (!courses || !Array.isArray(courses)) {
+      return [];
+    }
     return courses.map((course) => ({
       value: course.id,
       label: course.name,
