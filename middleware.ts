@@ -4,10 +4,12 @@ import type { NextRequest } from "next/server";
 // Define route groups
 const INSTRUCTOR_PROTECTED_PREFIX = "/dashboard/instructor";
 const STUDENT_PROTECTED_PREFIX = "/dashboard/student";
+const ADMIN_PROTECTED_PREFIX = "/dashboard/admin";
 
 const AUTH_ROUTES = [
   "/login/instructor",
   "/login/student",
+  "/login/admin",
   "/signup/instructor",
   "/select-role",
 ];
@@ -44,6 +46,7 @@ export async function middleware(request: NextRequest) {
     INSTRUCTOR_PROTECTED_PREFIX
   );
   const isStudentProtected = pathname.startsWith(STUDENT_PROTECTED_PREFIX);
+  const isAdminProtected = pathname.startsWith(ADMIN_PROTECTED_PREFIX);
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname.startsWith(route));
   const isOnboardingRoute = pathname.startsWith("/onboarding");
   const isInvitationRoute = pathname.startsWith("/invitation");
@@ -356,15 +359,17 @@ export async function middleware(request: NextRequest) {
               response.cookies.delete("access_token");
               response.cookies.delete("refresh_token");
 
-              // If on protected route, redirect to login
-              if (isInstructorProtected || isStudentProtected) {
-                const loginTarget = isInstructorProtected
-                  ? "/login/instructor"
-                  : "/login/student";
-                const url = request.nextUrl.clone();
-                url.pathname = loginTarget;
-                return NextResponse.redirect(url);
-              }
+          // If on protected route, redirect to login
+          if (isInstructorProtected || isStudentProtected || isAdminProtected) {
+            const loginTarget = isInstructorProtected
+              ? "/login/instructor"
+              : isAdminProtected
+              ? "/login/admin"
+              : "/login/student";
+            const url = request.nextUrl.clone();
+            url.pathname = loginTarget;
+            return NextResponse.redirect(url);
+          }
               return response;
             }
 
@@ -454,9 +459,11 @@ export async function middleware(request: NextRequest) {
           response.cookies.delete("refresh_token");
 
           // If on protected route, redirect to login
-          if (isInstructorProtected || isStudentProtected) {
+          if (isInstructorProtected || isStudentProtected || isAdminProtected) {
             const loginTarget = isInstructorProtected
               ? "/login/instructor"
+              : isAdminProtected
+              ? "/login/admin"
               : "/login/student";
             const url = request.nextUrl.clone();
             url.pathname = loginTarget;
@@ -503,9 +510,11 @@ export async function middleware(request: NextRequest) {
           response.cookies.delete("access_token");
           response.cookies.delete("refresh_token");
 
-          if (isInstructorProtected || isStudentProtected) {
+          if (isInstructorProtected || isStudentProtected || isAdminProtected) {
             const loginTarget = isInstructorProtected
               ? "/login/instructor"
+              : isAdminProtected
+              ? "/login/admin"
               : "/login/student";
             const url = request.nextUrl.clone();
             url.pathname = loginTarget;
@@ -576,9 +585,11 @@ export async function middleware(request: NextRequest) {
         );
         // Network errors should not delete cookies - the token might still be valid
         // BUT: If we have no token at all, redirect to login
-        if (!accessToken && (isInstructorProtected || isStudentProtected)) {
+        if (!accessToken && (isInstructorProtected || isStudentProtected || isAdminProtected)) {
           const loginTarget = isInstructorProtected
             ? "/login/instructor"
+            : isAdminProtected
+            ? "/login/admin"
             : "/login/student";
           const url = request.nextUrl.clone();
           url.pathname = loginTarget;
@@ -596,9 +607,11 @@ export async function middleware(request: NextRequest) {
       // For other errors, also preserve cookies and let client handle it
       // Only delete cookies if we're absolutely certain they're invalid
       // BUT: If we have no token at all, redirect to login
-      if (!accessToken && (isInstructorProtected || isStudentProtected)) {
+      if (!accessToken && (isInstructorProtected || isStudentProtected || isAdminProtected)) {
         const loginTarget = isInstructorProtected
           ? "/login/instructor"
+          : isAdminProtected
+          ? "/login/admin"
           : "/login/student";
         const url = request.nextUrl.clone();
         url.pathname = loginTarget;
@@ -623,7 +636,7 @@ export async function middleware(request: NextRequest) {
   // BUT: For fresh logins, be more lenient - allow access if we have a token
   // even if we couldn't fetch role yet (cookies might still be syncing)
   const hasValidRole =
-    sessionRole === "instructor" || sessionRole === "student";
+    sessionRole === "instructor" || sessionRole === "student" || sessionRole === "admin";
   const isAuthenticated = !!accessToken && hasValidRole;
 
   // For fresh logins, if we have a token but couldn't verify role yet,
@@ -634,7 +647,7 @@ export async function middleware(request: NextRequest) {
     !!accessToken && // Must have token
     (isFreshLogin || isImmediatePostLogin) &&
     hasTokenButNoRole &&
-    (isInstructorProtected || isStudentProtected);
+    (isInstructorProtected || isStudentProtected || isAdminProtected);
 
   // IMPORTANT: In cross-domain scenarios, cookies may exist on the API domain
   // but not be readable by this middleware. If we're on a protected route
@@ -659,15 +672,21 @@ export async function middleware(request: NextRequest) {
   }
 
   // Enforce role-based dashboard access when role info is available
-  if (sessionRole === "student" && isInstructorProtected) {
+  if (sessionRole === "student" && (isInstructorProtected || isAdminProtected)) {
     const url = request.nextUrl.clone();
     url.pathname = STUDENT_PROTECTED_PREFIX;
     return NextResponse.redirect(url);
   }
 
-  if (sessionRole === "instructor" && isStudentProtected) {
+  if (sessionRole === "instructor" && (isStudentProtected || isAdminProtected)) {
     const url = request.nextUrl.clone();
     url.pathname = INSTRUCTOR_PROTECTED_PREFIX;
+    return NextResponse.redirect(url);
+  }
+
+  if (sessionRole === "admin" && (isInstructorProtected || isStudentProtected)) {
+    const url = request.nextUrl.clone();
+    url.pathname = ADMIN_PROTECTED_PREFIX;
     return NextResponse.redirect(url);
   }
 
@@ -684,12 +703,14 @@ export async function middleware(request: NextRequest) {
   // Only redirect to login if we're certain the user is not authenticated
   // In cross-domain scenarios, cookies may exist but not be readable here
   // So we should be lenient and allow the request to proceed - client-side will handle auth
-  if (!isAuthenticated && (isInstructorProtected || isStudentProtected)) {
+  if (!isAuthenticated && (isInstructorProtected || isStudentProtected || isAdminProtected)) {
     // If we have no token at all AND it's not a fresh login, redirect to login
     // But if it's a fresh login or we're not certain, allow the request to proceed
     if (!accessToken && !isFreshLogin && !isImmediatePostLogin) {
       const loginTarget = isInstructorProtected
         ? "/login/instructor"
+        : isAdminProtected
+        ? "/login/admin"
         : "/login/student";
       const url = request.nextUrl.clone();
       url.pathname = loginTarget;
@@ -716,10 +737,12 @@ export async function middleware(request: NextRequest) {
   }
 
   // Check if authenticated user needs onboarding before allowing dashboard access
+  // Admins don't need onboarding
   if (
     isAuthenticated &&
     needsOnboarding &&
-    (isInstructorProtected || isStudentProtected)
+    (isInstructorProtected || isStudentProtected) &&
+    sessionRole !== "admin"
   ) {
     const onboardingTarget =
       sessionRole === "instructor"
@@ -756,6 +779,8 @@ export async function middleware(request: NextRequest) {
       redirectPath = INSTRUCTOR_PROTECTED_PREFIX;
     } else if (sessionRole === "student") {
       redirectPath = STUDENT_PROTECTED_PREFIX;
+    } else if (sessionRole === "admin") {
+      redirectPath = ADMIN_PROTECTED_PREFIX;
     } else {
       // If we have token/session but no valid role, don't redirect from /select-role
       // Allow user to select their role
@@ -764,7 +789,10 @@ export async function middleware(request: NextRequest) {
       }
       // For other auth routes, use pathname heuristic as fallback
       const toInstructor = pathname.includes("/instructor");
-      redirectPath = toInstructor
+      const toAdmin = pathname.includes("/admin");
+      redirectPath = toAdmin
+        ? ADMIN_PROTECTED_PREFIX
+        : toInstructor
         ? INSTRUCTOR_PROTECTED_PREFIX
         : STUDENT_PROTECTED_PREFIX;
     }

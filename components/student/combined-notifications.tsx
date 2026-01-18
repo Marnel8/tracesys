@@ -17,7 +17,6 @@ import { useStudentTemplateNotifications } from "@/hooks/requirement-template/us
 import { useStudentRequirementCommentNotifications } from "@/hooks/requirement/useStudentRequirementCommentNotifications";
 import { useStudentReportViewNotifications } from "@/hooks/report/useStudentReportViewNotifications";
 import { useAuth } from "@/hooks/auth/useAuth";
-import { useStudent } from "@/hooks/student/useStudent";
 import type { Announcement } from "@/data/announcements";
 import type { RequirementTemplate } from "@/hooks/requirement-template/useRequirementTemplate";
 import type { RequirementComment } from "@/hooks/requirement/useRequirement";
@@ -66,14 +65,7 @@ export function CombinedNotifications({
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("announcements");
 
-  // Get student data to extract instructor ID
-  const { data: studentResponse } = useStudent(effectiveStudentId || "");
-  const studentRecord: any = (studentResponse as any)?.data ?? studentResponse;
-  const mainSection = studentRecord?.enrollments?.[0]?.section;
-  const instructorId =
-    mainSection?.instructor?.id || mainSection?.instructorId || undefined;
-
-  // Announcement notifications - filtered by instructor
+  // Announcement notifications
   const {
     announcements,
     unreadAnnouncements,
@@ -82,9 +74,9 @@ export function CombinedNotifications({
     error: announcementError,
     markAsRead: markAnnouncementAsRead,
     markAllAsRead: markAllAnnouncementsAsRead,
-  } = useStudentAnnouncementNotifications(effectiveStudentId, instructorId);
+  } = useStudentAnnouncementNotifications(effectiveStudentId);
 
-  // Template notifications - filtered by instructor
+  // Template notifications
   const {
     templates,
     unreadTemplates,
@@ -93,7 +85,7 @@ export function CombinedNotifications({
     error: templateError,
     markAsRead: markTemplateAsRead,
     markAllAsRead: markAllTemplatesAsRead,
-  } = useStudentTemplateNotifications(effectiveStudentId, instructorId);
+  } = useStudentTemplateNotifications(effectiveStudentId);
 
   // Comment notifications
   const {

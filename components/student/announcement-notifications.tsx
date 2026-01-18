@@ -13,7 +13,6 @@ import {
 import { Bell, Check, MessageSquare, Eye } from "lucide-react";
 import { useStudentAnnouncementNotifications } from "@/hooks/announcement/useStudentAnnouncementNotifications";
 import { useAuth } from "@/hooks/auth/useAuth";
-import { useStudent } from "@/hooks/student/useStudent";
 import type { Announcement } from "@/data/announcements";
 
 function getPriorityColor(priority: Announcement["priority"]) {
@@ -56,13 +55,6 @@ export function AnnouncementNotifications({
   const effectiveStudentId = studentId || normalizedUser?.id;
   const [isOpen, setIsOpen] = useState(false);
 
-  // Get student data to extract instructor ID
-  const { data: studentResponse } = useStudent(effectiveStudentId || "");
-  const studentRecord: any = (studentResponse as any)?.data ?? studentResponse;
-  const mainSection = studentRecord?.enrollments?.[0]?.section;
-  const instructorId =
-    mainSection?.instructor?.id || mainSection?.instructorId || undefined;
-
   const {
     unreadAnnouncements,
     unreadCount,
@@ -71,7 +63,7 @@ export function AnnouncementNotifications({
     markAsRead,
     markAllAsRead,
     announcements, // Add this for debugging
-  } = useStudentAnnouncementNotifications(effectiveStudentId, instructorId);
+  } = useStudentAnnouncementNotifications(effectiveStudentId);
 
   // Debug logging (remove in production)
   if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {

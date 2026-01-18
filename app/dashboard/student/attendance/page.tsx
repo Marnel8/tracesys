@@ -23,7 +23,9 @@ import {
   useClockIn,
   useClockOut,
   AttendanceRecord,
+  attendanceKeys,
 } from "@/hooks/attendance";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function AttendancePage() {
   const { toast } = useToast();
@@ -510,6 +512,7 @@ export default function AttendancePage() {
   }, [todayAttendance]);
 
   // Attendance hooks
+  const queryClient = useQueryClient();
   const clockInMutation = useClockIn();
   const clockOutMutation = useClockOut();
 
@@ -1318,7 +1321,12 @@ export default function AttendancePage() {
         sessionType: sessionType,
       });
 
-      // Reset camera state
+      // Wait for attendance data to refetch before resetting state
+      await queryClient.refetchQueries({
+        queryKey: attendanceKeys.list({ studentId, date: today, limit: 1 }),
+      });
+
+      // Reset camera state AFTER data is updated
       setCapturedImage(null);
       setWasCapturedWithFaceDetection(false);
       setShowCamera(false);
@@ -1326,6 +1334,12 @@ export default function AttendancePage() {
       setClockInSession(null);
     } catch (error) {
       console.log(error);
+      // Reset state on error so user can retry
+      setCapturedImage(null);
+      setWasCapturedWithFaceDetection(false);
+      setShowCamera(false);
+      setIsClockingIn(false);
+      setClockInSession(null);
     }
   };
 
@@ -1544,7 +1558,12 @@ export default function AttendancePage() {
         sessionType: sessionType,
       });
 
-      // Reset camera state
+      // Wait for attendance data to refetch before resetting state
+      await queryClient.refetchQueries({
+        queryKey: attendanceKeys.list({ studentId, date: today, limit: 1 }),
+      });
+
+      // Reset camera state AFTER data is updated
       setCapturedImage(null);
       setWasCapturedWithFaceDetection(false);
       setShowCamera(false);
@@ -1552,6 +1571,12 @@ export default function AttendancePage() {
       setClockOutSession(null);
     } catch (error) {
       console.log(error);
+      // Reset state on error so user can retry
+      setCapturedImage(null);
+      setWasCapturedWithFaceDetection(false);
+      setShowCamera(false);
+      setIsClockingOut(false);
+      setClockOutSession(null);
     }
   };
 
@@ -1668,7 +1693,12 @@ export default function AttendancePage() {
         sessionType: "overtime",
       });
 
-      // Reset camera state
+      // Wait for attendance data to refetch before resetting state
+      await queryClient.refetchQueries({
+        queryKey: attendanceKeys.list({ studentId, date: today, limit: 1 }),
+      });
+
+      // Reset camera state AFTER data is updated
       setCapturedImage(null);
       setWasCapturedWithFaceDetection(false);
       setShowCamera(false);
@@ -1676,6 +1706,12 @@ export default function AttendancePage() {
       setOvertimeClockInSession(null);
     } catch (error) {
       console.log(error);
+      // Reset state on error so user can retry
+      setCapturedImage(null);
+      setWasCapturedWithFaceDetection(false);
+      setShowCamera(false);
+      setIsOvertimeClockingIn(false);
+      setOvertimeClockInSession(null);
     }
   };
 
@@ -1788,7 +1824,12 @@ export default function AttendancePage() {
         sessionType: "overtime",
       });
 
-      // Reset camera state
+      // Wait for attendance data to refetch before resetting state
+      await queryClient.refetchQueries({
+        queryKey: attendanceKeys.list({ studentId, date: today, limit: 1 }),
+      });
+
+      // Reset camera state AFTER data is updated
       setCapturedImage(null);
       setWasCapturedWithFaceDetection(false);
       setShowCamera(false);
@@ -1796,6 +1837,12 @@ export default function AttendancePage() {
       setOvertimeClockOutSession(null);
     } catch (error) {
       console.log(error);
+      // Reset state on error so user can retry
+      setCapturedImage(null);
+      setWasCapturedWithFaceDetection(false);
+      setShowCamera(false);
+      setIsOvertimeClockingOut(false);
+      setOvertimeClockOutSession(null);
     }
   };
 
