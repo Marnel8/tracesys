@@ -210,16 +210,8 @@ export default function AttendancePage() {
 
     if (opening === null || closing === null) return true;
 
-    // Handle case where operating hours span midnight (e.g., 12:00 AM - 5:00 AM)
-    // If closing time is less than opening time, it means it spans midnight
-    if (closing < opening) {
-      // Operating hours span midnight (e.g., 12:00 AM - 5:00 AM)
-      // Current time is valid if it's >= opening OR <= closing
-      return currentTimeMinutes >= opening || currentTimeMinutes <= closing;
-    } else {
-      // Normal case: operating hours within the same day
-      return currentTimeMinutes >= opening && currentTimeMinutes <= closing;
-    }
+    // Simple comparison: operating hours within the same day
+    return currentTimeMinutes >= opening && currentTimeMinutes <= closing;
   }, [agencyOpeningTime, agencyClosingTime, currentTime]);
 
   // Determine current session type based on time
@@ -245,62 +237,20 @@ export default function AttendancePage() {
     // NOTE: These lunch times are reference points for session determination, not actual lunch duration
     if (lunchStart !== null) {
       // Use lunch start time (reference point) as the divider between morning and afternoon
-      // Handle lunch break that might span midnight
-      if (lunchEnd !== null && lunchEnd < lunchStart) {
-        // Lunch spans midnight (e.g., 11:00 PM - 1:00 AM)
-        // Morning: between lunch end and lunch start
-        // Afternoon: at/after lunch start OR before/at lunch end
-        if (currentTimeMinutes > lunchEnd && currentTimeMinutes < lunchStart) {
-          setCurrentSession("morning");
-        } else {
-          setCurrentSession("afternoon");
-        }
+      // Morning: before lunch start
+      // Afternoon: at/after lunch start (includes during lunch break)
+      if (currentTimeMinutes < lunchStart) {
+        setCurrentSession("morning");
       } else {
-        // Normal lunch break (e.g., 2:00 AM - 4:00 AM)
-        // Morning: before lunch start
-        // Afternoon: at/after lunch start (includes during lunch break)
-        if (currentTimeMinutes < lunchStart) {
-          setCurrentSession("morning");
-        } else {
-          setCurrentSession("afternoon");
-        }
+        setCurrentSession("afternoon");
       }
     } else if (opening !== null && closing !== null) {
       // No lunch times, use midpoint of operating hours
-      // Handle case where operating hours span midnight
-      if (closing < opening) {
-        // Operating hours span midnight (e.g., 12:00 AM - 5:00 AM)
-        const totalMinutes = 24 * 60 - opening + closing;
-        const midPoint = opening + totalMinutes / 2;
-
-        // Adjust midpoint if it wraps past midnight
-        if (midPoint >= 24 * 60) {
-          const adjustedMidPoint = midPoint - 24 * 60;
-          // Morning: from opening to adjusted midpoint (wrapping past midnight)
-          // Afternoon: after adjusted midpoint to closing
-          if (
-            currentTimeMinutes >= opening ||
-            currentTimeMinutes <= adjustedMidPoint
-          ) {
-            setCurrentSession("morning");
-          } else {
-            setCurrentSession("afternoon");
-          }
-        } else {
-          // Midpoint doesn't wrap
-          if (currentTimeMinutes >= opening && currentTimeMinutes < midPoint) {
-            setCurrentSession("morning");
-          } else {
-            setCurrentSession("afternoon");
-          }
-        }
-      } else {
-        // Normal case: operating hours within same day
-        const midPoint = opening + (closing - opening) / 2;
-        setCurrentSession(
-          currentTimeMinutes < midPoint ? "morning" : "afternoon"
-        );
-      }
+      // Normal case: operating hours within same day
+      const midPoint = opening + (closing - opening) / 2;
+      setCurrentSession(
+        currentTimeMinutes < midPoint ? "morning" : "afternoon"
+      );
     } else {
       // No time constraints, default to morning
       setCurrentSession("morning");
@@ -355,13 +305,19 @@ export default function AttendancePage() {
       const lunchEnd = parseTimeToMinutes(agencyLunchEndTime);
 
       // Morning clock-in cutoff: Use lunch start - 1 minute if available, otherwise opening + 2 hours
+      // Prevent negative morningCutoff when lunchStart = 0 (midnight)
       let morningCutoff: number;
-      if (lunchStart !== null) {
+      if (lunchStart !== null && lunchStart > 0) {
         morningCutoff = lunchStart - 1;
       } else if (opening !== null) {
         morningCutoff = opening + 2 * 60; // 2 hours after opening
       } else {
         morningCutoff = 10 * 60 + 59; // Fallback: 10:59 AM
+      }
+
+      // Ensure morningCutoff is never negative
+      if (morningCutoff < 0) {
+        morningCutoff = opening !== null ? opening + 2 * 60 : 10 * 60 + 59;
       }
 
       const morningBoundary = morningCutoff + 1;
@@ -1167,13 +1123,19 @@ export default function AttendancePage() {
       const opening = parseTimeToMinutes(agencyOpeningTime);
       const lunchStart = parseTimeToMinutes(agencyLunchStartTime);
 
+      // Prevent negative morningCutoff when lunchStart = 0 (midnight)
       let morningCutoff: number;
-      if (lunchStart !== null) {
+      if (lunchStart !== null && lunchStart > 0) {
         morningCutoff = lunchStart - 1; // 1 minute before lunch starts
       } else if (opening !== null) {
         morningCutoff = opening + 2 * 60; // 2 hours after opening
       } else {
         morningCutoff = 10 * 60 + 59; // Fallback: 10:59 AM
+      }
+
+      // Ensure morningCutoff is never negative
+      if (morningCutoff < 0) {
+        morningCutoff = opening !== null ? opening + 2 * 60 : 10 * 60 + 59;
       }
 
       const isMorningWindowOpen = currentTimeMinutes <= morningCutoff;
