@@ -17,6 +17,7 @@ type Props = {
 	containerRef: RefObject<HTMLDivElement | null>;
 	overlayCircleRef: RefObject<HTMLDivElement | null>;
 	capturedImage: string | null;
+	actionType?: "clock-in" | "clock-out" | "overtime-clock-in" | "overtime-clock-out";
 	onCapture: () => void;
 	onCancel: () => void;
 	onSubmit: () => void;
@@ -37,6 +38,7 @@ const SelfieCapture = ({
 	containerRef,
 	overlayCircleRef,
 	capturedImage,
+	actionType = "clock-in",
 	onCapture,
 	onCancel,
 	onSubmit,
@@ -46,12 +48,29 @@ const SelfieCapture = ({
 	const remainingSeconds = isFaceDetected && !isFaceSteady
 		? Math.ceil((100 - steadyProgress) / 100 * 3)
 		: 0;
+	
+	// Determine action text based on action type
+	const getActionText = () => {
+		switch (actionType) {
+			case "clock-out":
+				return { verb: "Clock Out", verbLower: "clock out", action: "clock-out" };
+			case "overtime-clock-in":
+				return { verb: "Clock In (Overtime)", verbLower: "clock in (overtime)", action: "clock-in" };
+			case "overtime-clock-out":
+				return { verb: "Clock Out (Overtime)", verbLower: "clock out (overtime)", action: "clock-out" };
+			default:
+				return { verb: "Clock In", verbLower: "clock in", action: "clock-in" };
+		}
+	};
+	
+	const actionText = getActionText();
+	
 	if (!showCamera) return null;
 	return (
 		<div className="space-y-3 sm:space-y-4">
 			<div className="text-center">
 				<h3 className="text-base sm:text-lg font-semibold mb-2">
-					Take a Selfie to Clock In
+					Take a Selfie to {actionText.verb}
 				</h3>
 				<p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4 px-2">
 					Position your face in the camera and take a clear photo
@@ -191,7 +210,7 @@ const SelfieCapture = ({
 					<div className="relative aspect-video bg-gray-100 rounded-lg overflow-hidden">
 						<img
 							src={capturedImage}
-							alt="Captured selfie for clock in"
+							alt={`Captured selfie for ${actionText.verbLower}`}
 							className="w-full h-full object-cover scale-x-[-1]"
 						/>
 					</div>
@@ -202,7 +221,7 @@ const SelfieCapture = ({
 							size="sm"
 						>
 							<CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-							Complete Clock In
+							Complete {actionText.verb}
 						</Button>
 						<Button
 							variant="outline"

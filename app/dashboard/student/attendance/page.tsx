@@ -62,12 +62,18 @@ export default function AttendancePage() {
   const [isFaceDetected, setIsFaceDetected] = useState(false);
   const [wasCapturedWithFaceDetection, setWasCapturedWithFaceDetection] =
     useState(false);
-  const [faceSteadyStartTime, setFaceSteadyStartTime] = useState<number | null>(null);
   const [isFaceSteady, setIsFaceSteady] = useState(false);
   const [steadyProgress, setSteadyProgress] = useState(0);
   const detectionIntervalRef = useRef<number | null>(null);
   const detectionRafRef = useRef<number | null>(null);
   const faceModelLoadedRef = useRef<boolean>(false);
+  const steadyTimerIntervalRef = useRef<number | null>(null);
+  const previousFaceDetectedRef = useRef<boolean>(false);
+  const lastFaceDetectedTimeRef = useRef<number | null>(null);
+  const timerPausedRef = useRef<boolean>(false);
+  const cumulativeDetectedTimeRef = useRef<number>(0);
+  const timerStartTimeRef = useRef<number | null>(null);
+  const pauseStartTimeRef = useRef<number | null>(null);
   const [currentSession, setCurrentSession] = useState<
     "morning" | "afternoon" | null
   >(null);
@@ -776,6 +782,15 @@ export default function AttendancePage() {
         window.clearInterval(detectionIntervalRef.current);
         detectionIntervalRef.current = null;
       }
+      if (detectionRafRef.current) {
+        cancelAnimationFrame(detectionRafRef.current);
+        detectionRafRef.current = null;
+      }
+      if (steadyTimerIntervalRef.current) {
+        window.clearInterval(steadyTimerIntervalRef.current);
+        steadyTimerIntervalRef.current = null;
+      }
+      resetSteadyTimer();
     };
   }, []);
 
@@ -878,6 +893,79 @@ export default function AttendancePage() {
     }
   };
 
+  const resetSteadyTimer = () => {
+    if (steadyTimerIntervalRef.current) {
+      window.clearInterval(steadyTimerIntervalRef.current);
+      steadyTimerIntervalRef.current = null;
+    }
+    cumulativeDetectedTimeRef.current = 0;
+    timerStartTimeRef.current = null;
+    timerPausedRef.current = false;
+    pauseStartTimeRef.current = null;
+    lastFaceDetectedTimeRef.current = null;
+    setIsFaceSteady(false);
+    setSteadyProgress(0);
+  };
+
+  const pauseSteadyTimer = () => {
+    if (timerPausedRef.current || !steadyTimerIntervalRef.current) {
+      return;
+    }
+    timerPausedRef.current = true;
+    pauseStartTimeRef.current = Date.now();
+  };
+
+  const resumeSteadyTimer = () => {
+    if (!timerPausedRef.current || !steadyTimerIntervalRef.current) {
+      return;
+    }
+    // Don't add pause time to cumulative time - we just resume counting
+    timerPausedRef.current = false;
+    pauseStartTimeRef.current = null;
+  };
+
+  const startSteadyTimer = () => {
+    // Don't restart if timer is already running
+    if (steadyTimerIntervalRef.current) {
+      return;
+    }
+    
+    // Initialize timer
+    cumulativeDetectedTimeRef.current = 0;
+    timerStartTimeRef.current = Date.now();
+    timerPausedRef.current = false;
+    pauseStartTimeRef.current = null;
+    setIsFaceSteady(false);
+    setSteadyProgress(0);
+
+    // Update UI every 100ms (not every frame)
+    steadyTimerIntervalRef.current = window.setInterval(() => {
+      const now = Date.now();
+      
+      if (!timerPausedRef.current && lastFaceDetectedTimeRef.current) {
+        // Face is currently detected (or was detected very recently)
+        // Check if face was detected within the last 200ms (allowing for some delay)
+        const timeSinceLastDetection = now - lastFaceDetectedTimeRef.current;
+        
+        if (timeSinceLastDetection < 200) {
+          // Face is still detected, increment cumulative time
+          cumulativeDetectedTimeRef.current += 100; // Add 100ms (interval duration)
+          
+          const progress = Math.min(100, (cumulativeDetectedTimeRef.current / 3000) * 100);
+          setSteadyProgress(progress);
+
+          if (cumulativeDetectedTimeRef.current >= 3000) {
+            setIsFaceSteady(true);
+          } else {
+            setIsFaceSteady(false);
+          }
+        }
+        // If timeSinceLastDetection >= 200ms, face is lost, don't increment
+      }
+      // If paused, don't increment but keep showing current progress
+    }, 100);
+  };
+
   const stopFaceDetection = () => {
     if (detectionIntervalRef.current) {
       window.clearInterval(detectionIntervalRef.current);
@@ -887,10 +975,9 @@ export default function AttendancePage() {
       cancelAnimationFrame(detectionRafRef.current);
       detectionRafRef.current = null;
     }
+    resetSteadyTimer();
     setIsFaceDetected(false);
-    setFaceSteadyStartTime(null);
-    setIsFaceSteady(false);
-    setSteadyProgress(0);
+    previousFaceDetectedRef.current = false;
   };
 
   const startFaceDetection = () => {
@@ -920,9 +1007,6 @@ export default function AttendancePage() {
             // Require minimum confidence score of 0.5 (already filtered by threshold, but double-check)
             if (detectionScore < 0.5) {
               setIsFaceDetected(false);
-              setFaceSteadyStartTime(null);
-              setIsFaceSteady(false);
-              setSteadyProgress(0);
               return;
             }
 
@@ -934,9 +1018,6 @@ export default function AttendancePage() {
             // Require face to be at least 5% of video area to be considered valid
             if (faceAreaRatio < 0.05) {
               setIsFaceDetected(false);
-              setFaceSteadyStartTime(null);
-              setIsFaceSteady(false);
-              setSteadyProgress(0);
               return;
             }
 
@@ -966,45 +1047,77 @@ export default function AttendancePage() {
 
               // Face must be properly centered and within the circle
               const inside = centerDist + faceHalfDiag <= radius;
-              setIsFaceDetected(inside);
-
-              // Track steady timer
+              
+              // Update state if detection status changed
+              if (inside !== previousFaceDetectedRef.current) {
+                setIsFaceDetected(inside);
+                previousFaceDetectedRef.current = inside;
+              }
+              
+              // Time-based resilient timer logic
+              const now = Date.now();
+              
               if (inside) {
-                const now = Date.now();
-                if (!faceSteadyStartTime) {
-                  // Face just became detected, start timer
-                  setFaceSteadyStartTime(now);
-                  setIsFaceSteady(false);
-                  setSteadyProgress(0);
-                } else {
-                  // Face is still detected, check if 3 seconds have elapsed
-                  const elapsed = now - faceSteadyStartTime;
-                  const progress = Math.min(100, (elapsed / 3000) * 100);
-                  setSteadyProgress(progress);
-
-                  if (elapsed >= 3000) {
-                    setIsFaceSteady(true);
+                // Face is detected
+                const wasFirstDetection = lastFaceDetectedTimeRef.current === null;
+                lastFaceDetectedTimeRef.current = now;
+                
+                // If timer is paused, resume it
+                if (timerPausedRef.current) {
+                  resumeSteadyTimer();
+                }
+                
+                // Check if we should start the timer
+                // Start timer if face has been detected for 200ms continuously
+                if (!steadyTimerIntervalRef.current) {
+                  if (wasFirstDetection || !timerStartTimeRef.current) {
+                    // First detection or timer start time was reset - mark the time
+                    timerStartTimeRef.current = now;
                   } else {
-                    setIsFaceSteady(false);
+                    // Check if we've been detecting for 200ms continuously
+                    const detectionDuration = now - timerStartTimeRef.current;
+                    if (detectionDuration >= 200) {
+                      startSteadyTimer();
+                    }
                   }
                 }
               } else {
-                // Face not properly positioned, reset timer
-                setFaceSteadyStartTime(null);
-                setIsFaceSteady(false);
-                setSteadyProgress(0);
+                // Face lost
+                if (lastFaceDetectedTimeRef.current) {
+                  const timeSinceLastDetection = now - lastFaceDetectedTimeRef.current;
+                  
+                  if (steadyTimerIntervalRef.current) {
+                    // Timer is running
+                    if (timeSinceLastDetection < 500) {
+                      // Brief flicker (< 500ms) - pause timer instead of resetting
+                      if (!timerPausedRef.current) {
+                        pauseSteadyTimer();
+                      }
+                    } else {
+                      // Face lost for > 500ms - reset timer completely
+                      resetSteadyTimer();
+                    }
+                  } else {
+                    // Timer not started yet - reset detection start time if lost for > 200ms
+                    if (timeSinceLastDetection > 200 && timerStartTimeRef.current) {
+                      timerStartTimeRef.current = null;
+                    }
+                  }
+                }
               }
             } else {
               setIsFaceDetected(false);
-              setFaceSteadyStartTime(null);
-              setIsFaceSteady(false);
-              setSteadyProgress(0);
+              if (previousFaceDetectedRef.current) {
+                previousFaceDetectedRef.current = false;
+                resetSteadyTimer();
+              }
             }
           } else {
             setIsFaceDetected(false);
-            setFaceSteadyStartTime(null);
-            setIsFaceSteady(false);
-            setSteadyProgress(0);
+            if (previousFaceDetectedRef.current) {
+              previousFaceDetectedRef.current = false;
+              resetSteadyTimer();
+            }
           }
         }
       } catch (err) {
@@ -1096,8 +1209,8 @@ export default function AttendancePage() {
 
     // Validate that face has been steady for 3 seconds
     if (!isFaceSteady) {
-      const remaining = faceSteadyStartTime
-        ? Math.ceil((3000 - (Date.now() - faceSteadyStartTime)) / 1000)
+      const remaining = cumulativeDetectedTimeRef.current > 0
+        ? Math.ceil((3000 - cumulativeDetectedTimeRef.current) / 1000)
         : 3;
       toast({
         variant: "destructive",
@@ -1375,12 +1488,30 @@ export default function AttendancePage() {
         const expectedTime = new Date();
         expectedTime.setHours(hours, minutes || 0, 0, 0);
         isLate = now > expectedTime;
-      } else if (sessionType === "afternoon" && agencyLunchEndTime) {
-        // lunchEndTime is a reference point for determining if afternoon clock-in is late
-        const [hours, minutes] = agencyLunchEndTime.split(":").map(Number);
-        const expectedTime = new Date();
-        expectedTime.setHours(hours, minutes || 0, 0, 0);
-        isLate = now > expectedTime;
+      } else if (sessionType === "afternoon") {
+        // For afternoon session, only mark as late if clocking in AFTER lunchEndTime
+        // Clocking in during lunch break or early (before lunchEndTime) should NOT be marked as late
+        // This allows students to clock in early for afternoon session without penalty
+        if (agencyLunchEndTime) {
+          const [hours, minutes] = agencyLunchEndTime.split(":").map(Number);
+          const expectedTime = new Date();
+          expectedTime.setHours(hours, minutes || 0, 0, 0);
+          // Only mark as late if clocking in AFTER lunchEndTime
+          // Clocking in before lunchEndTime (even if "too early") is considered Normal, not Late
+          // This allows flexibility for students who want to clock in early for afternoon
+          isLate = now > expectedTime;
+        } else if (agencyLunchStartTime) {
+          // If lunchEndTime is not set but lunchStartTime is, use lunchStartTime as reference
+          // Clocking in during or after lunch start is not late (it's expected)
+          const [hours, minutes] = agencyLunchStartTime.split(":").map(Number);
+          const expectedTime = new Date();
+          expectedTime.setHours(hours, minutes || 0, 0, 0);
+          // Afternoon clock-in is never late if lunchStartTime is the reference
+          // (since you can clock in during lunch break or early)
+          isLate = false;
+        }
+        // If neither lunchEndTime nor lunchStartTime is set, don't mark as late
+        // This ensures early afternoon clock-ins are not penalized
       }
 
       await clockInMutation.mutateAsync({
@@ -1429,11 +1560,8 @@ export default function AttendancePage() {
     }
     stopFaceDetection();
 
-    // Reset face detection state
+    // Reset face detection state (stopFaceDetection already handles steady timer cleanup)
     setIsFaceDetected(false);
-    setFaceSteadyStartTime(null);
-    setIsFaceSteady(false);
-    setSteadyProgress(0);
 
     // Restart camera
     try {
@@ -1467,9 +1595,7 @@ export default function AttendancePage() {
     setClockOutSession(null);
     setOvertimeClockInSession(null);
     setOvertimeClockOutSession(null);
-    setFaceSteadyStartTime(null);
-    setIsFaceSteady(false);
-    setSteadyProgress(0);
+    // stopFaceDetection already handles steady timer cleanup
   };
 
   const handleClockOut = async () => {
@@ -2141,6 +2267,15 @@ export default function AttendancePage() {
                 containerRef={containerRef}
                 overlayCircleRef={overlayCircleRef}
                 capturedImage={capturedImage}
+                actionType={
+                  isOvertimeClockingOut
+                    ? "overtime-clock-out"
+                    : isOvertimeClockingIn
+                    ? "overtime-clock-in"
+                    : isClockingOut
+                    ? "clock-out"
+                    : "clock-in"
+                }
                 onCapture={capturePhoto}
                 onCancel={cancelCamera}
                 onSubmit={
@@ -2155,9 +2290,7 @@ export default function AttendancePage() {
                 onRetake={async () => {
                   setCapturedImage(null);
                   setWasCapturedWithFaceDetection(false);
-                  setFaceSteadyStartTime(null);
-                  setIsFaceSteady(false);
-                  setSteadyProgress(0);
+                  resetSteadyTimer();
                   await startCamera();
                 }}
                 onRestartCamera={restartCamera}

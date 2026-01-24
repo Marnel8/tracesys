@@ -1135,66 +1135,67 @@ export default function ProfilePage() {
   );
 
   return (
-    <div className="px-4 md:px-8 lg:px-16 ">
+    <div className="px-3 sm:px-4 md:px-8 lg:px-16">
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-4 mb-4">
+      <div className="mb-4 sm:mb-6">
+        <div className="flex items-center gap-2 sm:gap-4 mb-3 sm:mb-4">
           <Link href="/dashboard/student">
             <Button
               variant="ghost"
               size="sm"
-              className="flex items-center gap-2"
+              className="flex items-center gap-1 sm:gap-2"
             >
               <ArrowLeft className="w-4 h-4" />
               <span className="hidden sm:inline">Back to Dashboard</span>
+              <span className="sm:hidden">Back</span>
             </Button>
           </Link>
         </div>
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-2">
             Profile
           </h1>
-          <p className="text-gray-600 text-sm md:text-base">
+          <p className="text-gray-600 text-xs sm:text-sm md:text-base">
             Manage your personal information and track your progress.
           </p>
         </div>
       </div>
 
-      <Tabs defaultValue="personal" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto">
-          <TabsTrigger value="personal" className="text-xs sm:text-sm py-2">
+      <Tabs defaultValue="personal" className="space-y-4 sm:space-y-6">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto gap-1 sm:gap-2">
+          <TabsTrigger value="personal" className="text-xs sm:text-sm py-2 px-2 sm:px-4">
             Personal
           </TabsTrigger>
-          <TabsTrigger value="practicum" className="text-xs sm:text-sm py-2">
+          <TabsTrigger value="practicum" className="text-xs sm:text-sm py-2 px-2 sm:px-4">
             Practicum
           </TabsTrigger>
-          <TabsTrigger value="progress" className="text-xs sm:text-sm py-2">
+          <TabsTrigger value="progress" className="text-xs sm:text-sm py-2 px-2 sm:px-4">
             Progress
           </TabsTrigger>
-          <TabsTrigger value="dtr" className="text-xs sm:text-sm py-2">
+          <TabsTrigger value="dtr" className="text-xs sm:text-sm py-2 px-2 sm:px-4">
             DTR
           </TabsTrigger>
         </TabsList>
 
         {/* Personal Information */}
-        <TabsContent value="personal" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <TabsContent value="personal" className="space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
             {/* Profile Picture */}
             <Card>
-              <CardContent className="p-6 text-center space-y-4">
-                <Avatar className="w-32 h-32 mx-auto">
+              <CardContent className="p-4 sm:p-6 text-center space-y-4">
+                <Avatar className="w-24 h-24 sm:w-32 sm:h-32 mx-auto">
                   <AvatarImage src={avatarPreview || "/placeholder-user.jpg"} />
-                  <AvatarFallback className="text-2xl">
+                  <AvatarFallback className="text-xl sm:text-2xl">
                     {watchProfile("firstName")?.[0]}
                     {watchProfile("lastName")?.[0]}
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <h3 className="font-semibold text-lg">
+                  <h3 className="font-semibold text-base sm:text-lg break-words">
                     {watchProfile("firstName")} {watchProfile("lastName")}
                   </h3>
-                  <p className="text-gray-600">{computedStudentId}</p>
-                  <Badge variant="secondary" className="mt-2">
+                  <p className="text-gray-600 text-sm sm:text-base break-all">{computedStudentId}</p>
+                  <Badge variant="secondary" className="mt-2 text-xs sm:text-sm">
                     {computedYear} Student
                   </Badge>
                 </div>
@@ -1228,8 +1229,8 @@ export default function ProfilePage() {
             <div className="lg:col-span-2 space-y-6">
               <Card>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
                       <User className="w-5 h-5" />
                       Personal Information
                     </CardTitle>
@@ -1238,6 +1239,7 @@ export default function ProfilePage() {
                         onClick={() => setIsEditing(true)}
                         variant="outline"
                         size="sm"
+                        className="w-full sm:w-auto"
                       >
                         <Edit className="w-4 h-4 mr-2" />
                         Edit Profile
@@ -1405,32 +1407,32 @@ export default function ProfilePage() {
         </TabsContent>
 
         {/* Practicum Information */}
-        <TabsContent value="practicum" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <TabsContent value="practicum" className="space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
                   <GraduationCap className="w-5 h-5" />
                   Academic Information
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="p-4 sm:p-6 space-y-3 sm:space-y-4">
                 <div className="space-y-2">
-                  <Label>Student ID</Label>
-                  <Input value={computedStudentId} disabled />
+                  <Label className="text-sm sm:text-base">Student ID</Label>
+                  <Input value={computedStudentId} disabled className="text-sm sm:text-base" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Course</Label>
-                  <Input value={computedCourse} disabled />
+                  <Label className="text-sm sm:text-base">Course</Label>
+                  <Input value={computedCourse} disabled className="text-sm sm:text-base" />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div className="space-y-2">
-                    <Label>Year Level</Label>
-                    <Input value={computedYear} disabled />
+                    <Label className="text-sm sm:text-base">Year Level</Label>
+                    <Input value={computedYear} disabled className="text-sm sm:text-base" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Section</Label>
-                    <Input value={computedSection} disabled />
+                    <Label className="text-sm sm:text-base">Section</Label>
+                    <Input value={computedSection} disabled className="text-sm sm:text-base" />
                   </div>
                 </div>
               </CardContent>
@@ -1438,8 +1440,8 @@ export default function ProfilePage() {
 
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
                     <Building className="w-5 h-5" />
                     Practicum Details
                   </CardTitle>
@@ -1448,14 +1450,16 @@ export default function ProfilePage() {
                       variant="outline"
                       size="sm"
                       onClick={() => setIsEditingPracticum(true)}
+                      className="w-full sm:w-auto"
                     >
                       <Edit className="w-4 h-4 mr-2" />
-                      {practicum ? "Edit" : "Add Practicum"}
+                      <span className="hidden xs:inline">{practicum ? "Edit" : "Add Practicum"}</span>
+                      <span className="xs:hidden">{practicum ? "Edit" : "Add"}</span>
                     </Button>
                   )}
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="p-4 sm:p-6 space-y-3 sm:space-y-4">
                 {isEditingPracticum ? (
                   <form
                     onSubmit={practicumForm.handleSubmit(updatePracticum)}
@@ -1540,7 +1544,7 @@ export default function ProfilePage() {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="startDate">Start Date *</Label>
                         <Input
@@ -1569,11 +1573,11 @@ export default function ProfilePage() {
                       </div>
                     </div>
 
-                    <div className="flex gap-2 pt-2">
+                    <div className="flex flex-col sm:flex-row gap-2 pt-2">
                       <Button
                         type="submit"
                         disabled={practicumForm.formState.isSubmitting}
-                        className="flex-1"
+                        className="flex-1 w-full sm:w-auto"
                       >
                         {practicumForm.formState.isSubmitting ? (
                           <>
@@ -1595,6 +1599,7 @@ export default function ProfilePage() {
                           practicumForm.reset();
                         }}
                         disabled={practicumForm.formState.isSubmitting}
+                        className="w-full sm:w-auto"
                       >
                         <X className="w-4 h-4 mr-2" />
                         Cancel
@@ -1604,32 +1609,32 @@ export default function ProfilePage() {
                 ) : practicum ? (
                   <>
                     <div className="space-y-2">
-                      <Label>Company</Label>
-                      <Input value={computedCompany} disabled />
+                      <Label className="text-sm sm:text-base">Company</Label>
+                      <Input value={computedCompany} disabled className="text-sm sm:text-base" />
                     </div>
                     <div className="space-y-2">
-                      <Label>Position</Label>
-                      <Input value={computedPosition} disabled />
+                      <Label className="text-sm sm:text-base">Position</Label>
+                      <Input value={computedPosition} disabled className="text-sm sm:text-base" />
                     </div>
                     <div className="space-y-2">
-                      <Label>Supervisor</Label>
-                      <Input value={computedSupervisor} disabled />
+                      <Label className="text-sm sm:text-base">Supervisor</Label>
+                      <Input value={computedSupervisor} disabled className="text-sm sm:text-base" />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div className="space-y-2">
-                        <Label>Start Date</Label>
-                        <Input value={displayStartDate} disabled />
+                        <Label className="text-sm sm:text-base">Start Date</Label>
+                        <Input value={displayStartDate} disabled className="text-sm sm:text-base" />
                       </div>
                       <div className="space-y-2">
-                        <Label>End Date</Label>
-                        <Input value={displayEndDate} disabled />
+                        <Label className="text-sm sm:text-base">End Date</Label>
+                        <Input value={displayEndDate} disabled className="text-sm sm:text-base" />
                       </div>
                     </div>
                   </>
                 ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <Building className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                    <p className="text-sm">
+                  <div className="text-center py-6 sm:py-8 text-gray-500">
+                    <Building className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-gray-300" />
+                    <p className="text-xs sm:text-sm px-4">
                       No practicum details found. Click "Add Practicum" to set
                       up your practicum information.
                     </p>
@@ -1641,18 +1646,18 @@ export default function ProfilePage() {
         </TabsContent>
 
         {/* Progress Tracking */}
-        <TabsContent value="progress" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <TabsContent value="progress" className="space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <Card className="border border-primary-200 shadow-sm">
-              <CardContent className="p-4 text-center">
-                <Clock className="w-8 h-8 mx-auto text-primary-600 mb-2" />
-                <div className="text-2xl font-bold text-primary-600">
+              <CardContent className="p-3 sm:p-4 text-center">
+                <Clock className="w-6 h-6 sm:w-8 sm:h-8 mx-auto text-primary-600 mb-2" />
+                <div className="text-xl sm:text-2xl font-bold text-primary-600">
                   {practicum_stats.hoursCompleted}
                 </div>
-                <div className="text-sm text-gray-600">
+                <div className="text-xs sm:text-sm text-gray-600">
                   of {practicum_stats.totalHours} hours
                 </div>
-                <div className="text-xs text-gray-500 mt-1">
+                <div className="text-[10px] sm:text-xs text-gray-500 mt-1">
                   {practicum_stats.totalHours > 0
                     ? (
                         (practicum_stats.hoursCompleted /
@@ -1666,32 +1671,32 @@ export default function ProfilePage() {
             </Card>
 
             <Card className="border border-primary-200 shadow-sm">
-              <CardContent className="p-4 text-center">
-                <Target className="w-8 h-8 mx-auto text-primary-600 mb-2" />
-                <div className="text-2xl font-bold text-primary-600">
+              <CardContent className="p-3 sm:p-4 text-center">
+                <Target className="w-6 h-6 sm:w-8 sm:h-8 mx-auto text-primary-600 mb-2" />
+                <div className="text-xl sm:text-2xl font-bold text-primary-600">
                   {practicum_stats.attendanceRate}%
                 </div>
-                <div className="text-sm text-gray-600">Attendance Rate</div>
+                <div className="text-xs sm:text-sm text-gray-600">Attendance Rate</div>
               </CardContent>
             </Card>
 
             <Card className="border border-primary-200 shadow-sm">
-              <CardContent className="p-4 text-center">
-                <Award className="w-8 h-8 mx-auto text-primary-600 mb-2" />
-                <div className="text-2xl font-bold text-primary-600">
+              <CardContent className="p-3 sm:p-4 text-center">
+                <Award className="w-6 h-6 sm:w-8 sm:h-8 mx-auto text-primary-600 mb-2" />
+                <div className="text-xl sm:text-2xl font-bold text-primary-600">
                   {practicum_stats.reportsSubmitted}
                 </div>
-                <div className="text-sm text-gray-600">Reports Submitted</div>
+                <div className="text-xs sm:text-sm text-gray-600">Reports Submitted</div>
               </CardContent>
             </Card>
 
             <Card className="border border-primary-200 shadow-sm">
-              <CardContent className="p-4 text-center">
-                <GraduationCap className="w-8 h-8 mx-auto text-primary-600 mb-2" />
-                <div className="text-2xl font-bold text-primary-600">
+              <CardContent className="p-3 sm:p-4 text-center">
+                <GraduationCap className="w-6 h-6 sm:w-8 sm:h-8 mx-auto text-primary-600 mb-2" />
+                <div className="text-xl sm:text-2xl font-bold text-primary-600">
                   {practicum_stats.requirementsDone}
                 </div>
-                <div className="text-sm text-gray-600">
+                <div className="text-xs sm:text-sm text-gray-600">
                   of {practicum_stats.totalRequirements} requirements
                 </div>
               </CardContent>
@@ -1700,21 +1705,21 @@ export default function ProfilePage() {
         </TabsContent>
 
         {/* DTR - Daily Time Record */}
-        <TabsContent value="dtr" className="space-y-6">
+        <TabsContent value="dtr" className="space-y-4 sm:space-y-6">
           <Card className="border border-primary-200 shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
                 <Clock className="w-5 h-5 text-primary-600" />
                 Daily Time Record (DTR)
               </CardTitle>
-              <p className="text-sm text-gray-600">
+              <p className="text-xs sm:text-sm text-gray-600 mt-2">
                 View and print your daily time records for practicum hours
                 tracking.
               </p>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4 sm:p-6">
               {/* DTR Controls */}
-              <div className="flex flex-col gap-4 mb-6">
+              <div className="flex flex-col gap-3 sm:gap-4 mb-4 sm:mb-6">
                 {/* Search and Filters Row */}
                 <div className="flex flex-col sm:flex-row gap-3">
                   <div className="flex-1 min-w-0">
@@ -1753,11 +1758,11 @@ export default function ProfilePage() {
 
                 {/* Custom Date Range Picker */}
                 {presetRange === "custom" && (
-                  <div className="flex flex-col sm:flex-row gap-3 p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row gap-3 p-3 sm:p-4 bg-gray-50 rounded-lg">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-1">
                       <Label
                         htmlFor="startDate"
-                        className="text-sm font-medium whitespace-nowrap"
+                        className="text-xs sm:text-sm font-medium whitespace-nowrap"
                       >
                         From:
                       </Label>
@@ -1771,13 +1776,13 @@ export default function ProfilePage() {
                             startDate: e.target.value,
                           }))
                         }
-                        className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                       />
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-1">
                       <Label
                         htmlFor="endDate"
-                        className="text-sm font-medium whitespace-nowrap"
+                        className="text-xs sm:text-sm font-medium whitespace-nowrap"
                       >
                         To:
                       </Label>
@@ -1791,7 +1796,7 @@ export default function ProfilePage() {
                             endDate: e.target.value,
                           }))
                         }
-                        className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                       />
                     </div>
                     <Button
@@ -1801,7 +1806,7 @@ export default function ProfilePage() {
                         setDateRange({ startDate: "", endDate: "" });
                         setPresetRange("all");
                       }}
-                      className="whitespace-nowrap"
+                      className="whitespace-nowrap w-full sm:w-auto"
                     >
                       Clear
                     </Button>
@@ -1832,8 +1837,8 @@ export default function ProfilePage() {
               </div>
 
               {/* DTR Summary */}
-              <div className="mb-4">
-                <div className="text-sm text-gray-600 mb-2">
+              <div className="mb-3 sm:mb-4">
+                <div className="text-xs sm:text-sm text-gray-600 mb-2 break-words">
                   {presetRange === "all" && "Showing all time records"}
                   {presetRange === "last7days" && "Showing last 7 days"}
                   {presetRange === "last30days" && "Showing last 30 days"}
@@ -1857,35 +1862,35 @@ export default function ProfilePage() {
                     "Select start and end dates"}
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4 sm:mb-6">
                 <Card className="border border-primary-200 shadow-sm">
                   <CardContent className="p-3 sm:p-4 text-center">
-                    <div className="text-xl sm:text-2xl font-bold text-primary-600">
+                    <div className="text-lg sm:text-xl md:text-2xl font-bold text-primary-600">
                       {filteredDTR.length}
                     </div>
-                    <div className="text-xs sm:text-sm text-gray-600">
+                    <div className="text-xs sm:text-sm text-gray-600 mt-1">
                       Days Recorded
                     </div>
                   </CardContent>
                 </Card>
                 <Card className="border border-primary-200 shadow-sm">
                   <CardContent className="p-3 sm:p-4 text-center">
-                    <div className="text-xl sm:text-2xl font-bold text-primary-600">
+                    <div className="text-lg sm:text-xl md:text-2xl font-bold text-primary-600">
                       {totalHours.toFixed(2)}
                     </div>
-                    <div className="text-xs sm:text-sm text-gray-600">
+                    <div className="text-xs sm:text-sm text-gray-600 mt-1">
                       Total Hours
                     </div>
                   </CardContent>
                 </Card>
                 <Card className="sm:col-span-2 lg:col-span-1 border border-primary-200 shadow-sm">
                   <CardContent className="p-3 sm:p-4 text-center">
-                    <div className="text-xl sm:text-2xl font-bold text-primary-600">
+                    <div className="text-lg sm:text-xl md:text-2xl font-bold text-primary-600">
                       {filteredDTR.length > 0
                         ? (totalHours / filteredDTR.length).toFixed(2)
                         : "0.00"}
                     </div>
-                    <div className="text-xs sm:text-sm text-gray-600">
+                    <div className="text-xs sm:text-sm text-gray-600 mt-1">
                       Avg Hours/Day
                     </div>
                   </CardContent>
@@ -1893,9 +1898,10 @@ export default function ProfilePage() {
               </div>
 
               {/* DTR Table - Mobile Responsive */}
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {/* Desktop Table View */}
-                <div className="hidden md:block overflow-x-auto">
+                <div className="hidden lg:block overflow-x-auto -mx-4 sm:mx-0">
+                  <div className="inline-block min-w-full align-middle px-4 sm:px-0">
                   <table className="w-full border-collapse border border-gray-300">
                     <thead>
                       <tr className="bg-gray-50">
@@ -1992,10 +1998,58 @@ export default function ProfilePage() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
 
-                {/* Mobile Card View */}
-                <div className="md:hidden space-y-3">
+                {/* Tablet/Mobile Table View - Horizontal Scroll */}
+                <div className="lg:hidden overflow-x-auto -mx-4 sm:mx-0">
+                  <div className="inline-block min-w-full align-middle px-4 sm:px-0">
+                    <table className="w-full border-collapse border border-gray-300 text-xs sm:text-sm">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="border border-gray-300 px-2 py-2 text-left font-medium text-gray-700 whitespace-nowrap">Date</th>
+                          <th className="border border-gray-300 px-2 py-2 text-left font-medium text-gray-700 whitespace-nowrap">Day</th>
+                          <th colSpan={2} className="border border-gray-300 px-2 py-2 text-center font-medium text-gray-700 bg-primary-50 whitespace-nowrap">Morning</th>
+                          <th colSpan={2} className="border border-gray-300 px-2 py-2 text-center font-medium text-gray-700 bg-primary-50 whitespace-nowrap">Afternoon</th>
+                          <th colSpan={2} className="border border-gray-300 px-2 py-2 text-center font-medium text-gray-700 bg-orange-50 whitespace-nowrap">Overtime</th>
+                          <th className="border border-gray-300 px-2 py-2 text-left font-medium text-gray-700 whitespace-nowrap">Hours</th>
+                          <th className="border border-gray-300 px-2 py-2 text-left font-medium text-gray-700 whitespace-nowrap">Remarks</th>
+                        </tr>
+                        <tr className="bg-gray-50">
+                          <th className="border border-gray-300 px-2 py-1"></th>
+                          <th className="border border-gray-300 px-2 py-1"></th>
+                          <th className="border border-gray-300 px-2 py-1 text-left font-medium text-gray-700 bg-primary-50 text-[10px] sm:text-xs">In</th>
+                          <th className="border border-gray-300 px-2 py-1 text-left font-medium text-gray-700 bg-primary-50 text-[10px] sm:text-xs">Out</th>
+                          <th className="border border-gray-300 px-2 py-1 text-left font-medium text-gray-700 bg-primary-50 text-[10px] sm:text-xs">In</th>
+                          <th className="border border-gray-300 px-2 py-1 text-left font-medium text-gray-700 bg-primary-50 text-[10px] sm:text-xs">Out</th>
+                          <th className="border border-gray-300 px-2 py-1 text-left font-medium text-gray-700 bg-orange-50 text-[10px] sm:text-xs">In</th>
+                          <th className="border border-gray-300 px-2 py-1 text-left font-medium text-gray-700 bg-orange-50 text-[10px] sm:text-xs">Out</th>
+                          <th className="border border-gray-300 px-2 py-1"></th>
+                          <th className="border border-gray-300 px-2 py-1"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredDTR.map((record: DtrRecord, index: number) => (
+                          <tr key={index} className="hover:bg-gray-50">
+                            <td className="border border-gray-300 px-2 py-2 whitespace-nowrap">{record.date}</td>
+                            <td className="border border-gray-300 px-2 py-2 whitespace-nowrap">{record.day}</td>
+                            <td className="border border-gray-300 px-2 py-2 bg-primary-50 whitespace-nowrap">{record.morningTimeIn || "N/A"}</td>
+                            <td className="border border-gray-300 px-2 py-2 bg-primary-50 whitespace-nowrap">{record.morningTimeOut || "N/A"}</td>
+                            <td className="border border-gray-300 px-2 py-2 bg-primary-50 whitespace-nowrap">{record.afternoonTimeIn || "N/A"}</td>
+                            <td className="border border-gray-300 px-2 py-2 bg-primary-50 whitespace-nowrap">{record.afternoonTimeOut || "N/A"}</td>
+                            <td className="border border-gray-300 px-2 py-2 bg-orange-50 whitespace-nowrap">{record.overtimeTimeIn || "N/A"}</td>
+                            <td className="border border-gray-300 px-2 py-2 bg-orange-50 whitespace-nowrap">{record.overtimeTimeOut || "N/A"}</td>
+                            <td className="border border-gray-300 px-2 py-2 font-semibold whitespace-nowrap">{record.hours.toFixed(2)}</td>
+                            <td className="border border-gray-300 px-2 py-2 max-w-[100px] truncate" title={record.remarks}>{record.remarks || "N/A"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Mobile Card View - Hidden, using scrollable table instead */}
+                <div className="hidden space-y-3">
                   {filteredDTR.map((record: DtrRecord, index: number) => (
                     <Card key={index} className="p-4">
                       <div className="space-y-3">
@@ -2162,9 +2216,9 @@ export default function ProfilePage() {
 
               {/* No Records Message */}
               {filteredDTR.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <Clock className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                  <p className="text-sm sm:text-base">
+                <div className="text-center py-6 sm:py-8 text-gray-500">
+                  <Clock className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-gray-300" />
+                  <p className="text-xs sm:text-sm md:text-base px-4">
                     No time records found for the selected criteria.
                   </p>
                 </div>
