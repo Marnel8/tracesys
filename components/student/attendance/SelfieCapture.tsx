@@ -10,6 +10,8 @@ type Props = {
 	isFaceModelLoaded: boolean;
 	isLoadingFaceModels: boolean;
 	isFaceDetected: boolean;
+	isFaceSteady: boolean;
+	steadyProgress: number;
 	videoRef: RefObject<HTMLVideoElement | null>;
 	canvasRef: RefObject<HTMLCanvasElement | null>;
 	containerRef: RefObject<HTMLDivElement | null>;
@@ -18,8 +20,8 @@ type Props = {
 	onCapture: () => void;
 	onCancel: () => void;
 	onSubmit: () => void;
-	onRetake: () => void;
-	onRestartCamera: () => void;
+	onRetake: () => void | Promise<void>;
+	onRestartCamera: () => void | Promise<void>;
 };
 
 const SelfieCapture = ({
@@ -28,6 +30,8 @@ const SelfieCapture = ({
 	isFaceModelLoaded,
 	isLoadingFaceModels,
 	isFaceDetected,
+	isFaceSteady,
+	steadyProgress,
 	videoRef,
 	canvasRef,
 	containerRef,
@@ -39,6 +43,9 @@ const SelfieCapture = ({
 	onRetake,
 	onRestartCamera,
 }: Props) => {
+	const remainingSeconds = isFaceDetected && !isFaceSteady
+		? Math.ceil((100 - steadyProgress) / 100 * 3)
+		: 0;
 	if (!showCamera) return null;
 	return (
 		<div className="space-y-3 sm:space-y-4">
@@ -67,12 +74,16 @@ const SelfieCapture = ({
 							<div
 								ref={overlayCircleRef}
 								className={`rounded-full border-2 ${
-									isFaceDetected ? "border-green-400" : "border-white/60"
-								} w-[65%] sm:w-[56%] md:w-[50%] max-w-[400px] aspect-square`}
+									isFaceSteady
+										? "border-green-500"
+										: isFaceDetected
+										? "border-green-400 animate-pulse"
+										: "border-white/60"
+								} w-[65%] sm:w-[56%] md:w-[50%] max-w-[400px] aspect-square transition-colors duration-200`}
 							/>
 						</div>
 					</div>
-					<div className="flex items-center justify-center gap-2 text-xs">
+					<div className="flex flex-col items-center gap-2 text-xs">
 						{(!isFaceModelLoaded || isLoadingFaceModels) && (
 							<span className="inline-flex items-center text-gray-600">
 								<Loader2 className="w-3 h-3 mr-1 animate-spin" /> Loading face
@@ -80,11 +91,31 @@ const SelfieCapture = ({
 							</span>
 						)}
 						{isFaceModelLoaded && (
-							<span
-								className={isFaceDetected ? "text-green-600" : "text-gray-600"}
-							>
-								{isFaceDetected ? "Face detected" : "No face detected"}
-							</span>
+							<div className="flex flex-col items-center gap-1">
+								<span
+									className={
+										isFaceSteady
+											? "text-green-600 font-semibold"
+											: isFaceDetected
+											? "text-green-600"
+											: "text-gray-600"
+									}
+								>
+									{isFaceSteady
+										? "✓ Face steady - Ready to capture"
+										: isFaceDetected
+										? `Stay steady... ${remainingSeconds}s remaining`
+										: "No face detected"}
+								</span>
+								{isFaceDetected && !isFaceSteady && (
+									<div className="w-48 sm:w-64 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+										<div
+											className="h-full bg-green-500 transition-all duration-100 ease-linear"
+											style={{ width: `${steadyProgress}%` }}
+										/>
+									</div>
+								)}
+							</div>
 						)}
 					</div>
 					<div className="px-2">
@@ -92,7 +123,7 @@ const SelfieCapture = ({
 							<li>Align your face inside the circle</li>
 							<li>Hold the device at eye level and look straight</li>
 							<li>Use good lighting; avoid strong backlight and shadows</li>
-							<li>Keep still for a moment until "Face detected" appears</li>
+							<li>Keep still for 3 seconds once "Face detected" appears</li>
 							<li>Remove masks or hats; reduce glasses glare if possible</li>
 						</ul>
 
@@ -113,15 +144,17 @@ const SelfieCapture = ({
 							onClick={onCapture}
 							className="bg-blue-500 hover:bg-blue-600 text-sm"
 							disabled={
-								!isFaceDetected || !isFaceModelLoaded || isLoadingFaceModels
+								!isFaceSteady || !isFaceDetected || !isFaceModelLoaded || isLoadingFaceModels
 							}
 							size="sm"
 						>
 							<Camera className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
 							{!isFaceModelLoaded || isLoadingFaceModels
 								? "Loading..."
-								: isFaceDetected
+								: isFaceSteady
 								? "Capture Photo"
+								: isFaceDetected
+								? `Stay Steady (${remainingSeconds}s)`
 								: "Align Face"}
 						</Button>
 						{isFaceModelLoaded && !isLoadingFaceModels && (

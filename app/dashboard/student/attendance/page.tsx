@@ -62,8 +62,12 @@ export default function AttendancePage() {
   const [isFaceDetected, setIsFaceDetected] = useState(false);
   const [wasCapturedWithFaceDetection, setWasCapturedWithFaceDetection] =
     useState(false);
+  const [faceSteadyStartTime, setFaceSteadyStartTime] = useState<number | null>(null);
+  const [isFaceSteady, setIsFaceSteady] = useState(false);
+  const [steadyProgress, setSteadyProgress] = useState(0);
   const detectionIntervalRef = useRef<number | null>(null);
   const detectionRafRef = useRef<number | null>(null);
+  const faceModelLoadedRef = useRef<boolean>(false);
   const [currentSession, setCurrentSession] = useState<
     "morning" | "afternoon" | null
   >(null);
@@ -840,10 +844,11 @@ export default function AttendancePage() {
 
   // Load face-api models from /public/models
   const loadFaceModels = async () => {
-    if (isFaceModelLoaded || isLoadingFaceModels) return;
+    if (faceModelLoadedRef.current || isLoadingFaceModels) return;
     try {
       setIsLoadingFaceModels(true);
       setIsFaceModelLoaded(false); // Ensure we start with false
+      faceModelLoadedRef.current = false; // Reset ref
       if (!faceApiModule) {
         if (typeof window === "undefined") return; // guard for SSR
         faceApiModule = (await import("face-api.js")).default
@@ -858,6 +863,7 @@ export default function AttendancePage() {
       // Add a small delay to ensure the model is fully ready
       await new Promise((resolve) => setTimeout(resolve, 100));
 
+      faceModelLoadedRef.current = true; // Update ref immediately
       setIsFaceModelLoaded(true);
     } catch (err) {
       toast({
@@ -866,6 +872,7 @@ export default function AttendancePage() {
         description: "Could not load face detection model. Try again.",
       });
       setIsFaceModelLoaded(false);
+      faceModelLoadedRef.current = false;
     } finally {
       setIsLoadingFaceModels(false);
     }
@@ -881,10 +888,13 @@ export default function AttendancePage() {
       detectionRafRef.current = null;
     }
     setIsFaceDetected(false);
+    setFaceSteadyStartTime(null);
+    setIsFaceSteady(false);
+    setSteadyProgress(0);
   };
 
   const startFaceDetection = () => {
-    if (!videoRef.current || !isFaceModelLoaded || isLoadingFaceModels) {
+    if (!videoRef.current || !faceModelLoadedRef.current || isLoadingFaceModels) {
       return;
     }
 
@@ -910,6 +920,9 @@ export default function AttendancePage() {
             // Require minimum confidence score of 0.5 (already filtered by threshold, but double-check)
             if (detectionScore < 0.5) {
               setIsFaceDetected(false);
+              setFaceSteadyStartTime(null);
+              setIsFaceSteady(false);
+              setSteadyProgress(0);
               return;
             }
 
@@ -921,6 +934,9 @@ export default function AttendancePage() {
             // Require face to be at least 5% of video area to be considered valid
             if (faceAreaRatio < 0.05) {
               setIsFaceDetected(false);
+              setFaceSteadyStartTime(null);
+              setIsFaceSteady(false);
+              setSteadyProgress(0);
               return;
             }
 
@@ -951,11 +967,44 @@ export default function AttendancePage() {
               // Face must be properly centered and within the circle
               const inside = centerDist + faceHalfDiag <= radius;
               setIsFaceDetected(inside);
+
+              // Track steady timer
+              if (inside) {
+                const now = Date.now();
+                if (!faceSteadyStartTime) {
+                  // Face just became detected, start timer
+                  setFaceSteadyStartTime(now);
+                  setIsFaceSteady(false);
+                  setSteadyProgress(0);
+                } else {
+                  // Face is still detected, check if 3 seconds have elapsed
+                  const elapsed = now - faceSteadyStartTime;
+                  const progress = Math.min(100, (elapsed / 3000) * 100);
+                  setSteadyProgress(progress);
+
+                  if (elapsed >= 3000) {
+                    setIsFaceSteady(true);
+                  } else {
+                    setIsFaceSteady(false);
+                  }
+                }
+              } else {
+                // Face not properly positioned, reset timer
+                setFaceSteadyStartTime(null);
+                setIsFaceSteady(false);
+                setSteadyProgress(0);
+              }
             } else {
               setIsFaceDetected(false);
+              setFaceSteadyStartTime(null);
+              setIsFaceSteady(false);
+              setSteadyProgress(0);
             }
           } else {
             setIsFaceDetected(false);
+            setFaceSteadyStartTime(null);
+            setIsFaceSteady(false);
+            setSteadyProgress(0);
           }
         }
       } catch (err) {
@@ -993,7 +1042,7 @@ export default function AttendancePage() {
             if (
               videoRef.current &&
               videoRef.current.readyState >= 2 &&
-              isFaceModelLoaded
+              faceModelLoadedRef.current
             ) {
               resolve();
             } else {
@@ -1017,8 +1066,8 @@ export default function AttendancePage() {
           setTimeout(() => resolve(), 2000);
         });
 
-        // Double-check models are loaded before starting detection
-        if (isFaceModelLoaded) {
+        // Double-check models are loaded before starting detection (use ref, not state)
+        if (faceModelLoadedRef.current) {
           startFaceDetection();
         }
       }
@@ -1045,8 +1094,21 @@ export default function AttendancePage() {
       return;
     }
 
+    // Validate that face has been steady for 3 seconds
+    if (!isFaceSteady) {
+      const remaining = faceSteadyStartTime
+        ? Math.ceil((3000 - (Date.now() - faceSteadyStartTime)) / 1000)
+        : 3;
+      toast({
+        variant: "destructive",
+        title: "Stay steady",
+        description: `Please keep your face steady for ${remaining} more second${remaining !== 1 ? "s" : ""} before capturing.`,
+      });
+      return;
+    }
+
     // Additional validation: ensure face model is loaded and detection is active
-    if (!isFaceModelLoaded || isLoadingFaceModels) {
+    if (!faceModelLoadedRef.current || isLoadingFaceModels) {
       toast({
         variant: "destructive",
         title: "Face detection not ready",
@@ -1081,7 +1143,11 @@ export default function AttendancePage() {
   };
 
   const handleClockIn = async () => {
+    // Set loading state immediately for optimistic UI feedback
+    setIsClockingIn(true);
+
     if (hasBlockingRequired) {
+      setIsClockingIn(false);
       toast({
         variant: "destructive",
         title: "Action required",
@@ -1090,6 +1156,7 @@ export default function AttendancePage() {
       return;
     }
     if (!location) {
+      setIsClockingIn(false);
       toast({
         variant: "destructive",
         title: "Location required",
@@ -1099,6 +1166,7 @@ export default function AttendancePage() {
     }
 
     if (!isOperatingDay) {
+      setIsClockingIn(false);
       const operatingDaysText = agencyOperatingDays.join(", ") || "Not set";
       const operatingHoursText =
         agencyOpeningTime && agencyClosingTime
@@ -1121,6 +1189,7 @@ export default function AttendancePage() {
       todayAttendance?.afternoonTimeIn && !todayAttendance?.afternoonTimeOut;
 
     if (morningInProgress || afternoonInProgress) {
+      setIsClockingIn(false);
       const inProgressSession = morningInProgress ? "morning" : "afternoon";
       toast({
         variant: "destructive",
@@ -1134,6 +1203,7 @@ export default function AttendancePage() {
     const sessionToUse = availableSessionForClockIn;
 
     if (!sessionToUse) {
+      setIsClockingIn(false);
       const bothComplete =
         todayAttendance?.morningTimeIn &&
         todayAttendance?.morningTimeOut &&
@@ -1154,6 +1224,7 @@ export default function AttendancePage() {
     const morningComplete =
       todayAttendance?.morningTimeIn && todayAttendance?.morningTimeOut;
     if (sessionToUse === "morning" && morningComplete) {
+      setIsClockingIn(false);
       toast({
         variant: "destructive",
         title: "Morning session already complete",
@@ -1184,6 +1255,7 @@ export default function AttendancePage() {
       const isMorningWindowOpen = currentTimeMinutes <= morningCutoff;
 
       if (!isMorningWindowOpen) {
+        setIsClockingIn(false);
         const cutoffHour = Math.floor(morningCutoff / 60);
         const cutoffMinute = morningCutoff % 60;
         const cutoffTimeStr = `${cutoffHour}:${String(cutoffMinute).padStart(
@@ -1207,6 +1279,7 @@ export default function AttendancePage() {
       todayAttendance?.morningTimeIn &&
       !todayAttendance?.morningTimeOut
     ) {
+      setIsClockingIn(false);
       toast({
         variant: "destructive",
         title: "Already clocked in",
@@ -1221,6 +1294,7 @@ export default function AttendancePage() {
       todayAttendance?.afternoonTimeIn &&
       !todayAttendance?.afternoonTimeOut
     ) {
+      setIsClockingIn(false);
       toast({
         variant: "destructive",
         title: "Already clocked in",
@@ -1233,8 +1307,7 @@ export default function AttendancePage() {
     // Store the session for use in submitClockIn
     setClockInSession(sessionToUse);
 
-    // Start camera for selfie capture
-    setIsClockingIn(true);
+    // Start camera for selfie capture (loading state remains true)
     await startCamera();
   };
 
@@ -1358,6 +1431,9 @@ export default function AttendancePage() {
 
     // Reset face detection state
     setIsFaceDetected(false);
+    setFaceSteadyStartTime(null);
+    setIsFaceSteady(false);
+    setSteadyProgress(0);
 
     // Restart camera
     try {
@@ -1391,10 +1467,17 @@ export default function AttendancePage() {
     setClockOutSession(null);
     setOvertimeClockInSession(null);
     setOvertimeClockOutSession(null);
+    setFaceSteadyStartTime(null);
+    setIsFaceSteady(false);
+    setSteadyProgress(0);
   };
 
   const handleClockOut = async () => {
+    // Set loading state immediately for optimistic UI feedback
+    setIsClockingOut(true);
+
     if (hasBlockingRequired) {
+      setIsClockingOut(false);
       toast({
         variant: "destructive",
         title: "Action required",
@@ -1403,6 +1486,7 @@ export default function AttendancePage() {
       return;
     }
     if (!location) {
+      setIsClockingOut(false);
       toast({
         variant: "destructive",
         title: "Location required",
@@ -1415,6 +1499,7 @@ export default function AttendancePage() {
     const sessionType = availableSessionForClockOut;
 
     if (!sessionType) {
+      setIsClockingOut(false);
       toast({
         variant: "destructive",
         title: "No session to clock out",
@@ -1429,6 +1514,7 @@ export default function AttendancePage() {
       todayAttendance?.afternoonTimeIn && !todayAttendance?.afternoonTimeOut;
 
     if (sessionType === "morning" && !hasMorningClockIn) {
+      setIsClockingOut(false);
       toast({
         variant: "destructive",
         title: "Clock in first",
@@ -1439,6 +1525,7 @@ export default function AttendancePage() {
     }
 
     if (sessionType === "afternoon" && !hasAfternoonClockIn) {
+      setIsClockingOut(false);
       toast({
         variant: "destructive",
         title: "Clock in first",
@@ -1454,6 +1541,7 @@ export default function AttendancePage() {
       !hasAfternoonClockIn &&
       !todayAttendance?.timeIn
     ) {
+      setIsClockingOut(false);
       toast({
         variant: "destructive",
         title: "Clock in first",
@@ -1463,6 +1551,7 @@ export default function AttendancePage() {
     }
 
     if (!practicumWithAgency?.id) {
+      setIsClockingOut(false);
       toast({
         variant: "destructive",
         title: "No practicum found",
@@ -1474,8 +1563,7 @@ export default function AttendancePage() {
     // Store the session for use in submitClockOut
     setClockOutSession(sessionType);
 
-    // Start camera for selfie capture
-    setIsClockingOut(true);
+    // Start camera for selfie capture (loading state remains true)
     await startCamera();
   };
 
@@ -1586,7 +1674,11 @@ export default function AttendancePage() {
   };
 
   const handleOvertimeClockIn = async () => {
+    // Set loading state immediately for optimistic UI feedback
+    setIsOvertimeClockingIn(true);
+
     if (hasBlockingRequired) {
+      setIsOvertimeClockingIn(false);
       toast({
         variant: "destructive",
         title: "Action required",
@@ -1595,6 +1687,7 @@ export default function AttendancePage() {
       return;
     }
     if (!location) {
+      setIsOvertimeClockingIn(false);
       toast({
         variant: "destructive",
         title: "Location required",
@@ -1606,6 +1699,7 @@ export default function AttendancePage() {
     // Check if overtime can be clocked in
     const overtimeSession = availableOvertimeSessionForClockIn;
     if (!overtimeSession) {
+      setIsOvertimeClockingIn(false);
       if (!isAfternoonComplete) {
         toast({
           variant: "destructive",
@@ -1627,8 +1721,7 @@ export default function AttendancePage() {
     // Store the session for use in submitOvertimeClockIn
     setOvertimeClockInSession("overtime");
 
-    // Start camera for selfie capture
-    setIsOvertimeClockingIn(true);
+    // Start camera for selfie capture (loading state remains true)
     await startCamera();
   };
 
@@ -1721,7 +1814,11 @@ export default function AttendancePage() {
   };
 
   const handleOvertimeClockOut = async () => {
+    // Set loading state immediately for optimistic UI feedback
+    setIsOvertimeClockingOut(true);
+
     if (hasBlockingRequired) {
+      setIsOvertimeClockingOut(false);
       toast({
         variant: "destructive",
         title: "Action required",
@@ -1730,6 +1827,7 @@ export default function AttendancePage() {
       return;
     }
     if (!location) {
+      setIsOvertimeClockingOut(false);
       toast({
         variant: "destructive",
         title: "Location required",
@@ -1741,6 +1839,7 @@ export default function AttendancePage() {
     // Check if overtime is clocked in (has overtimeTimeIn but no overtimeTimeOut)
     const overtimeSession = availableOvertimeSessionForClockOut;
     if (!overtimeSession) {
+      setIsOvertimeClockingOut(false);
       toast({
         variant: "destructive",
         title: "Overtime not started",
@@ -1750,6 +1849,7 @@ export default function AttendancePage() {
     }
 
     if (!practicumWithAgency?.id) {
+      setIsOvertimeClockingOut(false);
       toast({
         variant: "destructive",
         title: "No practicum found",
@@ -1761,8 +1861,7 @@ export default function AttendancePage() {
     // Store the session for use in submitOvertimeClockOut
     setOvertimeClockOutSession("overtime");
 
-    // Start camera for selfie capture
-    setIsOvertimeClockingOut(true);
+    // Start camera for selfie capture (loading state remains true)
     await startCamera();
   };
 
@@ -2035,6 +2134,8 @@ export default function AttendancePage() {
                 isFaceModelLoaded={isFaceModelLoaded}
                 isLoadingFaceModels={isLoadingFaceModels}
                 isFaceDetected={isFaceDetected}
+                isFaceSteady={isFaceSteady}
+                steadyProgress={steadyProgress}
                 videoRef={videoRef}
                 canvasRef={canvasRef}
                 containerRef={containerRef}
@@ -2054,6 +2155,9 @@ export default function AttendancePage() {
                 onRetake={async () => {
                   setCapturedImage(null);
                   setWasCapturedWithFaceDetection(false);
+                  setFaceSteadyStartTime(null);
+                  setIsFaceSteady(false);
+                  setSteadyProgress(0);
                   await startCamera();
                 }}
                 onRestartCamera={restartCamera}
@@ -2092,6 +2196,7 @@ export default function AttendancePage() {
                       !availableSessionForClockOut
                     )
                   }
+                  isClockingIn={isClockingIn || clockInMutation.isPending}
                   isClockingOut={isClockingOut || clockOutMutation.isPending}
                 />
               )}
@@ -2140,6 +2245,9 @@ export default function AttendancePage() {
                             clockOutMutation.isPending ||
                             !availableOvertimeSessionForClockOut
                           )
+                        }
+                        isClockingIn={
+                          isOvertimeClockingIn || clockInMutation.isPending
                         }
                         isClockingOut={
                           isOvertimeClockingOut || clockOutMutation.isPending

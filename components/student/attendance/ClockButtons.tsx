@@ -9,6 +9,7 @@ type Props = {
 	onClockOut: () => void;
 	disableClockIn: boolean;
 	disableClockOut: boolean;
+	isClockingIn?: boolean;
 	isClockingOut: boolean;
 	currentSession?: "morning" | "afternoon" | "overtime" | null;
 	clockInSession?: "morning" | "afternoon" | "overtime" | null;
@@ -20,6 +21,7 @@ const ClockButtons = ({
 	onClockOut,
 	disableClockIn,
 	disableClockOut,
+	isClockingIn,
 	isClockingOut,
 	currentSession,
 	clockInSession,
@@ -40,8 +42,17 @@ const ClockButtons = ({
 				disabled={disableClockIn}
 				className="bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm h-10 sm:h-11"
 			>
-				<LogIn className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-				Clock In {finalClockInLabel ? `(${finalClockInLabel})` : ""}
+				{isClockingIn ? (
+					<>
+						<Clock className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 animate-spin" />
+						Clocking In...
+					</>
+				) : (
+					<>
+						<LogIn className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+						Clock In {finalClockInLabel ? `(${finalClockInLabel})` : ""}
+					</>
+				)}
 			</Button>
 
 			<Button
