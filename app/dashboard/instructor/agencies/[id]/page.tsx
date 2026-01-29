@@ -264,9 +264,9 @@ export default function AgencyDetailsPage() {
 								</div>
 								<div>
 									<label className="text-sm font-medium text-gray-500">Branch Type</label>
-									<p className="text-sm">
+									<div className="text-sm">
 										<Badge variant="outline">{agency.branchType}</Badge>
-									</p>
+									</div>
 								</div>
 							</div>
 							<div>
@@ -341,11 +341,11 @@ export default function AgencyDetailsPage() {
 							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 								<div>
 									<label className="text-sm font-medium text-gray-500">Status</label>
-									<p className="text-sm">
+									<div className="text-sm">
 										<Badge variant={agency.isActive ? "default" : "secondary"}>
 											{agency.isActive ? "Active" : "Inactive"}
 										</Badge>
-									</p>
+									</div>
 								</div>
 								<div>
 									<label className="text-sm font-medium text-gray-500">Created</label>

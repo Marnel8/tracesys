@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -45,8 +46,15 @@ import {
   Smartphone,
   Clock3,
   Download,
+  CheckCircle,
+  X,
 } from "lucide-react";
-import { useAttendance, AttendanceRecord } from "@/hooks/attendance";
+import {
+  useAttendance,
+  AttendanceRecord,
+  useApproveAttendance,
+  useRejectAttendance,
+} from "@/hooks/attendance";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { InstructorStatsCard } from "@/components/instructor-stats-card";
@@ -108,6 +116,15 @@ export default function AttendancePage() {
   const [selectedGender, setSelectedGender] = useState("all");
   const [selectedLog, setSelectedLog] = useState<AttendanceRecord | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [recordToReject, setRecordToReject] = useState<AttendanceRecord | null>(
+    null
+  );
+
+  // Approval/Rejection hooks
+  const approveMutation = useApproveAttendance();
+  const rejectMutation = useRejectAttendance();
 
   // Fetch attendance data
   const {
@@ -224,6 +241,37 @@ export default function AttendancePage() {
   const handleView = (record: AttendanceRecord) => {
     setSelectedLog(record);
     setIsViewDialogOpen(true);
+  };
+
+  const handleApprove = async (record: AttendanceRecord) => {
+    try {
+      await approveMutation.mutateAsync({ id: record.id });
+      setIsViewDialogOpen(false);
+    } catch (error) {
+      // Error is handled by the mutation hook
+    }
+  };
+
+  const handleReject = (record: AttendanceRecord) => {
+    setRecordToReject(record);
+    setRejectionReason("");
+    setIsRejectDialogOpen(true);
+  };
+
+  const handleConfirmReject = async () => {
+    if (!recordToReject) return;
+    try {
+      await rejectMutation.mutateAsync({
+        id: recordToReject.id,
+        reason: rejectionReason || undefined,
+      });
+      setIsRejectDialogOpen(false);
+      setRecordToReject(null);
+      setRejectionReason("");
+      setIsViewDialogOpen(false);
+    } catch (error) {
+      // Error is handled by the mutation hook
+    }
   };
 
   const handleExportToExcel = () => {
@@ -689,19 +737,72 @@ export default function AttendancePage() {
                           >
                             {record.status}
                           </Badge>
-                          {record.approvalStatus &&
-                            record.approvalStatus === "Declined" && (
-                              <Badge
-                                variant="destructive"
-                                className="bg-red-100 text-red-800"
-                              >
-                                {record.approvalStatus}
-                              </Badge>
-                            )}
+                          {record.approvalStatus && (
+                            <Badge
+                              variant={
+                                record.approvalStatus === "Approved"
+                                  ? "default"
+                                  : record.approvalStatus === "Pending"
+                                  ? "secondary"
+                                  : "destructive"
+                              }
+                              className={
+                                record.approvalStatus === "Approved"
+                                  ? "bg-green-100 text-green-800"
+                                  : record.approvalStatus === "Pending"
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : "bg-red-100 text-red-800"
+                              }
+                            >
+                              {record.approvalStatus}
+                            </Badge>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-2 justify-end">
+                          {record.approvalStatus === "Pending" && (
+                            <>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => handleApprove(record)}
+                                disabled={
+                                  approveMutation.isPending ||
+                                  rejectMutation.isPending
+                                }
+                                className="bg-green-600 hover:bg-green-700"
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleReject(record)}
+                                disabled={
+                                  approveMutation.isPending ||
+                                  rejectMutation.isPending
+                                }
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </>
+                          )}
+                          {record.approvalStatus === "Declined" && (
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => handleApprove(record)}
+                              disabled={
+                                approveMutation.isPending ||
+                                rejectMutation.isPending
+                              }
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              <CheckCircle className="w-4 h-4 mr-1" />
+                              Re-approve
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
@@ -785,6 +886,59 @@ export default function AttendancePage() {
                         {selectedLog.status}
                       </Badge>
                     </div>
+                    {selectedLog.approvalStatus && (
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">Approval Status:</span>
+                        <Badge
+                          variant={
+                            selectedLog.approvalStatus === "Approved"
+                              ? "default"
+                              : selectedLog.approvalStatus === "Pending"
+                              ? "secondary"
+                              : "destructive"
+                          }
+                          className={
+                            selectedLog.approvalStatus === "Approved"
+                              ? "bg-green-100 text-green-800"
+                              : selectedLog.approvalStatus === "Pending"
+                              ? "bg-yellow-100 text-yellow-800"
+                              : "bg-red-100 text-red-800"
+                          }
+                        >
+                          {selectedLog.approvalStatus}
+                        </Badge>
+                      </div>
+                    )}
+                    {selectedLog.approvedAt && (
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">Approved At:</span>
+                        <span>
+                          {new Date(selectedLog.approvedAt).toLocaleString()}
+                        </span>
+                      </div>
+                    )}
+                    {selectedLog.approver && (
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">Approved By:</span>
+                        <span>
+                          {selectedLog.approver.firstName}{" "}
+                          {selectedLog.approver.lastName}
+                        </span>
+                      </div>
+                    )}
+                    {selectedLog.approvalNotes && (
+                      <div className="space-y-1">
+                        <span className="font-medium">
+                          {selectedLog.approvalStatus === "Declined"
+                            ? "Rejection Reason"
+                            : "Approval Notes"}
+                          :
+                        </span>
+                        <div className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                          {selectedLog.approvalNotes}
+                        </div>
+                      </div>
+                    )}
                     {(() => {
                       const progress = getStudentProgress(
                         selectedLog.studentId
@@ -1396,8 +1550,100 @@ export default function AttendancePage() {
                   </CardContent>
                 </Card>
               )}
+
+              {/* Approval Actions */}
+              {selectedLog && (
+                <div className="flex justify-end gap-2 pt-4 border-t">
+                  {selectedLog.approvalStatus === "Pending" && (
+                    <>
+                      <Button
+                        variant="destructive"
+                        onClick={() => handleReject(selectedLog)}
+                        disabled={
+                          approveMutation.isPending ||
+                          rejectMutation.isPending
+                        }
+                      >
+                        <X className="w-4 h-4 mr-2" />
+                        Reject
+                      </Button>
+                      <Button
+                        variant="default"
+                        onClick={() => handleApprove(selectedLog)}
+                        disabled={
+                          approveMutation.isPending ||
+                          rejectMutation.isPending
+                        }
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Approve
+                      </Button>
+                    </>
+                  )}
+                  {selectedLog.approvalStatus === "Declined" && (
+                    <Button
+                      variant="default"
+                      onClick={() => handleApprove(selectedLog)}
+                      disabled={
+                        approveMutation.isPending || rejectMutation.isPending
+                      }
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Re-approve
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Rejection Dialog */}
+      <Dialog open={isRejectDialogOpen} onOpenChange={setIsRejectDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject Attendance Record</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to reject this attendance record? You can
+              optionally provide a reason for rejection.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">
+                Rejection Reason (Optional)
+              </label>
+              <Textarea
+                placeholder="Enter reason for rejection..."
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                className="mt-1"
+                rows={4}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsRejectDialogOpen(false);
+                  setRecordToReject(null);
+                  setRejectionReason("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleConfirmReject}
+                disabled={rejectMutation.isPending}
+              >
+                {rejectMutation.isPending ? "Rejecting..." : "Reject"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

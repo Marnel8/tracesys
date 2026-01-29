@@ -94,8 +94,18 @@ const humanizeBytes = (bytes?: number | null) => {
   return `${mb.toFixed(1)} MB`;
 };
 
-const resolveFileUrl = (url?: string | null) => {
+const resolveFileUrl = (url?: string | null, requirementId?: string, category?: string) => {
   if (!url) return "";
+  
+  // For health requirements, use protected download endpoint
+  if (requirementId && category?.toLowerCase() === "health") {
+    const base =
+      process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ||
+      (typeof window !== "undefined" ? window.location.origin : "");
+    return `${base}/api/v1/requirements/${requirementId}/download`;
+  }
+  
+  // For non-health requirements, use direct URL
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
   const base =
     process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ||
@@ -166,13 +176,23 @@ export default function RequirementsPage() {
 
   const instructorId = (user as any)?.id;
 
-  const { data, refetch } = useRequirements({
+  const { data, refetch, error } = useRequirements({
     page,
     limit,
     status: selectedStatus as any,
     search: debouncedSearch || undefined,
     instructorId,
   });
+
+  // Handle API errors (e.g., unauthorized access to health requirements)
+  useEffect(() => {
+    if (error) {
+      const errorMessage = (error as any)?.response?.data?.message || (error as any)?.message;
+      if (errorMessage?.includes("permission") || errorMessage?.includes("unauthorized")) {
+        toast.error("Some health-related requirements may not be visible due to privacy restrictions");
+      }
+    }
+  }, [error]);
 
   // Refetch requirements when page becomes visible (e.g., after submitting from another tab)
   useEffect(() => {
@@ -383,7 +403,7 @@ export default function RequirementsPage() {
     if (!previewFile) return null;
 
     const extension = previewFile.fileName.split(".").pop()?.toLowerCase();
-    const fileUrl = resolveFileUrl(previewFile.fileUrl);
+    const fileUrl = resolveFileUrl(previewFile.fileUrl, previewFile.id, previewFile.category);
 
     switch (extension) {
       case "pdf":
@@ -665,13 +685,41 @@ export default function RequirementsPage() {
                               <DropdownMenuLabel>Actions</DropdownMenuLabel>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                onClick={() => {
-                                  const url = resolveFileUrl(req.fileUrl);
-                                  if (!url) {
-                                    toast.error("File URL not available");
-                                    return;
+                                onClick={async () => {
+                                  try {
+                                    const url = resolveFileUrl(req.fileUrl, req.id, req.category);
+                                    if (!url) {
+                                      toast.error("File URL not available");
+                                      return;
+                                    }
+                                    // For health requirements, use protected endpoint which requires auth
+                                    if (req.category?.toLowerCase() === "health") {
+                                      // Use fetch with credentials to ensure auth cookies are sent
+                                      const response = await fetch(url, {
+                                        credentials: "include",
+                                      });
+                                      if (!response.ok) {
+                                        if (response.status === 401 || response.status === 403) {
+                                          toast.error("You do not have permission to access this health-related requirement");
+                                          return;
+                                        }
+                                        throw new Error("Failed to download file");
+                                      }
+                                      const blob = await response.blob();
+                                      const downloadUrl = window.URL.createObjectURL(blob);
+                                      const link = document.createElement("a");
+                                      link.href = downloadUrl;
+                                      link.download = req.fileName || "requirement-file";
+                                      document.body.appendChild(link);
+                                      link.click();
+                                      document.body.removeChild(link);
+                                      window.URL.revokeObjectURL(downloadUrl);
+                                    } else {
+                                      window.open(url, "_blank");
+                                    }
+                                  } catch (error: any) {
+                                    toast.error(error.message || "Failed to download file");
                                   }
-                                  window.open(url, "_blank");
                                 }}
                               >
                                 <Download className="w-4 h-4 mr-2" />
@@ -809,13 +857,40 @@ export default function RequirementsPage() {
               Close
             </Button>
             <Button
-              onClick={() => {
-                const url = resolveFileUrl(previewFile?.fileUrl);
-                if (!url) {
-                  toast.error("File URL not available");
-                  return;
+              onClick={async () => {
+                try {
+                  const url = resolveFileUrl(previewFile?.fileUrl, previewFile?.id, previewFile?.category);
+                  if (!url) {
+                    toast.error("File URL not available");
+                    return;
+                  }
+                  // For health requirements, use protected endpoint
+                  if (previewFile?.category?.toLowerCase() === "health") {
+                    const response = await fetch(url, {
+                      credentials: "include",
+                    });
+                    if (!response.ok) {
+                      if (response.status === 401 || response.status === 403) {
+                        toast.error("You do not have permission to access this health-related requirement");
+                        return;
+                      }
+                      throw new Error("Failed to download file");
+                    }
+                    const blob = await response.blob();
+                    const downloadUrl = window.URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.href = downloadUrl;
+                    link.download = previewFile?.fileName || "requirement-file";
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(downloadUrl);
+                  } else {
+                    window.open(url, "_blank");
+                  }
+                } catch (error: any) {
+                  toast.error(error.message || "Failed to download file");
                 }
-                window.open(url, "_blank");
               }}
             >
               <Download className="w-4 h-4 mr-2" />

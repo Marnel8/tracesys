@@ -25,15 +25,30 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Building2, Save, X, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Building2, Save, X, Plus, Trash2, Search } from "lucide-react";
 import {
   useCreateAgency,
   useCreateSupervisor,
   SupervisorFormData,
+  useAgencies,
 } from "@/hooks/agency";
-import { AgencyFormData } from "@/data/agencies";
+import { AgencyFormData, Agency } from "@/data/agencies";
 import { BRANCH_TYPE_OPTIONS } from "@/data/agencies";
 import { toast } from "sonner";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 const agencySchema = z.object({
   name: z.string().min(2, "Agency name must be at least 2 characters"),
@@ -42,7 +57,12 @@ const agencySchema = z.object({
     .string()
     .min(2, "Contact person name must be at least 2 characters"),
   contactRole: z.string().min(2, "Contact role must be at least 2 characters"),
-  contactPhone: z.string().min(10, "Phone number must be at least 10 digits"),
+  contactPhone: z
+    .string()
+    .regex(
+      /^\+63\d{10}$/,
+      "Phone number must be in format +63XXXXXXXXXX (10 digits after +63)"
+    ),
   contactEmail: z.string().email("Please enter a valid email address"),
   branchType: z.enum(["Main", "Branch"], {
     required_error: "Please select a branch type",
@@ -105,12 +125,20 @@ export default function AddAgencyPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
   const [supervisors, setSupervisors] = useState<SupervisorForm[]>([]);
+  const [selectedAgencyId, setSelectedAgencyId] = useState<string | null>(null);
+  const [agencyDropdownOpen, setAgencyDropdownOpen] = useState(false);
+  const [isEditingExisting, setIsEditingExisting] = useState(false);
+
+  // Fetch all agencies for the dropdown
+  const { data: agenciesData } = useAgencies({ status: "all" });
+  const agencies = agenciesData?.agencies || [];
 
   const {
     register,
     handleSubmit,
     control,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<AgencyForm>({
     // @ts-expect-error - zodResolver has type inference issues with z.preprocess
@@ -135,10 +163,35 @@ export default function AddAgencyPage() {
     },
   });
 
+  // Handle phone number input with +63 prefix
+  const handleContactPhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, ""); // Remove non-digits
+    if (value.length <= 10) {
+      setValue("contactPhone", value ? `+63${value}` : "", { shouldValidate: true });
+    }
+  };
+
+  const contactPhoneValue = watch("contactPhone")?.replace("+63", "") || "";
+
+  // Handle supervisor phone number input with +63 prefix
+  const handleSupervisorPhoneChange = (
+    index: number,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const value = e.target.value.replace(/\D/g, ""); // Remove non-digits
+    if (value.length <= 10) {
+      updateSupervisor(index, "phone", value ? `+63${value}` : "");
+    }
+  };
+
   const handleDayToggle = (day: string) => {
     setSelectedDays((prev) =>
       prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
     );
+  };
+
+  const validatePhoneNumber = (phone: string): boolean => {
+    return /^\+63\d{10}$/.test(phone);
   };
 
   const addSupervisor = () => {
@@ -175,8 +228,17 @@ export default function AddAgencyPage() {
         lunchEndTime: data.lunchEndTime || undefined,
       };
 
+      let agencyId: string;
+
+      if (isEditingExisting && selectedAgencyId) {
+        // Update existing agency - redirect to edit page
+        router.push(`/dashboard/instructor/agencies/${selectedAgencyId}/edit`);
+        return;
+      }
+
+      // Create new agency
       const result = await createAgencyMutation.mutateAsync(formData);
-      const agencyId = result.id;
+      agencyId = result.id;
 
       // Create supervisors if any
       if (supervisors.length > 0 && agencyId) {
@@ -188,6 +250,13 @@ export default function AddAgencyPage() {
             supervisor.phone &&
             supervisor.position
           ) {
+            // Validate phone number format
+            if (!validatePhoneNumber(supervisor.phone)) {
+              supervisorErrors.push(
+                `Supervisor ${supervisor.name}: Phone number must be in format +63XXXXXXXXXX (10 digits after +63)`
+              );
+              continue;
+            }
             try {
               await createSupervisorMutation.mutateAsync({
                 agencyId,
@@ -222,6 +291,66 @@ export default function AddAgencyPage() {
     router.back();
   };
 
+  const handleAgencySelect = (agencyId: string) => {
+    if (agencyId === "new") {
+      setSelectedAgencyId(null);
+      setIsEditingExisting(false);
+      reset({
+        name: "",
+        address: "",
+        contactPerson: "",
+        contactRole: "",
+        contactPhone: "",
+        contactEmail: "",
+        branchType: "Main",
+        openingTime: "",
+        closingTime: "",
+        operatingDays: "",
+        lunchStartTime: "",
+        lunchEndTime: "",
+        isActive: true,
+        isSchoolAffiliated: false,
+        latitude: undefined,
+        longitude: undefined,
+      });
+      setSelectedDays([]);
+      setSupervisors([]);
+      setAgencyDropdownOpen(false);
+      return;
+    }
+
+    const agency = agencies.find((a) => a.id === agencyId);
+    if (agency) {
+      setSelectedAgencyId(agencyId);
+      setIsEditingExisting(true);
+      reset({
+        name: agency.name,
+        address: agency.address,
+        contactPerson: agency.contactPerson,
+        contactRole: agency.contactRole,
+        contactPhone: agency.contactPhone,
+        contactEmail: agency.contactEmail,
+        branchType: agency.branchType,
+        openingTime: agency.openingTime || "",
+        closingTime: agency.closingTime || "",
+        operatingDays: agency.operatingDays || "",
+        lunchStartTime: agency.lunchStartTime || "",
+        lunchEndTime: agency.lunchEndTime || "",
+        isActive: agency.isActive,
+        isSchoolAffiliated: agency.isSchoolAffiliated || false,
+        latitude: agency.latitude,
+        longitude: agency.longitude,
+      });
+      if (agency.operatingDays) {
+        setSelectedDays(agency.operatingDays.split(","));
+      } else {
+        setSelectedDays([]);
+      }
+      setSupervisors([]);
+      setAgencyDropdownOpen(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -231,12 +360,83 @@ export default function AddAgencyPage() {
           Back
         </Button>
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Add New Agency</h1>
+          <h1 className="text-3xl font-bold text-gray-900">
+            {isEditingExisting ? "Edit Agency" : "Add New Agency"}
+          </h1>
           <p className="text-gray-600">
-            Create a new practicum agency for student placements
+            {isEditingExisting
+              ? "Update agency information or create a new agency"
+              : "Create a new practicum agency for student placements"}
           </p>
         </div>
       </div>
+
+      {/* Agency Selection Dropdown */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Select Existing Agency</CardTitle>
+          <CardDescription>
+            Choose an existing agency to edit, or create a new one
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Popover open={agencyDropdownOpen} onOpenChange={setAgencyDropdownOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                className="w-full justify-between"
+              >
+                {selectedAgencyId
+                  ? agencies.find((a) => a.id === selectedAgencyId)?.name ||
+                    "Select agency..."
+                  : "Select agency or create new..."}
+                <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-full p-0" align="start">
+              <Command>
+                <CommandInput placeholder="Search agencies..." />
+                <CommandList>
+                  <CommandEmpty>No agencies found.</CommandEmpty>
+                  <CommandGroup>
+                    <CommandItem
+                      value="new"
+                      onSelect={() => handleAgencySelect("new")}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create New Agency
+                    </CommandItem>
+                    {agencies.map((agency) => (
+                      <CommandItem
+                        key={agency.id}
+                        value={agency.name}
+                        onSelect={() => handleAgencySelect(agency.id)}
+                      >
+                        <Building2 className="mr-2 h-4 w-4" />
+                        {agency.name}
+                        {agency.branchType && (
+                          <span className="ml-2 text-xs text-gray-500">
+                            ({agency.branchType})
+                          </span>
+                        )}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+          {isEditingExisting && selectedAgencyId && (
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Editing:</strong> You are editing an existing agency.
+                Changes will update the shared agency record. Click "Update Agency" to save changes or navigate to the edit page for full editing capabilities.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <form
         // @ts-expect-error - handleSubmit type inference issue with zodResolver and z.preprocess
@@ -362,11 +562,20 @@ export default function AddAgencyPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="contactPhone">Phone Number *</Label>
-                    <Input
-                      id="contactPhone"
-                      {...register("contactPhone")}
-                      placeholder="Enter phone number"
-                    />
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                        +63
+                      </span>
+                      <Input
+                        id="contactPhone"
+                        placeholder="9123456789"
+                        className="pl-12"
+                        value={contactPhoneValue}
+                        onChange={handleContactPhoneChange}
+                        maxLength={10}
+                        inputMode="numeric"
+                      />
+                    </div>
                     {errors.contactPhone && (
                       <p className="text-sm text-red-600">
                         {errors.contactPhone.message}
@@ -656,13 +865,31 @@ export default function AddAgencyPage() {
                   </div>
                   <div className="space-y-2">
                     <Label>Phone *</Label>
-                    <Input
-                      value={supervisor.phone}
-                      onChange={(e) =>
-                        updateSupervisor(index, "phone", e.target.value)
-                      }
-                      placeholder="Enter phone number"
-                    />
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                        +63
+                      </span>
+                      <Input
+                        value={supervisor.phone?.replace("+63", "") || ""}
+                        onChange={(e) => handleSupervisorPhoneChange(index, e)}
+                        placeholder="9123456789"
+                        className={`pl-12 ${
+                          supervisor.phone &&
+                          !validatePhoneNumber(supervisor.phone)
+                            ? "border-red-500"
+                            : ""
+                        }`}
+                        maxLength={10}
+                        inputMode="numeric"
+                      />
+                    </div>
+                    {supervisor.phone &&
+                      !validatePhoneNumber(supervisor.phone) && (
+                        <p className="text-sm text-red-600">
+                          Phone number must be in format +63XXXXXXXXXX (10
+                          digits after +63)
+                        </p>
+                      )}
                   </div>
                   <div className="space-y-2">
                     <Label>Position *</Label>

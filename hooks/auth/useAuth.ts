@@ -198,6 +198,7 @@ interface User {
 	isActive: boolean;
 	emailVerified: boolean;
 	allowLoginWithoutRequirements?: boolean;
+	ojtHours?: number;
 	lastLoginAt?: Date;
 	createdAt: Date;
 	updatedAt: Date;
@@ -315,6 +316,7 @@ interface EditUserParams {
 	program?: string;
 	specialization?: string;
 	yearLevel?: string;
+	ojtHours?: number;
 }
 
 const editUser = async (userData: EditUserParams) => {
@@ -368,6 +370,9 @@ const editUser = async (userData: EditUserParams) => {
 	}
 	if (userData.yearLevel !== undefined) {
 		formData.append("yearLevel", userData.yearLevel);
+	}
+	if (userData.ojtHours !== undefined) {
+		formData.append("ojtHours", userData.ojtHours.toString());
 	}
 	if (userData.password) {
 		formData.append("password", userData.password);

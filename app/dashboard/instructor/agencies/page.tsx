@@ -57,10 +57,116 @@ import {
 import { toast } from "sonner";
 import { Agency } from "@/data/agencies";
 import { InstructorStatsCard } from "@/components/instructor-stats-card";
+import { AlertCircle, Clock, CheckCircle2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/hooks/auth/useAuth";
+
+// Helper function to validate agency time settings
+const validateAgencyTimes = (agency: Agency) => {
+  const issues: string[] = [];
+  const warnings: string[] = [];
+
+  if (!agency.openingTime) {
+    issues.push("Opening time not set");
+  }
+  if (!agency.closingTime) {
+    issues.push("Closing time not set");
+  }
+  if (!agency.lunchStartTime) {
+    warnings.push("Lunch start time not set (defaults will be used)");
+  }
+  if (!agency.lunchEndTime) {
+    warnings.push("Lunch end time not set (defaults will be used)");
+  }
+
+  // Validate time relationships if times are set
+  if (agency.openingTime && agency.closingTime) {
+    const opening = parseTime(agency.openingTime);
+    const closing = parseTime(agency.closingTime);
+    if (opening && closing) {
+      // Handle midnight crossover
+      if (closing < opening && closing > 360 && opening < 1200) {
+        // Normal case: closing should be after opening
+        issues.push("Closing time should be after opening time");
+      }
+    }
+  }
+
+  if (agency.lunchStartTime && agency.lunchEndTime) {
+    const lunchStart = parseTime(agency.lunchStartTime);
+    const lunchEnd = parseTime(agency.lunchEndTime);
+    if (lunchStart && lunchEnd) {
+      // Handle midnight crossover
+      if (lunchEnd < lunchStart && lunchEnd > 360 && lunchStart < 1200) {
+        // Normal case: lunch end should be after lunch start
+        issues.push("Lunch end time should be after lunch start time");
+      }
+    }
+  }
+
+  return {
+    isValid: issues.length === 0,
+    issues,
+    warnings,
+  };
+};
+
+// Helper function to parse time string to minutes
+const parseTime = (timeStr: string | undefined): number | null => {
+  if (!timeStr) return null;
+  const parts = timeStr.split(":");
+  if (parts.length < 2) return null;
+  const hours = parseInt(parts[0], 10);
+  const minutes = parseInt(parts[1], 10);
+  if (isNaN(hours) || isNaN(minutes)) return null;
+  return hours * 60 + minutes;
+};
+
+// Helper function to format time for display
+const formatTimeDisplay = (timeStr: string | undefined): string => {
+  if (!timeStr) return "Not set";
+  try {
+    const parts = timeStr.split(":");
+    if (parts.length < 2) return timeStr;
+    const hours = parseInt(parts[0], 10);
+    const minutes = parseInt(parts[1], 10);
+    const date = new Date();
+    date.setHours(hours, minutes, 0, 0);
+    return date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  } catch {
+    return timeStr;
+  }
+};
+
+// Helper function to check if current user can edit an agency
+// User can edit if:
+// 1. They are the creator (instructorId matches)
+// 2. OR they created any supervisor for that agency
+const canEditAgency = (agency: Agency, currentUserId: string | undefined): boolean => {
+  if (!currentUserId) return false;
+  
+  // Check if user is the creator
+  if (agency.instructorId === currentUserId) {
+    return true;
+  }
+  
+  // Check if user created any supervisor for this agency
+  if (agency.supervisors && agency.supervisors.length > 0) {
+    return agency.supervisors.some(
+      (supervisor) => supervisor.createdByInstructorId === currentUserId
+    );
+  }
+  
+  return false;
+};
 
 export default function AgenciesPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<
     "all" | "active" | "inactive"
@@ -71,33 +177,19 @@ export default function AgenciesPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [agencyToDelete, setAgencyToDelete] = useState<Agency | null>(null);
 
-  // Get current instructor's ID
-  const { user } = useAuth();
-  const instructorId = useMemo(() => {
-    const userData = (user as any)?.user || user;
-    return userData?.id || "";
-  }, [user]);
-
-  // Fetch data
+  // Fetch data - agencies are now shared across all instructors
   const { data: agenciesData, isLoading } = useAgencies({
     search: searchTerm || undefined,
     status: statusFilter,
     branchType: branchTypeFilter,
   });
 
-  // Filter agencies - server now handles instructorId and active status filtering
-  // Keep client-side filtering as a safety net
+  // Filter agencies - server handles filtering, client only applies status filter if needed
   const filteredAgencies = useMemo(() => {
     if (!agenciesData?.agencies) return [];
-    if (!instructorId) return []; // Don't show any agencies if instructor ID is not available
 
-    // Server-side filtering should handle instructorId, but keep client-side as safety
-    // Apply status filter on client-side as well
+    // Server handles most filtering, but apply status filter on client-side as well for consistency
     return agenciesData.agencies.filter((agency) => {
-      // Safety check: only show agencies belonging to this instructor
-      const matchesInstructor = agency.instructorId === instructorId;
-      if (!matchesInstructor) return false;
-
       // Apply status filter
       if (statusFilter === "all" || statusFilter === "active") {
         // When "all" or "active", only show active agencies (server should already filter this)
@@ -109,7 +201,7 @@ export default function AgenciesPage() {
 
       return true;
     });
-  }, [agenciesData?.agencies, instructorId, statusFilter]);
+  }, [agenciesData?.agencies, statusFilter]);
 
   const deleteAgency = useDeleteAgency();
   const toggleStatus = useToggleAgencyStatus();
@@ -262,39 +354,43 @@ export default function AgenciesPage() {
                       <Eye className="mr-2 h-4 w-4" />
                       View Details
                     </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        router.push(
-                          `/dashboard/instructor/agencies/${agency.id}/edit`
-                        )
-                      }
-                    >
-                      <Edit className="mr-2 h-4 w-4" />
-                      Edit Agency
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() => handleToggleStatus(agency)}
-                    >
-                      {agency.isActive ? (
-                        <>
-                          <ToggleLeft className="mr-2 h-4 w-4" />
-                          Deactivate
-                        </>
-                      ) : (
-                        <>
-                          <ToggleRight className="mr-2 h-4 w-4" />
-                          Activate
-                        </>
-                      )}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => handleDelete(agency)}
-                      className="text-red-600"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
-                    </DropdownMenuItem>
+                    {canEditAgency(agency, user?.id) && (
+                      <>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            router.push(
+                              `/dashboard/instructor/agencies/${agency.id}/edit`
+                            )
+                          }
+                        >
+                          <Edit className="mr-2 h-4 w-4" />
+                          Edit Agency
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => handleToggleStatus(agency)}
+                        >
+                          {agency.isActive ? (
+                            <>
+                              <ToggleLeft className="mr-2 h-4 w-4" />
+                              Deactivate
+                            </>
+                          ) : (
+                            <>
+                              <ToggleRight className="mr-2 h-4 w-4" />
+                              Activate
+                            </>
+                          )}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleDelete(agency)}
+                          className="text-red-600"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -308,8 +404,86 @@ export default function AgenciesPage() {
                 </Badge>
               </div>
             </CardHeader>
-            {agency.practicums && agency.practicums.length > 0 && (
-              <CardContent className="pt-0">
+            <CardContent className="pt-0">
+              {/* Official Time Settings */}
+              <div className="mt-4 border-t pt-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Clock className="w-4 h-4 text-gray-500" />
+                  <Label className="text-sm font-semibold">
+                    Official Time Settings
+                  </Label>
+                </div>
+                {(() => {
+                  const validation = validateAgencyTimes(agency);
+                  return (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-gray-500">Opening:</span>{" "}
+                          <span className="font-medium">
+                            {formatTimeDisplay(agency.openingTime)}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Closing:</span>{" "}
+                          <span className="font-medium">
+                            {formatTimeDisplay(agency.closingTime)}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Lunch Start:</span>{" "}
+                          <span className="font-medium">
+                            {formatTimeDisplay(agency.lunchStartTime)}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Lunch End:</span>{" "}
+                          <span className="font-medium">
+                            {formatTimeDisplay(agency.lunchEndTime)}
+                          </span>
+                        </div>
+                      </div>
+                      {validation.issues.length > 0 && (
+                        <Alert variant="destructive" className="py-2">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription className="text-xs">
+                            <div className="font-semibold mb-1">
+                              Time Configuration Issues:
+                            </div>
+                            <ul className="list-disc list-inside space-y-0.5">
+                              {validation.issues.map((issue, idx) => (
+                                <li key={idx}>{issue}</li>
+                              ))}
+                            </ul>
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      {validation.issues.length === 0 &&
+                        validation.warnings.length > 0 && (
+                          <Alert className="py-2">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertDescription className="text-xs">
+                              <div className="font-semibold mb-1">Note:</div>
+                              <ul className="list-disc list-inside space-y-0.5">
+                                {validation.warnings.map((warning, idx) => (
+                                  <li key={idx}>{warning}</li>
+                                ))}
+                              </ul>
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                      {validation.isValid &&
+                        validation.warnings.length === 0 && (
+                          <div className="flex items-center gap-1 text-xs text-green-600">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Time settings configured correctly</span>
+                          </div>
+                        )}
+                    </div>
+                  );
+                })()}
+              </div>
+              {agency.practicums && agency.practicums.length > 0 && (
                 <div className="mt-4 border-t pt-4">
                   <Label className="text-sm font-semibold mb-2 block">
                     Trainees ({agency.practicums.length})
@@ -338,8 +512,8 @@ export default function AgenciesPage() {
                     ))}
                   </div>
                 </div>
-              </CardContent>
-            )}
+              )}
+            </CardContent>
           </Card>
         ))}
       </div>
@@ -453,39 +627,43 @@ export default function AgenciesPage() {
                               <Eye className="mr-2 h-4 w-4" />
                               View Details
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() =>
-                                router.push(
-                                  `/dashboard/instructor/agencies/${agency.id}/edit`
-                                )
-                              }
-                            >
-                              <Edit className="mr-2 h-4 w-4" />
-                              Edit Agency
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => handleToggleStatus(agency)}
-                            >
-                              {agency.isActive ? (
-                                <>
-                                  <ToggleLeft className="mr-2 h-4 w-4" />
-                                  Deactivate
-                                </>
-                              ) : (
-                                <>
-                                  <ToggleRight className="mr-2 h-4 w-4" />
-                                  Activate
-                                </>
-                              )}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleDelete(agency)}
-                              className="text-red-600"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete
-                            </DropdownMenuItem>
+                            {canEditAgency(agency, user?.id) && (
+                              <>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    router.push(
+                                      `/dashboard/instructor/agencies/${agency.id}/edit`
+                                    )
+                                  }
+                                >
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Edit Agency
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => handleToggleStatus(agency)}
+                                >
+                                  {agency.isActive ? (
+                                    <>
+                                      <ToggleLeft className="mr-2 h-4 w-4" />
+                                      Deactivate
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ToggleRight className="mr-2 h-4 w-4" />
+                                      Activate
+                                    </>
+                                  )}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleDelete(agency)}
+                                  className="text-red-600"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

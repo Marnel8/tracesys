@@ -1,17 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-} from "@/components/ui/carousel";
-import { usePublicAnnouncements } from "@/hooks/announcement/useAnnouncement";
 import {
   GraduationCap,
   Users,
@@ -20,33 +13,10 @@ import {
   Clock,
   Star,
   ChevronRight,
-  ExternalLink,
-  Pin,
-  Calendar,
-  User,
 } from "lucide-react";
 
 export default function LandingPage() {
   const router = useRouter();
-  const [carouselApi, setCarouselApi] = useState<any>(null);
-  const [isHovered, setIsHovered] = useState(false);
-
-  const {
-    data: announcementsData,
-    isLoading: isLoadingAnnouncements,
-    error: announcementsError,
-  } = usePublicAnnouncements({ limit: 10 });
-  const announcements = announcementsData?.announcements ?? [];
-
-  useEffect(() => {
-    if (!carouselApi || isHovered) return;
-    const interval = setInterval(() => {
-      try {
-        carouselApi.scrollNext();
-      } catch {}
-    }, 4500);
-    return () => clearInterval(interval);
-  }, [carouselApi, isHovered]);
 
   const handleGetStarted = () => {
     router.push("/select-role");
@@ -140,102 +110,6 @@ export default function LandingPage() {
               <Link href="#features">Learn More</Link>
             </Button>
           </div>
-        </div>
-      </section>
-
-      {/* Announcements Section */}
-      <section className="py-20 bg-gradient-to-br from-primary-50 to-secondary-50">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="text-center mb-10">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-3">
-              Latest Announcements
-            </h2>
-            <p className="text-lg text-gray-600">
-              Stay updated with important news and updates.
-            </p>
-          </div>
-
-          {isLoadingAnnouncements ? (
-            <div className="text-center py-12">
-              <p className="text-gray-500">Loading announcements...</p>
-            </div>
-          ) : announcementsError ? (
-            <div className="text-center py-12">
-              <p className="text-gray-500">
-                Unable to load announcements at this time.
-              </p>
-            </div>
-          ) : announcements.length > 0 ? (
-            <Carousel
-              className="w-full"
-              opts={{ loop: true, align: "start" }}
-              setApi={setCarouselApi}
-              onMouseEnter={() => setIsHovered(true)}
-              onMouseLeave={() => setIsHovered(false)}
-            >
-              <CarouselContent className="-ml-0">
-                {announcements.map((a) => (
-                  <CarouselItem key={a.id} className="pl-0">
-                    <Card className="border-primary-200/50 shadow-xl hover:shadow-2xl transition-all duration-300 bg-white/95 backdrop-blur-sm overflow-hidden group">
-                      <CardContent className="p-0">
-                        {/* Pinned Badge */}
-                        {a.isPinned && (
-                          <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 px-6 py-2 flex items-center gap-2">
-                            <Pin className="w-4 h-4 text-yellow-900" />
-                            <span className="text-xs font-semibold text-yellow-900 uppercase tracking-wide">
-                              Pinned Announcement
-                            </span>
-                          </div>
-                        )}
-                        
-                        <div className="p-8 md:p-10">
-                          {/* Title */}
-                          <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 group-hover:text-primary-700 transition-colors">
-                            {a.title}
-                          </h3>
-                          
-                          {/* Content */}
-                          <div className="prose prose-lg max-w-none mb-6">
-                            <p className="text-gray-700 text-base md:text-lg leading-relaxed whitespace-pre-line">
-                              {a.content}
-                            </p>
-                          </div>
-                          
-                          {/* Metadata */}
-                          <div className="flex flex-wrap items-center gap-4 pt-4 border-t border-gray-200">
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <Calendar className="w-4 h-4 text-primary-600" />
-                              <span className="font-medium">
-                                {new Date(a.createdAt).toLocaleDateString("en-US", {
-                                  year: "numeric",
-                                  month: "long",
-                                  day: "numeric",
-                                })}
-                              </span>
-                            </div>
-                            {a.author && (
-                              <div className="flex items-center gap-2 text-sm text-gray-600">
-                                <User className="w-4 h-4 text-primary-600" />
-                                <span>
-                                  {a.author.firstName} {a.author.lastName}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </CarouselItem>
-                ))}
-              </CarouselContent>
-            </Carousel>
-          ) : (
-            <div className="text-center py-12">
-              <p className="text-gray-500">
-                No announcements available at this time.
-              </p>
-            </div>
-          )}
         </div>
       </section>
 

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, FileText, Upload, MessageSquare } from "lucide-react";
+import { ArrowLeft, FileText, Upload, MessageSquare, AlertTriangle } from "lucide-react";
 import { useRequirementTemplate } from "@/hooks/requirement-template/useRequirementTemplate";
 import {
   useCreateRequirementFromTemplate,
@@ -302,13 +302,37 @@ export default function RequirementTemplateDetailPage() {
             </CardContent>
           </Card>
 
+          {/* Rejection Feedback Banner */}
+          {matchedRequirement?.status === "rejected" && matchedRequirement?.feedback && (
+            <Card className="border border-red-200 shadow-sm bg-red-50">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg text-red-900 flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                  Rejection Feedback
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="bg-white/70 border border-red-200 rounded-lg p-4">
+                  <p className="text-sm text-red-800 whitespace-pre-wrap leading-relaxed mb-3">
+                    {matchedRequirement.feedback}
+                  </p>
+                  <p className="text-xs font-medium text-red-700">
+                    Please review the feedback above and upload a revised file below.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card className="border border-primary-200 shadow-sm">
             <CardHeader className="pb-4">
               <CardTitle className="text-lg text-gray-900">
-                Submit Your Work
+                {matchedRequirement ? "Update Your Submission" : "Submit Your Work"}
               </CardTitle>
               <p className="text-sm text-gray-600">
-                Upload your completed requirement file
+                {matchedRequirement
+                  ? "Upload a new file to replace your current submission"
+                  : "Upload your completed requirement file"}
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -316,7 +340,7 @@ export default function RequirementTemplateDetailPage() {
               {matchedRequirement?.fileName && !selectedFile && (
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                    Requirement file
+                    Current Submission
                   </p>
                   <div className="bg-gray-50 border border-dashed border-gray-300 rounded-lg p-4">
                     <div className="flex items-center justify-between gap-3">
@@ -357,6 +381,9 @@ export default function RequirementTemplateDetailPage() {
                         </a>
                       )}
                     </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      ⚠️ Uploading a new file will replace this submission.
+                    </p>
                   </div>
                 </div>
               )}
@@ -414,7 +441,7 @@ export default function RequirementTemplateDetailPage() {
                         <FileText className="w-5 h-5 text-primary-600 flex-shrink-0 mt-0.5" />
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium text-primary-900 mb-1">
-                            Selected file
+                            New file to upload
                           </p>
                           <p className="text-sm text-primary-800 truncate">
                             {selectedFile.name}
@@ -422,6 +449,11 @@ export default function RequirementTemplateDetailPage() {
                           <p className="text-xs text-primary-600 mt-1">
                             {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
                           </p>
+                          {matchedRequirement && (
+                            <p className="text-xs text-orange-600 mt-2 font-medium">
+                              ⚠️ This will replace your current submission.
+                            </p>
+                          )}
                         </div>
                       </div>
                       <Button
@@ -446,10 +478,16 @@ export default function RequirementTemplateDetailPage() {
                   <Button
                     onClick={onSubmit}
                     disabled={!selectedFile || isSubmitting}
-                    className="bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed min-w-[120px]"
+                    className={`min-w-[120px] disabled:opacity-60 disabled:cursor-not-allowed ${
+                      matchedRequirement?.status === "rejected"
+                        ? "bg-red-600 text-white hover:bg-red-700"
+                        : "bg-primary-600 text-white hover:bg-primary-700"
+                    }`}
                   >
                     {isSubmitting
                       ? "Submitting..."
+                      : matchedRequirement?.status === "rejected"
+                      ? "Resubmit"
                       : matchedRequirement
                       ? "Update Submission"
                       : "Submit"}

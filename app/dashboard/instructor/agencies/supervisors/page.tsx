@@ -137,6 +137,20 @@ function SupervisorsPageContent() {
 		setStatusFilter(value as "all" | "active" | "inactive");
 	};
 
+	const validatePhoneNumber = (phone: string): boolean => {
+		return /^\+63\d{10}$/.test(phone);
+	};
+
+	// Handle phone number input with +63 prefix
+	const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const value = e.target.value.replace(/\D/g, ""); // Remove non-digits
+		if (value.length <= 10) {
+			setFormData({ ...formData, phone: value ? `+63${value}` : "" });
+		}
+	};
+
+	const phoneValue = formData.phone?.replace("+63", "") || "";
+
 	const handleCreate = () => {
 		if (!selectedAgencyId) {
 			toast.error("Please select an agency first");
@@ -179,6 +193,11 @@ function SupervisorsPageContent() {
 			return;
 		}
 
+		if (!validatePhoneNumber(formData.phone)) {
+			toast.error("Phone number must be in format +63XXXXXXXXXX (10 digits after +63)");
+			return;
+		}
+
 		createSupervisor.mutate(formData, {
 			onSuccess: () => {
 				setCreateDialogOpen(false);
@@ -198,6 +217,11 @@ function SupervisorsPageContent() {
 	const handleSubmitEdit = () => {
 		if (!editingSupervisor || !formData.name || !formData.email || !formData.phone || !formData.position) {
 			toast.error("Please fill in all required fields");
+			return;
+		}
+
+		if (!validatePhoneNumber(formData.phone)) {
+			toast.error("Phone number must be in format +63XXXXXXXXXX (10 digits after +63)");
 			return;
 		}
 
@@ -601,11 +625,28 @@ function SupervisorsPageContent() {
 						</div>
 						<div>
 							<label className="text-sm font-medium">Phone *</label>
-							<Input
-								value={formData.phone}
-								onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-								placeholder="Enter phone number"
-							/>
+							<div className="relative">
+								<span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+									+63
+								</span>
+								<Input
+									value={phoneValue}
+									onChange={handlePhoneChange}
+									placeholder="9123456789"
+									className={`pl-12 ${
+										formData.phone && !validatePhoneNumber(formData.phone)
+											? "border-red-500"
+											: ""
+									}`}
+									maxLength={10}
+									inputMode="numeric"
+								/>
+							</div>
+							{formData.phone && !validatePhoneNumber(formData.phone) && (
+								<p className="text-sm text-red-600 mt-1">
+									Phone number must be in format +63XXXXXXXXXX (10 digits after +63)
+								</p>
+							)}
 						</div>
 						<div>
 							<label className="text-sm font-medium">Position *</label>

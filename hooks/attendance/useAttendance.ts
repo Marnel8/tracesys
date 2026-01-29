@@ -65,6 +65,7 @@ export interface AttendanceRecord {
   overtimeTimeIn?: string | null;
   overtimeTimeOut?: string | null;
   hours?: number | null;
+  undertimeHours?: number | null;
   status: AttendanceStatus;
   latitude?: number | null;
   longitude?: number | null;
@@ -107,6 +108,12 @@ export interface AttendanceRecord {
   approvedBy?: string | null;
   approvedAt?: string | null;
   approvalNotes?: string | null;
+  approver?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null;
   // timestamps
   createdAt: string;
   updatedAt: string;
@@ -136,6 +143,8 @@ const ENDPOINTS = {
   detail: (id: string) => `/attendance/${id}`,
   clockIn: "/attendance/clock-in",
   clockOut: "/attendance/clock-out",
+  approve: (id: string) => `/attendance/${id}/approve`,
+  reject: (id: string) => `/attendance/${id}/reject`,
 };
 
 export const attendanceKeys = {
@@ -300,6 +309,48 @@ export const useClockOut = () => {
       // Format time strings in error messages (e.g., "17:00:00" -> "05:00 PM")
       const formattedMessage = formatTimeInMessage(message);
       toast.error(formattedMessage);
+    },
+  });
+};
+
+export const useApproveAttendance = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { id: string; notes?: string }) => {
+      const res = await api.put(ENDPOINTS.approve(data.id), {
+        notes: data.notes || null,
+      });
+      return res.data.data as AttendanceRecord;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: attendanceKeys.lists() });
+      toast.success("Attendance approved successfully");
+    },
+    onError: (err: any) => {
+      const message =
+        err.response?.data?.message || "Failed to approve attendance";
+      toast.error(message);
+    },
+  });
+};
+
+export const useRejectAttendance = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { id: string; reason?: string }) => {
+      const res = await api.put(ENDPOINTS.reject(data.id), {
+        reason: data.reason || null,
+      });
+      return res.data.data as AttendanceRecord;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: attendanceKeys.lists() });
+      toast.success("Attendance rejected successfully");
+    },
+    onError: (err: any) => {
+      const message =
+        err.response?.data?.message || "Failed to reject attendance";
+      toast.error(message);
     },
   });
 };

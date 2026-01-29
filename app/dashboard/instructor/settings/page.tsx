@@ -34,6 +34,7 @@ import {
   LogOut,
   Camera,
   Loader2,
+  Clock,
 } from "lucide-react";
 import {
   useAuth,
@@ -74,11 +75,10 @@ const profileSchema = z.object({
     .string()
     .min(1, "Phone number is required")
     .regex(
-      /^[\d\s\-()+]*$/,
-      "Phone number can only contain numbers, spaces, hyphens, parentheses, and plus sign"
+      /^\+63\d{10}$/,
+      "Phone number must be in format +63XXXXXXXXXX (10 digits after +63)"
     ),
   address: z.string().optional(),
-  bio: z.string().optional(),
   instructorId: z
     .string()
     .regex(
@@ -86,7 +86,7 @@ const profileSchema = z.object({
       "Instructor ID can only contain letters, numbers, and hyphens"
     )
     .optional(),
-  gender: z.enum(["male", "female", "other", ""]).optional(),
+  gender: z.enum(["male", "female", ""]).optional(),
   age: z
     .number()
     .refine((val) => val === 0 || (val >= 22 && val <= 80), {
@@ -95,6 +95,11 @@ const profileSchema = z.object({
     .optional(),
   departmentId: z.string().optional(),
   program: z.string().optional(),
+  ojtHours: z
+    .number()
+    .int("OJT hours must be a whole number")
+    .min(1, "OJT hours must be at least 1")
+    .optional(),
 });
 
 const passwordSchema = z
@@ -140,14 +145,24 @@ export default function SettingsPage() {
       email: "",
       phone: "",
       address: "",
-      bio: "",
       instructorId: "",
       gender: "",
       age: 0,
       departmentId: "",
       program: "",
+      ojtHours: undefined,
     },
   });
+
+  // Handle phone number input with +63 prefix
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, ""); // Remove non-digits
+    if (value.length <= 10) {
+      setProfileValue("phone", value ? `+63${value}` : "", { shouldValidate: true });
+    }
+  };
+
+  const phoneValue = watchProfile("phone")?.replace("+63", "") || "";
 
   const watchedDepartmentId = watchProfile("departmentId");
 
@@ -216,12 +231,12 @@ export default function SettingsPage() {
         email: userData.email || "",
         phone: userData.phone || "",
         address: userData.address || "",
-        bio: userData.bio || "",
         instructorId: userData.instructorId || "",
         gender: userData.gender || "",
         age: userData.age || 0,
         departmentId: departmentId || undefined,
         program: program || undefined,
+        ojtHours: userData.ojtHours || undefined,
       };
 
       // Reset form with user data
@@ -322,13 +337,13 @@ export default function SettingsPage() {
         email: data.email,
         phone: data.phone,
         address: data.address,
-        bio: data.bio,
         instructorId: data.instructorId,
         role: user.role,
         gender: data.gender,
         age: data.age,
         departmentId: data.departmentId ? data.departmentId : undefined,
         program: data.program ? data.program : undefined,
+        ojtHours: data.ojtHours ? data.ojtHours : undefined,
       };
 
       if (avatarFile) {
@@ -411,7 +426,7 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <User className="w-5 h-5" />
-                Profile Information
+                Personal Information
               </CardTitle>
               <CardDescription>
                 Update your personal information and profile details
@@ -519,11 +534,21 @@ export default function SettingsPage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone Number *</Label>
-                  <Input
-                    id="phone"
-                    {...registerProfile("phone")}
-                    disabled={editUserMutation.isPending}
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                      +63
+                    </span>
+                    <Input
+                      id="phone"
+                      disabled={editUserMutation.isPending}
+                      className="pl-12"
+                      placeholder="9123456789"
+                      value={phoneValue}
+                      onChange={handlePhoneChange}
+                      maxLength={10}
+                      inputMode="numeric"
+                    />
+                  </div>
                   {profileErrors.phone && (
                     <p className="text-sm text-red-600">
                       {profileErrors.phone.message}
@@ -550,7 +575,7 @@ export default function SettingsPage() {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="gender">Gender</Label>
+                    <Label htmlFor="gender">Sex</Label>
                     <Controller
                       name="gender"
                       control={profileControl}
@@ -561,12 +586,11 @@ export default function SettingsPage() {
                           disabled={editUserMutation.isPending}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Select gender" />
+                            <SelectValue placeholder="Select sex" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="male">Male</SelectItem>
                             <SelectItem value="female">Female</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
                           </SelectContent>
                         </Select>
                       )}
@@ -767,21 +791,6 @@ export default function SettingsPage() {
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="bio">Bio</Label>
-                  <Textarea
-                    id="bio"
-                    {...registerProfile("bio")}
-                    rows={3}
-                    disabled={editUserMutation.isPending}
-                  />
-                  {profileErrors.bio && (
-                    <p className="text-sm text-red-600">
-                      {profileErrors.bio.message}
-                    </p>
-                  )}
-                </div>
-
                 <Button
                   type="submit"
                   disabled={editUserMutation.isPending || userLoading}
@@ -794,6 +803,61 @@ export default function SettingsPage() {
                     </>
                   ) : (
                     "Save Changes"
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* OJT Settings */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="w-5 h-5" />
+                OJT Settings
+              </CardTitle>
+              <CardDescription>
+                Configure default OJT hours for new students
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <form
+                onSubmit={handleProfileSubmit(onProfileSubmit)}
+                className="space-y-6"
+              >
+                <div className="space-y-2">
+                  <Label htmlFor="ojtHours">Default OJT Hours</Label>
+                  <Input
+                    id="ojtHours"
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    {...registerProfile("ojtHours", { valueAsNumber: true })}
+                    disabled={editUserMutation.isPending}
+                    placeholder="e.g., 400"
+                  />
+                  {profileErrors.ojtHours && (
+                    <p className="text-sm text-red-600">
+                      {profileErrors.ojtHours.message}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-500">
+                    This will be used as the default OJT hours when creating new students and practicums
+                  </p>
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={editUserMutation.isPending || userLoading}
+                  className="bg-primary-500 hover:bg-primary-600"
+                >
+                  {editUserMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Save OJT Settings"
                   )}
                 </Button>
               </form>
@@ -1044,7 +1108,7 @@ export default function SettingsPage() {
 										<SelectItem value="15">15 minutes</SelectItem>
 										<SelectItem value="30">30 minutes</SelectItem>
 										<SelectItem value="60">1 hour</SelectItem>
-										<SelectItem value="120">2 hours</SelectItem>
+										<SelectItem value="120">2 hour/s</SelectItem>
 									</SelectContent>
 								</Select>
 								<p className="text-sm text-gray-600">
@@ -1144,32 +1208,6 @@ export default function SettingsPage() {
 							</Button>
 						</CardContent>
 					</Card> */}
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-red-600">Danger Zone</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Button
-                variant="outline"
-                className="w-full justify-start text-red-600 border-red-200 hover:bg-red-50"
-                onClick={handleSignOut}
-                disabled={isLoggingOut}
-              >
-                {isLoggingOut ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Signing Out...
-                  </>
-                ) : (
-                  <>
-                    <LogOut className="w-4 h-4 mr-2" />
-                    Sign Out
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>

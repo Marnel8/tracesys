@@ -176,6 +176,7 @@ export default function ReportsPage() {
     setHoursLogged(hours);
 
     setSelectedFiles([]);
+    setSelectedReportId(report.id); // Set selected report to show current file
     // Scroll to top of form so the student sees the editing state
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -263,6 +264,7 @@ export default function ReportsPage() {
             setDateRange({ from: undefined, to: undefined });
             setHoursLogged("");
             setReportType("weekly");
+            setSelectedReportId(null);
           },
         }
       );
@@ -313,6 +315,7 @@ export default function ReportsPage() {
                 setDateRange({ from: undefined, to: undefined });
                 setHoursLogged("");
                 setReportType("weekly");
+                setSelectedReportId(null);
               },
             }
           );
@@ -354,8 +357,13 @@ export default function ReportsPage() {
               <CardHeader className="pb-3 sm:pb-6">
                 <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
                   <Plus className="w-4 h-4 sm:w-5 sm:h-5 text-primary-600" />
-                  Submit New Report
+                  {editingReportId ? "Update Report" : "Submit New Report"}
                 </CardTitle>
+                {editingReportId && (
+                  <p className="text-xs sm:text-sm text-gray-600 mt-2">
+                    ⚠️ Resubmitting will replace your previous submission. Make sure to review all changes before submitting.
+                  </p>
+                )}
               </CardHeader>
               <CardContent className="space-y-3 sm:space-y-4">
                 <div className="space-y-2">
@@ -509,11 +517,51 @@ export default function ReportsPage() {
                       ? "Weekly DTR (PDF Required)"
                       : "Narrative Report Document (PDF Required)"}
                   </Label>
+                  
+                  {/* Current File Display when Editing */}
+                  {editingReportId && selectedReport?.fileUrl && !selectedFiles.length && (
+                    <div className="bg-gray-50 border border-dashed border-gray-300 rounded-lg p-3 sm:p-4 mb-3">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                        Current File
+                      </p>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <FileText className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                          <span className="text-xs sm:text-sm text-gray-700 truncate">
+                            {getFileNameFromUrl(selectedReport.fileUrl)}
+                          </span>
+                        </div>
+                        <div className="flex gap-2 flex-shrink-0">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              if (selectedReport?.fileUrl) {
+                                handleDownloadReport(
+                                  selectedReport.fileUrl,
+                                  getFileNameFromUrl(selectedReport.fileUrl)
+                                );
+                              }
+                            }}
+                            className="text-xs h-7"
+                          >
+                            <Download className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        ⚠️ Uploading a new file will replace this submission.
+                      </p>
+                    </div>
+                  )}
+
                   <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-6">
                     <div className="text-center">
                       <Upload className="w-6 h-6 sm:w-8 sm:h-8 mx-auto text-gray-400 mb-2" />
                       <p className="text-xs sm:text-sm text-gray-600 mb-3">
-                        {reportType === "weekly"
+                        {editingReportId
+                          ? "Upload a new file to replace your current submission"
+                          : reportType === "weekly"
                           ? "Upload your weekly Daily Time Record (DTR) in PDF format"
                           : "Upload your narrative report document in PDF format"}
                       </p>
@@ -532,7 +580,7 @@ export default function ReportsPage() {
                         }
                         className="text-xs sm:text-sm"
                       >
-                        Choose PDF File
+                        {editingReportId ? "Choose New PDF File" : "Choose PDF File"}
                       </Button>
                     </div>
                   </div>
@@ -540,7 +588,9 @@ export default function ReportsPage() {
                   {selectedFiles.length > 0 && (
                     <div className="space-y-2">
                       <p className="text-xs sm:text-sm font-medium">
-                        {reportType === "weekly"
+                        {editingReportId
+                          ? "New file to upload:"
+                          : reportType === "weekly"
                           ? "Selected DTR File:"
                           : "Selected Narrative Report File:"}
                       </p>
@@ -570,6 +620,11 @@ export default function ReportsPage() {
                           </div>
                         </div>
                       ))}
+                      {editingReportId && (
+                        <p className="text-xs text-orange-600 font-medium">
+                          ⚠️ This will replace your current submission.
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -608,6 +663,7 @@ export default function ReportsPage() {
                       setDateRange({ from: undefined, to: undefined });
                       setHoursLogged("");
                       setReportType("weekly");
+                      setSelectedReportId(null);
                     }}
                     className="border border-gray-300 text-gray-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50 flex-1 sm:flex-none text-sm"
                   >
@@ -721,13 +777,30 @@ export default function ReportsPage() {
                       </div>
 
                       {report.feedback && (
-                        <div className="bg-gray-50 p-2 rounded text-xs">
-                          <p className="font-medium text-gray-900 mb-1">
-                            Feedback:
+                        <div className={`p-2 rounded text-xs ${
+                          report.status === "rejected"
+                            ? "bg-red-50 border border-red-200"
+                            : "bg-gray-50"
+                        }`}>
+                          <p className={`font-medium mb-1 ${
+                            report.status === "rejected"
+                              ? "text-red-900"
+                              : "text-gray-900"
+                          }`}>
+                            {report.status === "rejected" ? "Rejection Feedback:" : "Feedback:"}
                           </p>
-                          <p className="text-gray-600 line-clamp-2">
+                          <p className={`line-clamp-2 ${
+                            report.status === "rejected"
+                              ? "text-red-800"
+                              : "text-gray-600"
+                          }`}>
                             {report.feedback}
                           </p>
+                          {report.status === "rejected" && (
+                            <p className="text-red-600 mt-1 font-medium">
+                              Please review and resubmit with revisions.
+                            </p>
+                          )}
                         </div>
                       )}
 
@@ -762,15 +835,19 @@ export default function ReportsPage() {
                             <span className="xs:hidden">Download</span>
                           </Button>
                         )}
-                        {report.status === "rejected" && (
+                        {(report.status === "rejected" || report.status === "submitted") && (
                           <Button
                             size="sm"
                             variant="outline"
-                            className="w-full sm:w-auto text-xs border border-red-300 text-red-700 transition-all duration-300 hover:border-red-400 hover:bg-red-50/50"
+                            className={`w-full sm:w-auto text-xs transition-all duration-300 ${
+                              report.status === "rejected"
+                                ? "border border-red-300 text-red-700 hover:border-red-400 hover:bg-red-50/50"
+                                : "border border-primary-300 text-primary-700 hover:border-primary-400 hover:bg-primary-50/50"
+                            }`}
                             onClick={() => startEditReport(report)}
                           >
                             <Upload className="w-3 h-3 mr-1" />
-                            Edit &amp; Resubmit
+                            {report.status === "rejected" ? "Edit & Resubmit" : "Update Report"}
                           </Button>
                         )}
                       </div>

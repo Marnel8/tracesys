@@ -275,7 +275,7 @@ export default function AdminSectionsPage() {
             <DialogHeader>
               <DialogTitle>Create New Section</DialogTitle>
               <DialogDescription>
-                Add a new section to a course.
+                Add a new section to a program.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -309,7 +309,7 @@ export default function AdminSectionsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="course">Course</Label>
+                  <Label htmlFor="course">Program</Label>
                   <Select
                     onValueChange={(value) =>
                       setNewSection({ ...newSection, courseId: value })
@@ -320,8 +320,8 @@ export default function AdminSectionsPage() {
                       <SelectValue
                         placeholder={
                           coursesLoading
-                            ? "Loading courses..."
-                            : "Select course"
+                            ? "Loading programs..."
+                            : "Select program"
                         }
                       />
                     </SelectTrigger>
@@ -330,7 +330,7 @@ export default function AdminSectionsPage() {
                         <div className="flex items-center justify-center py-4">
                           <Loader2 className="w-4 h-4 animate-spin mr-2" />
                           <span className="text-sm text-gray-500">
-                            Loading courses...
+                            Loading programs...
                           </span>
                         </div>
                       ) : getCourseOptions().length === 0 ? (
@@ -481,7 +481,7 @@ export default function AdminSectionsPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="edit-course">Course</Label>
+                <Label htmlFor="edit-course">Program</Label>
                 <Select
                   onValueChange={(value) =>
                     setEditSection({ ...editSection, courseId: value })
@@ -492,7 +492,7 @@ export default function AdminSectionsPage() {
                   <SelectTrigger>
                     <SelectValue
                       placeholder={
-                        coursesLoading ? "Loading courses..." : "Select course"
+                        coursesLoading ? "Loading programs..." : "Select program"
                       }
                     />
                   </SelectTrigger>
@@ -501,7 +501,7 @@ export default function AdminSectionsPage() {
                       <div className="flex items-center justify-center py-4">
                         <Loader2 className="w-4 h-4 animate-spin mr-2" />
                         <span className="text-sm text-gray-500">
-                          Loading courses...
+                          Loading programs...
                         </span>
                       </div>
                     ) : getCourseOptions().length === 0 ? (
@@ -682,7 +682,7 @@ export default function AdminSectionsPage() {
                   <div>
                     <CardTitle className="text-lg">{section.name}</CardTitle>
                     <CardDescription className="text-sm">
-                      {section.course?.name || "No course assigned"}
+                      {section.course?.name || "No program assigned"}
                     </CardDescription>
                   </div>
                   <DropdownMenu>
@@ -756,7 +756,7 @@ export default function AdminSectionsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Year/Section</TableHead>
-                  <TableHead>Course</TableHead>
+                  <TableHead>Program</TableHead>
                   <TableHead>Year Level</TableHead>
                   <TableHead>Semester</TableHead>
                   <TableHead>Academic Year</TableHead>
@@ -816,7 +816,7 @@ export default function AdminSectionsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="text-sm text-gray-600">
-                          {section.course?.name || "No course assigned"}
+                          {section.course?.name || "No program assigned"}
                         </div>
                       </TableCell>
                       <TableCell>

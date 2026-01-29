@@ -391,7 +391,7 @@ export default function AttendanceReportsPage() {
                 <ul className="text-sm text-yellow-700 mt-2 space-y-1">
                   <li>• BSIS 4A section has lower attendance (89%)</li>
                   <li>• Week 5 showed a dip in overall attendance</li>
-                  <li>• 3 students have concerning absence patterns</li>
+                  <li>• 3 student/s have concerning absence patterns</li>
                 </ul>
               </div>
               <div className="p-3 bg-red-50 rounded-lg">

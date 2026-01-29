@@ -43,7 +43,12 @@ const instructorSignupSchema = z
         (email) => email.endsWith("@omsc.edu.ph"),
         "Email must end with @omsc.edu.ph"
       ),
-    phone: z.string().min(10, "Contact number must be at least 10 digits"),
+    phone: z
+      .string()
+      .regex(
+        /^\+63\d{10}$/,
+        "Phone number must be in format +63XXXXXXXXXX (10 digits after +63)"
+      ),
     age: z
       .number({
         required_error: "Age is required",
@@ -113,6 +118,16 @@ export default function InstructorSignupPage() {
   } = useForm<InstructorSignupForm>({
     resolver: zodResolver(instructorSignupSchema),
   });
+
+  // Handle phone number input with +63 prefix
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, ""); // Remove non-digits
+    if (value.length <= 10) {
+      setValue("phone", value ? `+63${value}` : "", { shouldValidate: true });
+    }
+  };
+
+  const phoneValue = watch("phone")?.replace("+63", "") || "";
 
   // Watch department changes to sync selectedDepartmentId (backup in case Controller doesn't fire)
   const watchedDepartment = watch("department");
@@ -459,12 +474,20 @@ export default function InstructorSignupPage() {
                   >
                     Contact Number *
                   </Label>
-                  <Input
-                    id="contactNumber"
-                    placeholder="+63 912 345 6789"
-                    className="border-gray-300 focus:border-accent-500 focus:ring-accent-500"
-                    {...register("phone")}
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                      +63
+                    </span>
+                    <Input
+                      id="contactNumber"
+                      placeholder="9123456789"
+                      className="border-gray-300 focus:border-accent-500 focus:ring-accent-500 pl-12"
+                      value={phoneValue}
+                      onChange={handlePhoneChange}
+                      maxLength={10}
+                      inputMode="numeric"
+                    />
+                  </div>
                   {errors.phone && (
                     <p className="text-sm text-red-600">
                       {errors.phone.message}

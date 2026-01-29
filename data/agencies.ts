@@ -33,6 +33,7 @@ export interface Supervisor {
 	position: string;
 	department?: string;
 	isActive: boolean;
+	createdByInstructorId?: string;
 	createdAt: string;
 	updatedAt: string;
 }

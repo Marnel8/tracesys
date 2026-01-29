@@ -165,6 +165,28 @@ export default function RequirementsPage() {
     }
   };
 
+  // Helper function to determine if a requirement can be updated
+  const canUpdateRequirement = (requirement: any) => {
+    return requirement.templateId && 
+           (requirement.status === "rejected" || 
+            requirement.status === "submitted" || 
+            requirement.status === "approved");
+  };
+
+  // Get update button text based on status
+  const getUpdateButtonText = (status: string) => {
+    switch (status) {
+      case "rejected":
+        return "Resubmit";
+      case "submitted":
+        return "Update Submission";
+      case "approved":
+        return "Update Submission";
+      default:
+        return "Update";
+    }
+  };
+
   const approvedCount = requirements.filter(
     (r: any) => r.status === "approved"
   ).length;
@@ -576,13 +598,30 @@ export default function RequirementsPage() {
                       </div>
 
                       {requirement.feedback && (
-                        <div className="bg-gray-50 border border-gray-200 p-3 rounded-lg">
-                          <p className="text-xs font-medium text-gray-500 mb-1">
-                            Feedback:
+                        <div className={`p-3 rounded-lg border ${
+                          requirement.status === "rejected"
+                            ? "bg-red-50 border-red-200"
+                            : "bg-gray-50 border-gray-200"
+                        }`}>
+                          <p className={`text-xs font-medium mb-1 ${
+                            requirement.status === "rejected"
+                              ? "text-red-700"
+                              : "text-gray-500"
+                          }`}>
+                            {requirement.status === "rejected" ? "Rejection Feedback:" : "Feedback:"}
                           </p>
-                          <p className="text-xs sm:text-sm text-gray-700 break-words">
+                          <p className={`text-xs sm:text-sm break-words ${
+                            requirement.status === "rejected"
+                              ? "text-red-800"
+                              : "text-gray-700"
+                          }`}>
                             {requirement.feedback}
                           </p>
+                          {requirement.status === "rejected" && (
+                            <p className="text-xs text-red-600 mt-2 font-medium">
+                              Please review the feedback and resubmit with revisions.
+                            </p>
+                          )}
                         </div>
                       )}
 
@@ -610,6 +649,30 @@ export default function RequirementsPage() {
                           <span className="min-[375px]:hidden">View</span>
                         </Button>
                       </Link>
+                      {canUpdateRequirement(requirement) && requirement.templateId && (
+                        <Link
+                          href={`/dashboard/student/requirements/templates/${requirement.templateId}`}
+                          className="flex-1 lg:flex-none"
+                        >
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className={`w-full transition-all duration-300 text-xs sm:text-sm ${
+                              requirement.status === "rejected"
+                                ? "border border-red-500 bg-red-50 text-red-700 hover:border-red-600 hover:bg-red-100"
+                                : "border border-primary-500 bg-primary-50 text-primary-700 hover:border-primary-400 hover:bg-primary-50/50"
+                            }`}
+                          >
+                            <Upload className="w-3 h-3 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 flex-shrink-0" />
+                            <span className="hidden min-[375px]:inline">
+                              {getUpdateButtonText(requirement.status)}
+                            </span>
+                            <span className="min-[375px]:hidden">
+                              {requirement.status === "rejected" ? "Resubmit" : "Update"}
+                            </span>
+                          </Button>
+                        </Link>
+                      )}
                     </div>
                   </div>
                 </CardContent>

@@ -889,7 +889,7 @@ export default function AnnouncementsPage() {
           trend={
             announcementStats?.publishedAnnouncements
               ? {
-                  label: `${announcementStats.publishedAnnouncements} active`,
+                  label: `${announcementStats.publishedAnnouncements} posted`,
                   variant: "positive",
                 }
               : undefined

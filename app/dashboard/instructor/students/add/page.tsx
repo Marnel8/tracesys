@@ -57,8 +57,9 @@ import { useDepartments } from "@/hooks/department";
 import { useCourses } from "@/hooks/course";
 import { useSections } from "@/hooks/section";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/auth/useAuth";
 
-const createStudentSchema = (includePracticum: boolean) => z.object({
+const createStudentSchema = (includePracticum: boolean, instructorOjtHours?: number) => z.object({
 	// Personal Information
 	firstName: z.string().min(2, "First name must be at least 2 characters"),
 	lastName: z.string().min(2, "Last name must be at least 2 characters"),
@@ -73,7 +74,7 @@ const createStudentSchema = (includePracticum: boolean) => z.object({
 	// Academic Information
 	studentId: z.string().min(8, "Student ID must be at least 8 characters"),
 	department: z.string().min(1, "Please select a college"),
-	course: z.string().min(1, "Please select a course"),
+	course: z.string().min(1, "Please select a program"),
 	section: z.string().min(1, "Please select a section"),
 	year: z.string().min(1, "Please select a year"),
 	semester: z.string().min(1, "Please select a semester"),
@@ -86,7 +87,7 @@ const createStudentSchema = (includePracticum: boolean) => z.object({
 	position: z.string().optional(),
 	startDate: z.string().optional(),
 	endDate: z.string().optional(),
-	totalHours: z.number().min(1, "Total hours must be at least 1").default(400),
+	totalHours: z.number().min(1, "Total hours must be at least 1").default(instructorOjtHours || 400),
 	workSetup: z.enum(["On-site"]).default("On-site"), // Work setup is always "On-site"
 
 	// Account Settings
@@ -117,6 +118,7 @@ type CreatedStudent = StudentFormData & {
 
 export default function AddStudentPage() {
 	const router = useRouter();
+	const { user } = useAuth();
 	const [showPassword, setShowPassword] = useState(false);
 	const [selectedAgencyId, setSelectedAgencyId] = useState<string>("");
 	const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
@@ -150,6 +152,9 @@ export default function AddStudentPage() {
 	const [submittedSendCredentials, setSubmittedSendCredentials] = useState(true);
 	const [includePracticum, setIncludePracticum] = useState(false);
 
+	// Get instructor's OJT hours
+	const instructorOjtHours = (user as any)?.user?.ojtHours || (user as any)?.ojtHours;
+
 	// Use the student registration hook
 	const registerStudent = useRegisterStudent();
 
@@ -160,7 +165,7 @@ export default function AddStudentPage() {
 		setValue,
 		formState: { errors },
 	} = useForm<StudentFormData>({
-		resolver: zodResolver(createStudentSchema(includePracticum)) as any,
+		resolver: zodResolver(createStudentSchema(includePracticum, instructorOjtHours)) as any,
 		defaultValues: {
 			sendCredentials: true,
 			generatePassword: true,
@@ -186,7 +191,7 @@ export default function AddStudentPage() {
 			position: "",
 			startDate: "",
 			endDate: "",
-			totalHours: 400,
+			totalHours: instructorOjtHours || 400,
 			workSetup: "On-site",
 			customPassword: "",
 		},
@@ -258,7 +263,7 @@ export default function AddStudentPage() {
 		const sectionName = sectionsData?.sections.find((s) => s.id === data.section)?.name || "";
 
 		if (!departmentCode || !courseCode || !sectionName) {
-			toast.error("Please select college, course, and section.");
+			toast.error("Please select college, program, and section.");
 			return;
 		}
 
@@ -768,7 +773,7 @@ export default function AddStudentPage() {
 								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 									<div className="space-y-2">
 										<Label htmlFor="course" className={errors.course ? "text-red-700" : ""}>
-											Course *
+											Program *
 											{errors.course && (
 												<Badge variant="destructive" className="ml-2 text-xs">
 													<X className="w-3 h-3 mr-1" />
@@ -782,7 +787,7 @@ export default function AddStudentPage() {
 											disabled={!selectedDepartmentId}
 										>
 											<SelectTrigger className={errors.course ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""}>
-												<SelectValue placeholder="Select course" />
+												<SelectValue placeholder="Select program" />
 											</SelectTrigger>
 											<SelectContent>
 												{coursesData?.courses.map((course) => (
@@ -840,7 +845,7 @@ export default function AddStudentPage() {
 										)}
 										{!selectedCourseId && (
 											<p className="text-sm text-amber-600">
-												Please select a course first
+												Please select a program first
 											</p>
 										)}
 									</div>

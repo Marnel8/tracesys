@@ -228,7 +228,7 @@ export default function StudentsPage() {
   const { data: attendanceData, isLoading: isLoadingAttendance } =
     useAttendance({
       studentId: selectedStudentId || undefined,
-      limit: 10,
+      limit: 1000, // Fetch all records for comprehensive view
     });
 
   // Fetch all attendance records for progress calculation
@@ -581,17 +581,43 @@ export default function StudentsPage() {
     );
   };
 
+  // Helper function to calculate attendance metrics from attendance records
+  const calculateAttendanceMetrics = (studentId: string) => {
+    const records: any[] = allAttendanceData?.attendance || [];
+    const studentRecords = records.filter((r) => r.studentId === studentId);
+
+    const totalDays = studentRecords.length;
+    const presentDays = studentRecords.filter(
+      (r) => r.status?.toLowerCase() === "present"
+    ).length;
+    const absentDays = studentRecords.filter(
+      (r) => r.status?.toLowerCase() === "absent"
+    ).length;
+    const lateDays = studentRecords.filter(
+      (r) => r.status?.toLowerCase() === "late"
+    ).length;
+    const excusedDays = studentRecords.filter(
+      (r) => r.status?.toLowerCase() === "excused"
+    ).length;
+
+    // Calculate attendance percentage: (present + late + excused) / total * 100
+    const attendancePercentage =
+      totalDays > 0
+        ? Math.round(((presentDays + lateDays + excusedDays) / totalDays) * 100)
+        : 0;
+
+    return {
+      totalDays,
+      presentDays,
+      absentDays,
+      lateDays,
+      excusedDays,
+      attendancePercentage,
+    };
+  };
+
   const normalizedStudents = useMemo(() => {
     const totalRequirements = includedRequirementTemplates.length || 0;
-
-    // Debug: Log the first student's data structure
-    if (serverStudents.length > 0) {
-      console.log("First student data structure:", {
-        student: serverStudents[0],
-        totalRequirements,
-        templatesData: templatesData?.requirementTemplates,
-      });
-    }
 
     return serverStudents.map((s: any) => {
       const enrollment = s.enrollments?.[0];
@@ -624,38 +650,28 @@ export default function StudentsPage() {
         return req.status === "approved" && !isExcludedRequirementTitle(title);
       }).length;
 
-      // Calculate attendance remarks based on attendance records
-      const attendanceRecords = s.attendanceRecords || [];
-      const lateCount = attendanceRecords.filter(
-        (record: any) => record.status === "late"
-      ).length;
-      const absentCount = attendanceRecords.filter(
-        (record: any) => record.status === "absent"
-      ).length;
+      // Calculate attendance metrics from allAttendanceData
+      const attendanceMetrics = calculateAttendanceMetrics(s.id);
+      const {
+        totalDays: totalAttendanceDays,
+        presentDays,
+        absentDays,
+        lateDays,
+        excusedDays,
+        attendancePercentage: calculatedAttendancePercentage,
+      } = attendanceMetrics;
 
+      // Use calculated attendance percentage or fall back to computed field
+      const finalAttendancePercentage =
+        calculatedAttendancePercentage || attendancePercentage;
+
+      // Calculate attendance remarks based on attendance metrics
       let attendanceRemarks = "Good";
-      if (absentCount >= 3) {
+      if (absentDays >= 3) {
         attendanceRemarks = "Too Many Absences";
-      } else if (lateCount >= 3) {
+      } else if (lateDays >= 3) {
         attendanceRemarks = "Too Many Lates";
       }
-
-      // Debug logging for all students to see the data structure
-      console.log(`Student ${s.firstName} ${s.lastName}:`, {
-        studentRequirements: studentRequirements,
-        approvedRequirements,
-        totalRequirements,
-        requirementsCompletion:
-          totalRequirements > 0
-            ? (approvedRequirements / totalRequirements) * 100
-            : 0,
-        hasRequirements: !!s.requirements,
-        requirementsLength: studentRequirements.length,
-        attendanceRecords: attendanceRecords.length,
-        lateCount,
-        absentCount,
-        attendanceRemarks,
-      });
 
       // Calculate requirements completion percentage
       const requirementsCompletion =
@@ -676,7 +692,7 @@ export default function StudentsPage() {
         email: s.email,
         agency: agencyName,
         status: s.isActive ? "Active" : "Inactive",
-        attendance: attendancePercentage,
+        attendance: finalAttendancePercentage,
         requirements: approvedRequirements,
         reports: reports,
         requirementsCompletion: requirementsCompletion,
@@ -695,9 +711,15 @@ export default function StudentsPage() {
                 )
               : 0,
         },
+        // Attendance metrics
+        absences: absentDays,
+        lates: lateDays,
+        presents: presentDays,
+        excused: excusedDays,
+        totalAttendanceDays: totalAttendanceDays,
       };
     });
-  }, [serverStudents, templatesData, studentProgressMap]);
+  }, [serverStudents, templatesData, studentProgressMap, allAttendanceData]);
 
   // Get unique sections from the data for dynamic filter options
   const availableSections = useMemo(() => {
@@ -936,12 +958,10 @@ export default function StudentsPage() {
 
         <Card className="invitation-card">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl">Student roster</CardTitle>
+            <CardTitle className="text-2xl">List of Students</CardTitle>
             <CardDescription>
-              Manage {totalStudents} student
-              {totalStudents === 1 ? "" : "s"} across{" "}
-              {availableSections.length || 0} section
-              {availableSections.length === 1 ? "" : "s"}.
+              Manage {totalStudents} student/s across{" "}
+              {availableSections.length || 0} section/s.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -1077,7 +1097,7 @@ export default function StudentsPage() {
                       <TableRow>
                         <TableHead>Student Info</TableHead>
                         <TableHead className="w-40">
-                          Course &amp; Section
+                          Program &amp; Section
                         </TableHead>
                         <TableHead>Agency</TableHead>
                         <TableHead>Status</TableHead>
@@ -1091,9 +1111,12 @@ export default function StudentsPage() {
                           <TableCell>
                             <div className="space-y-2">
                               <div className="space-y-1">
-                                <div className="font-medium text-gray-900">
+                                <button
+                                  onClick={() => handleViewProfile(student.id)}
+                                  className="font-medium text-gray-900 hover:text-primary-600 hover:underline cursor-pointer text-left transition-colors"
+                                >
                                   {student.name}
-                                </div>
+                                </button>
                                 <div className="text-sm text-gray-600">
                                   {student.studentId}
                                 </div>
@@ -1267,6 +1290,354 @@ export default function StudentsPage() {
             </div>
           ) : selectedStudentData?.data ? (
             <div className="space-y-6">
+              {/* Performance Summary */}
+              {(() => {
+                const studentId = selectedStudentData.data.id;
+                const progress = getStudentProgress(studentId);
+                const practicum = selectedStudentData.data.practicums?.[0];
+                const totalHours =
+                  practicum?.totalHours || progress.total || 0;
+                const completedHours = progress.completed || 0;
+                const remainingHours = Math.max(0, totalHours - completedHours);
+                const attendanceMetrics = calculateAttendanceMetrics(studentId);
+                const studentFromList = filteredStudents.find(
+                  (s: any) => s.id === studentId
+                );
+
+                return (
+                  <Card className="invitation-form-card border-l-4 border-l-primary-500">
+                    <CardHeader>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Star className="w-4 h-4" />
+                        Performance Summary
+                      </CardTitle>
+                      <CardDescription>
+                        Complete overview of student's practicum performance
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {/* Rendered Hours */}
+                        <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-blue-900">
+                              Rendered Hours
+                            </span>
+                            <Clock className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <p className="text-2xl font-bold text-blue-600">
+                            {completedHours.toFixed(1)}h
+                          </p>
+                          <p className="text-xs text-blue-700 mt-1">
+                            of {totalHours}h total
+                          </p>
+                        </div>
+
+                        {/* Remaining Hours */}
+                        <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-orange-900">
+                              Remaining Hours
+                            </span>
+                            <Clock className="w-5 h-5 text-orange-600" />
+                          </div>
+                          <p className="text-2xl font-bold text-orange-600">
+                            {remainingHours.toFixed(1)}h
+                          </p>
+                          <p className="text-xs text-orange-700 mt-1">
+                            {totalHours > 0
+                              ? `${Math.round(
+                                  (remainingHours / totalHours) * 100
+                                )}% remaining`
+                              : "N/A"}
+                          </p>
+                        </div>
+
+                        {/* Attendance Percentage */}
+                        <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-green-900">
+                              Attendance
+                            </span>
+                            <CheckCircle className="w-5 h-5 text-green-600" />
+                          </div>
+                          <p className="text-2xl font-bold text-green-600">
+                            {attendanceMetrics.attendancePercentage}%
+                          </p>
+                          <p className="text-xs text-green-700 mt-1">
+                            {attendanceMetrics.totalDays} days tracked
+                          </p>
+                        </div>
+
+                        {/* Absences Count */}
+                        <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-red-900">
+                              Absences
+                            </span>
+                            <AlertTriangle className="w-5 h-5 text-red-600" />
+                          </div>
+                          <p className="text-2xl font-bold text-red-600">
+                            {attendanceMetrics.absentDays}
+                          </p>
+                          <p className="text-xs text-red-700 mt-1">
+                            {attendanceMetrics.totalDays > 0
+                              ? `${Math.round(
+                                  (attendanceMetrics.absentDays /
+                                    attendanceMetrics.totalDays) *
+                                    100
+                                )}% of total days`
+                              : "No records"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Detailed Attendance Breakdown */}
+                      <div className="mt-6 pt-6 border-t">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-4">
+                          Attendance Breakdown
+                        </h4>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="text-center p-3 bg-gray-50 rounded-lg">
+                            <p className="text-2xl font-bold text-gray-900">
+                              {attendanceMetrics.presentDays}
+                            </p>
+                            <p className="text-xs text-gray-600 mt-1">
+                              Present Days
+                            </p>
+                          </div>
+                          <div className="text-center p-3 bg-yellow-50 rounded-lg">
+                            <p className="text-2xl font-bold text-yellow-600">
+                              {attendanceMetrics.lateDays}
+                            </p>
+                            <p className="text-xs text-yellow-700 mt-1">
+                              Late Days
+                            </p>
+                          </div>
+                          <div className="text-center p-3 bg-red-50 rounded-lg">
+                            <p className="text-2xl font-bold text-red-600">
+                              {attendanceMetrics.absentDays}
+                            </p>
+                            <p className="text-xs text-red-700 mt-1">
+                              Absent Days
+                            </p>
+                          </div>
+                          <div className="text-center p-3 bg-blue-50 rounded-lg">
+                            <p className="text-2xl font-bold text-blue-600">
+                              {attendanceMetrics.excusedDays}
+                            </p>
+                            <p className="text-xs text-blue-700 mt-1">
+                              Excused Days
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section & Agency Assignment */}
+                      <div className="mt-6 pt-6 border-t">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-4">
+                          Section & Agency Assignment
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="p-3 bg-gray-50 rounded-lg">
+                            <p className="text-xs text-gray-600 mb-1">Section</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              {selectedStudentData.data.enrollments?.[0]?.section
+                                ?.name || "N/A"}
+                            </p>
+                            <p className="text-xs text-gray-600 mt-1">
+                              {
+                                selectedStudentData.data.enrollments?.[0]?.section
+                                  ?.course?.name || "N/A"
+                              }
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Academic Year:{" "}
+                              {selectedStudentData.data.enrollments?.[0]?.section
+                                ?.academicYear || "N/A"}
+                              {" - "}
+                              {selectedStudentData.data.enrollments?.[0]?.section
+                                ?.semester || "N/A"}
+                            </p>
+                          </div>
+                          <div className="p-3 bg-gray-50 rounded-lg">
+                            <p className="text-xs text-gray-600 mb-1">Agency</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              {practicum?.agency?.name || "N/A"}
+                            </p>
+                            <p className="text-xs text-gray-600 mt-1">
+                              Position: {practicum?.position || "N/A"}
+                            </p>
+                            {practicum?.supervisor && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                Supervisor: {practicum.supervisor.name}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Submission Status */}
+                      <div className="mt-6 pt-6 border-t">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-4">
+                          Submission Status
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="p-3 bg-gray-50 rounded-lg">
+                            <p className="text-xs text-gray-600 mb-2">
+                              Requirements
+                            </p>
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-gray-900">
+                                {(() => {
+                                  const requirements =
+                                    requirementsData?.requirements || [];
+                                  const approvedCount = requirements.filter(
+                                    (r: any) => {
+                                      const title =
+                                        r.title ||
+                                        r.template?.title ||
+                                        r.templateTitle ||
+                                        "";
+                                      return (
+                                        r.status === "approved" &&
+                                        !isExcludedRequirementTitle(title)
+                                      );
+                                    }
+                                  ).length;
+                                  const submittedCount = requirements.filter(
+                                    (r: any) => {
+                                      const title =
+                                        r.title ||
+                                        r.template?.title ||
+                                        r.templateTitle ||
+                                        "";
+                                      return (
+                                        r.status === "submitted" &&
+                                        !isExcludedRequirementTitle(title)
+                                      );
+                                    }
+                                  ).length;
+                                  const totalCount =
+                                    includedRequirementTemplates.length;
+                                  return `${approvedCount}/${totalCount} approved`;
+                                })()}
+                              </span>
+                              <Badge
+                                variant="secondary"
+                                className={cn(
+                                  "invitation-status-pill",
+                                  (() => {
+                                    const requirements =
+                                      requirementsData?.requirements || [];
+                                    const approvedCount = requirements.filter(
+                                      (r: any) => {
+                                        const title =
+                                          r.title ||
+                                          r.template?.title ||
+                                          r.templateTitle ||
+                                          "";
+                                        return (
+                                          r.status === "approved" &&
+                                          !isExcludedRequirementTitle(title)
+                                        );
+                                      }
+                                    ).length;
+                                    const totalCount =
+                                      includedRequirementTemplates.length;
+                                    const percentage =
+                                      totalCount > 0
+                                        ? (approvedCount / totalCount) * 100
+                                        : 0;
+                                    if (percentage >= 100)
+                                      return "invitation-status-pill--success";
+                                    if (percentage >= 50)
+                                      return "invitation-status-pill--warning";
+                                    return "invitation-status-pill--danger";
+                                  })()
+                                )}
+                              >
+                                {(() => {
+                                  const requirements =
+                                    requirementsData?.requirements || [];
+                                  const approvedCount = requirements.filter(
+                                    (r: any) => {
+                                      const title =
+                                        r.title ||
+                                        r.template?.title ||
+                                        r.templateTitle ||
+                                        "";
+                                      return (
+                                        r.status === "approved" &&
+                                        !isExcludedRequirementTitle(title)
+                                      );
+                                    }
+                                  ).length;
+                                  const totalCount =
+                                    includedRequirementTemplates.length;
+                                  const percentage =
+                                    totalCount > 0
+                                      ? (approvedCount / totalCount) * 100
+                                      : 0;
+                                  return `${percentage.toFixed(0)}%`;
+                                })()}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="p-3 bg-gray-50 rounded-lg">
+                            <p className="text-xs text-gray-600 mb-2">
+                              Weekly Reports
+                            </p>
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-gray-900">
+                                {(() => {
+                                  const reports = reportsData?.reports || [];
+                                  const approvedCount = reports.filter(
+                                    (r: any) => r.status === "approved"
+                                  ).length;
+                                  return `${approvedCount}/${reports.length} approved`;
+                                })()}
+                              </span>
+                              <Badge
+                                variant="secondary"
+                                className={cn(
+                                  "invitation-status-pill",
+                                  (() => {
+                                    const reports = reportsData?.reports || [];
+                                    const approvedCount = reports.filter(
+                                      (r: any) => r.status === "approved"
+                                    ).length;
+                                    const total = reports.length;
+                                    const percentage =
+                                      total > 0 ? (approvedCount / total) * 100 : 0;
+                                    if (percentage >= 100)
+                                      return "invitation-status-pill--success";
+                                    if (percentage >= 50)
+                                      return "invitation-status-pill--warning";
+                                    return "invitation-status-pill--danger";
+                                  })()
+                                )}
+                              >
+                                {(() => {
+                                  const reports = reportsData?.reports || [];
+                                  const approvedCount = reports.filter(
+                                    (r: any) => r.status === "approved"
+                                  ).length;
+                                  const total = reports.length;
+                                  const percentage =
+                                    total > 0 ? (approvedCount / total) * 100 : 0;
+                                  return `${percentage.toFixed(0)}%`;
+                                })()}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+
               {/* Personal Information */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card className="invitation-form-card">
@@ -1345,7 +1716,7 @@ export default function StudentsPage() {
                       <>
                         <div>
                           <label className="text-sm font-medium text-gray-600">
-                            Course
+                            Program
                           </label>
                           <p className="text-gray-900">
                             {selectedStudentData.data.enrollments[0].section
@@ -1500,23 +1871,75 @@ export default function StudentsPage() {
                           : 0;
 
                       if (totalHours > 0) {
+                        const remainingHours = Math.max(
+                          0,
+                          totalHours - completedHours
+                        );
                         return (
-                          <div className="mt-4 pt-4 border-t space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-gray-600">
-                                Hours Progress:
-                              </span>
-                              <span className="text-sm font-semibold">
-                                {completedHours} / {totalHours}h
-                              </span>
-                            </div>
-                            <Progress value={percent} className="h-2" />
-                            <div className="flex items-center justify-between text-xs text-gray-600">
-                              <span>{percent}% complete</span>
-                              <span>
-                                {Math.max(0, totalHours - completedHours)}h
-                                remaining
-                              </span>
+                          <div className="mt-6 pt-6 border-t">
+                            <h4 className="text-sm font-semibold text-gray-900 mb-4">
+                              Hours Progress
+                            </h4>
+                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
+                              <div className="flex items-center justify-between mb-4">
+                                <div>
+                                  <p className="text-xs text-gray-600 mb-1">
+                                    Rendered Hours
+                                  </p>
+                                  <p className="text-3xl font-bold text-blue-600">
+                                    {completedHours.toFixed(1)}h
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-xs text-gray-600 mb-1">
+                                    Remaining Hours
+                                  </p>
+                                  <p className="text-3xl font-bold text-orange-600">
+                                    {remainingHours.toFixed(1)}h
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="mb-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-sm font-medium text-gray-700">
+                                    Progress
+                                  </span>
+                                  <span className="text-sm font-semibold text-gray-900">
+                                    {completedHours.toFixed(1)} / {totalHours}h (
+                                    {percent}%)
+                                  </span>
+                                </div>
+                                <Progress
+                                  value={percent}
+                                  className="h-3"
+                                />
+                              </div>
+                              <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-blue-200">
+                                <div className="text-center">
+                                  <p className="text-2xl font-bold text-blue-600">
+                                    {completedHours.toFixed(1)}
+                                  </p>
+                                  <p className="text-xs text-gray-600 mt-1">
+                                    Rendered
+                                  </p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-2xl font-bold text-gray-900">
+                                    {totalHours}
+                                  </p>
+                                  <p className="text-xs text-gray-600 mt-1">
+                                    Total Required
+                                  </p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-2xl font-bold text-orange-600">
+                                    {remainingHours.toFixed(1)}
+                                  </p>
+                                  <p className="text-xs text-gray-600 mt-1">
+                                    Remaining
+                                  </p>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         );
@@ -1585,14 +2008,25 @@ export default function StudentsPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-center p-4 bg-gray-50 rounded-lg mb-4">
-                    <div className="text-3xl font-bold text-gray-900">
-                      {selectedStudentData.data.computed?.attendance || 0}%
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      Overall Attendance
-                    </div>
-                  </div>
+                  {(() => {
+                    const attendanceMetrics = calculateAttendanceMetrics(
+                      selectedStudentData.data.id
+                    );
+                    return (
+                      <div className="text-center p-4 bg-gray-50 rounded-lg mb-4">
+                        <div className="text-3xl font-bold text-gray-900">
+                          {attendanceMetrics.attendancePercentage}%
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          Overall Attendance
+                        </div>
+                        <div className="text-xs text-gray-500 mt-2">
+                          Based on {attendanceMetrics.totalDays} attendance
+                          record{attendanceMetrics.totalDays !== 1 ? "s" : ""}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Attendance Records Table */}
                   <div className="space-y-2">

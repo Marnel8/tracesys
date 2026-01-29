@@ -41,7 +41,9 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, AreaChart, Area } from "recharts";
+import { useAnalytics } from "@/hooks/analytics";
+import { format, startOfMonth, endOfMonth } from "date-fns";
 
 // Helper function to calculate expected attendance days
 function calculateExpectedAttendanceDays(
@@ -109,6 +111,17 @@ export default function InstructorDashboard() {
     limit: 1000,
     status: "active",
   });
+
+  // Get analytics data for current month
+  const currentMonthRange = useMemo(() => {
+    const now = new Date();
+    return {
+      startDate: format(startOfMonth(now), "yyyy-MM-dd"),
+      endDate: format(endOfMonth(now), "yyyy-MM-dd"),
+    };
+  }, []);
+
+  const { data: analyticsData, isLoading: isAnalyticsLoading } = useAnalytics(currentMonthRange);
 
   const students: any[] = useMemo(
     () => studentsResp?.data?.students ?? [],
@@ -1411,6 +1424,153 @@ export default function InstructorDashboard() {
             )}
           </CardContent>
         </Card>
+
+        {/* Analytics Charts */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-semibold text-gray-900">Analytics Overview</h2>
+              <p className="text-sm text-muted-foreground">Key performance metrics and trends</p>
+            </div>
+            <Button
+              variant="outline"
+              className="border border-primary-500 bg-primary-50 text-primary-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-100"
+              onClick={() => router.push("/dashboard/instructor/analytics")}
+            >
+              View Full Analytics
+            </Button>
+          </div>
+          {isAnalyticsLoading ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="border border-primary-200 shadow-sm">
+                <CardContent className="flex items-center justify-center h-[300px]">
+                  <p className="text-muted-foreground">Loading analytics...</p>
+                </CardContent>
+              </Card>
+              <Card className="border border-primary-200 shadow-sm">
+                <CardContent className="flex items-center justify-center h-[300px]">
+                  <p className="text-muted-foreground">Loading analytics...</p>
+                </CardContent>
+              </Card>
+            </div>
+          ) : analyticsData ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Attendance Trends */}
+              <Card className="border border-primary-200 shadow-sm">
+                <CardHeader>
+                  <CardTitle>Attendance Trends</CardTitle>
+                  <CardDescription>Weekly attendance rates over time</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {analyticsData.attendanceTrends.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={250}>
+                      <LineChart data={analyticsData.attendanceTrends}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="week" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Line type="monotone" dataKey="attendance" stroke="#10B981" strokeWidth={2} name="Attendance %" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-[250px] text-muted-foreground">
+                      No attendance data available
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Submission Punctuality */}
+              <Card className="border border-primary-200 shadow-sm">
+                <CardHeader>
+                  <CardTitle>Submission Punctuality</CardTitle>
+                  <CardDescription>On-time vs late submission rates</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {analyticsData.submissionPatterns.length > 0 ? (
+                    <>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={analyticsData.submissionPatterns}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="week" />
+                          <YAxis />
+                          <Tooltip />
+                          <Legend />
+                          <Bar dataKey="onTime" stackId="a" fill="#10B981" name="On Time" />
+                          <Bar dataKey="late" stackId="a" fill="#EF4444" name="Late" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                      {analyticsData.reportPunctuality.total > 0 && (
+                        <div className="mt-4 flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">On-Time Rate:</span>
+                          <span className="font-semibold text-primary-700">
+                            {Math.round((analyticsData.reportPunctuality.onTime / analyticsData.reportPunctuality.total) * 100)}%
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex items-center justify-center h-[250px] text-muted-foreground">
+                      No submission data available
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Activity Frequency */}
+              {analyticsData.topActivities.length > 0 && (
+                <Card className="border border-primary-200 shadow-sm">
+                  <CardHeader>
+                    <CardTitle>Top Activities</CardTitle>
+                    <CardDescription>Most common activities from weekly reports</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={analyticsData.topActivities.slice(0, 5)} layout="horizontal">
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" />
+                        <YAxis dataKey="name" type="category" width={120} />
+                        <Tooltip />
+                        <Bar dataKey="count" fill="#8B5CF6" name="Frequency" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Weekly Progress */}
+              {analyticsData.weeklyProgress.length > 0 && (
+                <Card className="border border-primary-200 shadow-sm">
+                  <CardHeader>
+                    <CardTitle>Weekly Progress</CardTitle>
+                    <CardDescription>Hours, reports, and requirements by week</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <AreaChart data={analyticsData.weeklyProgress}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="week" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Area type="monotone" dataKey="hours" stackId="1" stroke="#8884d8" fill="#8884d8" name="Hours" />
+                        <Area type="monotone" dataKey="reports" stackId="2" stroke="#82ca9d" fill="#82ca9d" name="Reports" />
+                        <Area type="monotone" dataKey="requirements" stackId="3" stroke="#ffc658" fill="#ffc658" name="Requirements" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          ) : (
+            <Card className="border border-primary-200 shadow-sm">
+              <CardContent className="flex items-center justify-center h-[200px]">
+                <p className="text-muted-foreground">No analytics data available. Analytics will appear once you have student data.</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
 
         {/* Recent Activity & Pending Items */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

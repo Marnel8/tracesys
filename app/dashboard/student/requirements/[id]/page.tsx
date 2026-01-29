@@ -136,16 +136,37 @@ export default function RequirementDetailPage() {
               )}
 
               {requirement.feedback && (
-                <div className="bg-primary-50 border border-primary-200 p-4 rounded-lg">
+                <div className={`p-4 rounded-lg border ${
+                  requirement.status === "rejected"
+                    ? "bg-red-50 border-red-200"
+                    : "bg-primary-50 border-primary-200"
+                }`}>
                   <div className="flex items-center gap-2 mb-2">
-                    <FileText className="w-5 h-5 text-primary-600" />
-                    <p className="text-sm font-medium text-primary-900">
-                      Instructor Feedback
+                    <FileText className={`w-5 h-5 ${
+                      requirement.status === "rejected"
+                        ? "text-red-600"
+                        : "text-primary-600"
+                    }`} />
+                    <p className={`text-sm font-medium ${
+                      requirement.status === "rejected"
+                        ? "text-red-900"
+                        : "text-primary-900"
+                    }`}>
+                      {requirement.status === "rejected" ? "Rejection Feedback" : "Instructor Feedback"}
                     </p>
                   </div>
-                  <p className="text-sm text-primary-800 whitespace-pre-wrap leading-relaxed">
+                  <p className={`text-sm whitespace-pre-wrap leading-relaxed ${
+                    requirement.status === "rejected"
+                      ? "text-red-800"
+                      : "text-primary-800"
+                  }`}>
                     {requirement.feedback}
                   </p>
+                  {requirement.status === "rejected" && (
+                    <p className="text-xs text-red-600 mt-3 font-medium">
+                      Please review the feedback and resubmit with revisions.
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -233,11 +254,28 @@ export default function RequirementDetailPage() {
             </Card>
           )}
 
-          <Link href={`/dashboard/student/requirements/templates/${requirement.templateId}`}>
-            <Button variant="outline" className="w-full">
-              Update Submission
-            </Button>
-          </Link>
+          {requirement.templateId && (
+            <Link href={`/dashboard/student/requirements/templates/${requirement.templateId}`}>
+              <Button
+                variant="outline"
+                className={`w-full ${
+                  requirement.status === "rejected"
+                    ? "border border-red-500 bg-red-50 text-red-700 hover:border-red-600 hover:bg-red-100"
+                    : requirement.status === "submitted"
+                    ? "border border-primary-500 bg-primary-50 text-primary-700 hover:border-primary-400 hover:bg-primary-100"
+                    : ""
+                }`}
+              >
+                {requirement.status === "rejected"
+                  ? "Resubmit with Revisions"
+                  : requirement.status === "submitted"
+                  ? "Update Submission"
+                  : requirement.status === "approved"
+                  ? "Request Update"
+                  : "Update Submission"}
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
     </div>

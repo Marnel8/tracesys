@@ -45,6 +45,9 @@ import {
 import { AgencyFormData } from "@/data/agencies";
 import { BRANCH_TYPE_OPTIONS } from "@/data/agencies";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/auth/useAuth";
+import { Badge } from "@/components/ui/badge";
+import { useMemo } from "react";
 
 const agencySchema = z.object({
   name: z.string().min(2, "Agency name must be at least 2 characters"),
@@ -53,7 +56,12 @@ const agencySchema = z.object({
     .string()
     .min(2, "Contact person name must be at least 2 characters"),
   contactRole: z.string().min(2, "Contact role must be at least 2 characters"),
-  contactPhone: z.string().min(10, "Phone number must be at least 10 digits"),
+  contactPhone: z
+    .string()
+    .regex(
+      /^\+63\d{10}$/,
+      "Phone number must be in format +63XXXXXXXXXX (10 digits after +63)"
+    ),
   contactEmail: z.string().email("Please enter a valid email address"),
   branchType: z.enum(["Main", "Branch"], {
     required_error: "Please select a branch type",
@@ -106,6 +114,7 @@ export default function EditAgencyPage() {
   const params = useParams();
   const agencyId = params.id as string;
 
+  const { user } = useAuth();
   const { data: agency, isLoading, error } = useAgency(agencyId);
   const { data: supervisorsData } = useSupervisors(agencyId || "", {});
   const updateAgencyMutation = useUpdateAgency();
@@ -114,12 +123,35 @@ export default function EditAgencyPage() {
   const deleteSupervisorMutation = useDeleteSupervisor();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const [supervisors, setSupervisors] = useState<Array<{
+    id?: string;
+    name: string;
+    email: string;
+    phone: string;
+    position: string;
+    department?: string;
+    createdByInstructorId?: string;
+  }>>([]);
+
+  // Check if user can edit agency details (only the creator can edit agency info)
+  const canEditAgencyDetails = useMemo(() => {
+    if (!agency || !user?.id) return false;
+    // Only the creator can edit agency details
+    return agency.instructorId === user.id;
+  }, [agency, user?.id]);
+
+  // All instructors can manage supervisors (add their own)
+  const canManageSupervisors = useMemo(() => {
+    return !!user?.id && !!agency;
+  }, [user?.id, agency]);
 
   const {
     register,
     handleSubmit,
     control,
     reset,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<AgencyForm>({
     // @ts-expect-error - zodResolver has type inference issues with z.preprocess
@@ -143,6 +175,16 @@ export default function EditAgencyPage() {
       longitude: undefined,
     },
   });
+
+  // Handle phone number input with +63 prefix
+  const handleContactPhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, ""); // Remove non-digits
+    if (value.length <= 10) {
+      setValue("contactPhone", value ? `+63${value}` : "", { shouldValidate: true });
+    }
+  };
+
+  const contactPhoneValue = watch("contactPhone")?.replace("+63", "") || "";
 
   const handleDayToggle = (day: string) => {
     setSelectedDays((prev) =>
@@ -177,6 +219,91 @@ export default function EditAgencyPage() {
     }
   }, [agency, reset]);
 
+  // Load existing supervisors into the form
+  useEffect(() => {
+    if (supervisorsData?.supervisors !== undefined) {
+      const mappedSupervisors = supervisorsData.supervisors.map((s) => ({
+        id: s.id,
+        name: s.name || "",
+        email: s.email || "",
+        phone: s.phone || "",
+        position: s.position || "",
+        department: s.department || "",
+        createdByInstructorId: s.createdByInstructorId,
+      }));
+      
+      // Always update from server data when it changes
+      // This ensures saved supervisors appear when user returns to edit page
+      setSupervisors(mappedSupervisors);
+    } else if (supervisorsData && supervisorsData.supervisors?.length === 0) {
+      // If we explicitly have an empty array, clear supervisors
+      setSupervisors([]);
+    }
+  }, [supervisorsData]);
+
+  const validatePhoneNumber = (phone: string): boolean => {
+    return /^\+63\d{10}$/.test(phone);
+  };
+
+  const addSupervisor = () => {
+    setSupervisors([
+      ...supervisors,
+      { name: "", email: "", phone: "", position: "", department: "" },
+    ]);
+  };
+
+  const removeSupervisor = async (index: number) => {
+    const supervisor = supervisors[index];
+    
+    // If it's an existing supervisor, delete it from the server
+    if (supervisor.id) {
+      const isOwner = supervisor.createdByInstructorId === user?.id;
+      if (!isOwner && supervisor.createdByInstructorId) {
+        toast.error("You can only delete supervisors you created");
+        return;
+      }
+      
+      if (confirm(`Delete supervisor ${supervisor.name}?`)) {
+        try {
+          await deleteSupervisorMutation.mutateAsync({
+            id: supervisor.id,
+            agencyId: agencyId,
+          });
+          // Remove from local state after successful deletion
+          setSupervisors(supervisors.filter((_, i) => i !== index));
+        } catch (error: any) {
+          toast.error(
+            error?.response?.data?.message || "Failed to delete supervisor"
+          );
+        }
+      }
+    } else {
+      // If it's a new supervisor (not saved yet), just remove from local state
+      setSupervisors(supervisors.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateSupervisor = (
+    index: number,
+    field: "name" | "email" | "phone" | "position" | "department",
+    value: string
+  ) => {
+    const updated = [...supervisors];
+    updated[index] = { ...updated[index], [field]: value };
+    setSupervisors(updated);
+  };
+
+  // Handle supervisor phone number input with +63 prefix
+  const handleSupervisorPhoneChange = (
+    index: number,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const value = e.target.value.replace(/\D/g, ""); // Remove non-digits
+    if (value.length <= 10) {
+      updateSupervisor(index, "phone", value ? `+63${value}` : "");
+    }
+  };
+
   const onSubmit = async (data: AgencyForm) => {
     setIsSubmitting(true);
     try {
@@ -190,10 +317,80 @@ export default function EditAgencyPage() {
         lunchEndTime: data.lunchEndTime || undefined,
       };
 
-      await updateAgencyMutation.mutateAsync({
-        id: agencyId,
-        data: formData,
-      });
+      // Update agency if user is the creator
+      if (canEditAgencyDetails) {
+        await updateAgencyMutation.mutateAsync({
+          id: agencyId,
+          data: formData,
+        });
+      }
+
+      // Handle supervisors
+      const newSupervisors = supervisors.filter((s) => !s.id);
+      const existingSupervisors = supervisors.filter((s) => s.id);
+      
+      // Create new supervisors
+      if (newSupervisors.length > 0) {
+        const supervisorErrors: string[] = [];
+        for (const supervisor of newSupervisors) {
+          if (
+            supervisor.name &&
+            supervisor.email &&
+            supervisor.phone &&
+            supervisor.position
+          ) {
+            // Validate phone number format
+            if (!validatePhoneNumber(supervisor.phone)) {
+              supervisorErrors.push(
+                `Supervisor ${supervisor.name}: Phone number must be in format +63XXXXXXXXXX (10 digits after +63)`
+              );
+              continue;
+            }
+            try {
+              await createSupervisorMutation.mutateAsync({
+                agencyId,
+                ...supervisor,
+                isActive: true,
+              });
+            } catch (error: any) {
+              const errorMessage =
+                error?.response?.data?.message ||
+                `Failed to create supervisor ${supervisor.name}`;
+              supervisorErrors.push(errorMessage);
+              console.error("Failed to create supervisor:", error);
+            }
+          }
+        }
+        if (supervisorErrors.length > 0) {
+          toast.warning(
+            `${supervisorErrors.length} supervisor(s) failed to create. Check console for details.`
+          );
+        }
+      }
+
+      // Update existing supervisors that the user created (if they were edited)
+      // Note: We'll update all existing supervisors created by the user
+      // In a real scenario, you might want to track which ones changed
+      for (const supervisor of existingSupervisors) {
+        const isOwner = supervisor.createdByInstructorId === user?.id;
+        if (isOwner && supervisor.id) {
+          try {
+            await updateSupervisorMutation.mutateAsync({
+              id: supervisor.id,
+              data: {
+                name: supervisor.name,
+                email: supervisor.email,
+                phone: supervisor.phone,
+                position: supervisor.position,
+                department: supervisor.department,
+              },
+            });
+          } catch (error: any) {
+            console.error(`Failed to update supervisor ${supervisor.name}:`, error);
+          }
+        }
+      }
+
       router.push("/dashboard/instructor/agencies");
     } catch (error) {
       // Error is handled by the mutation
@@ -242,6 +439,8 @@ export default function EditAgencyPage() {
     );
   }
 
+  // Note: We allow access to the page for supervisor management, but disable form editing if user can't edit
+
   if (!agency) {
     return (
       <div className="space-y-6">
@@ -281,6 +480,13 @@ export default function EditAgencyPage() {
         </div>
       </div>
 
+      {!canEditAgencyDetails && (
+        <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <p className="text-sm text-yellow-800">
+            <strong>Note:</strong> You don't have permission to edit agency information. However, you can still add and manage your own supervisors for this agency.
+          </p>
+        </div>
+      )}
       <form
         // @ts-expect-error - handleSubmit type inference issue with zodResolver and z.preprocess
         onSubmit={handleSubmit(onSubmit)}
@@ -304,6 +510,7 @@ export default function EditAgencyPage() {
                       id="name"
                       {...register("name")}
                       placeholder="e.g., San Jose General Hospital"
+                      disabled={!canEditAgencyDetails}
                     />
                     {errors.name && (
                       <p className="text-sm text-red-600">
@@ -321,8 +528,9 @@ export default function EditAgencyPage() {
                         <Select
                           onValueChange={field.onChange}
                           value={field.value}
+                          disabled={!canEditAgencyDetails}
                         >
-                          <SelectTrigger>
+                          <SelectTrigger disabled={!canEditAgencyDetails}>
                             <SelectValue placeholder="Select branch type" />
                           </SelectTrigger>
                           <SelectContent>
@@ -353,6 +561,7 @@ export default function EditAgencyPage() {
                     {...register("address")}
                     placeholder="Enter complete agency address"
                     rows={3}
+                          disabled={!canEditAgencyDetails}
                   />
                   {errors.address && (
                     <p className="text-sm text-red-600">
@@ -379,6 +588,7 @@ export default function EditAgencyPage() {
                       id="contactPerson"
                       {...register("contactPerson")}
                       placeholder="Enter contact person name"
+                      disabled={!canEditAgencyDetails}
                     />
                     {errors.contactPerson && (
                       <p className="text-sm text-red-600">
@@ -393,6 +603,7 @@ export default function EditAgencyPage() {
                       id="contactRole"
                       {...register("contactRole")}
                       placeholder="Enter role or position"
+                      disabled={!canEditAgencyDetails}
                     />
                     {errors.contactRole && (
                       <p className="text-sm text-red-600">
@@ -405,11 +616,21 @@ export default function EditAgencyPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="contactPhone">Phone Number *</Label>
-                    <Input
-                      id="contactPhone"
-                      {...register("contactPhone")}
-                      placeholder="Enter phone number"
-                    />
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                        +63
+                      </span>
+                      <Input
+                        id="contactPhone"
+                        placeholder="9123456789"
+                        className="pl-12"
+                        value={contactPhoneValue}
+                        onChange={handleContactPhoneChange}
+                        maxLength={10}
+                        inputMode="numeric"
+                        disabled={!canEditAgencyDetails}
+                      />
+                    </div>
                     {errors.contactPhone && (
                       <p className="text-sm text-red-600">
                         {errors.contactPhone.message}
@@ -424,6 +645,7 @@ export default function EditAgencyPage() {
                       type="email"
                       {...register("contactEmail")}
                       placeholder="Enter email address"
+                      disabled={!canEditAgencyDetails}
                     />
                     {errors.contactEmail && (
                       <p className="text-sm text-red-600">
@@ -455,6 +677,7 @@ export default function EditAgencyPage() {
                         id="isActive"
                         checked={field.value}
                         onCheckedChange={field.onChange}
+                        disabled={!canEditAgencyDetails}
                       />
                     )}
                   />
@@ -474,6 +697,7 @@ export default function EditAgencyPage() {
                           id="isSchoolAffiliated"
                           checked={field.value || false}
                           onCheckedChange={field.onChange}
+                          disabled={!canEditAgencyDetails}
                         />
                       )}
                     />
@@ -527,6 +751,7 @@ export default function EditAgencyPage() {
                       id={`day-${day.value}`}
                       checked={selectedDays.includes(day.value)}
                       onCheckedChange={() => handleDayToggle(day.value)}
+                      disabled={!canEditAgencyDetails}
                     />
                     <Label
                       htmlFor={`day-${day.value}`}
@@ -545,6 +770,7 @@ export default function EditAgencyPage() {
                   id="openingTime"
                   type="time"
                   {...register("openingTime")}
+                          disabled={!canEditAgencyDetails}
                 />
                 {errors.openingTime && (
                   <p className="text-sm text-red-600">
@@ -559,6 +785,7 @@ export default function EditAgencyPage() {
                   id="closingTime"
                   type="time"
                   {...register("closingTime")}
+                          disabled={!canEditAgencyDetails}
                 />
                 {errors.closingTime && (
                   <p className="text-sm text-red-600">
@@ -576,6 +803,7 @@ export default function EditAgencyPage() {
                   id="lunchStartTime"
                   type="time"
                   {...register("lunchStartTime")}
+                          disabled={!canEditAgencyDetails}
                 />
                 {errors.lunchStartTime && (
                   <p className="text-sm text-red-600">
@@ -590,6 +818,7 @@ export default function EditAgencyPage() {
                   id="lunchEndTime"
                   type="time"
                   {...register("lunchEndTime")}
+                          disabled={!canEditAgencyDetails}
                 />
                 {errors.lunchEndTime && (
                   <p className="text-sm text-red-600">
@@ -624,6 +853,7 @@ export default function EditAgencyPage() {
                       v === "" || isNaN(Number(v)) ? undefined : Number(v),
                   })}
                   placeholder="e.g., 12.3601"
+                          disabled={!canEditAgencyDetails}
                 />
                 {errors.latitude && (
                   <p className="text-sm text-red-600">
@@ -648,6 +878,7 @@ export default function EditAgencyPage() {
                       v === "" || isNaN(Number(v)) ? undefined : Number(v),
                   })}
                   placeholder="e.g., 121.0444"
+                          disabled={!canEditAgencyDetails}
                 />
                 {errors.longitude && (
                   <p className="text-sm text-red-600">
@@ -675,101 +906,139 @@ export default function EditAgencyPage() {
           <CardHeader>
             <CardTitle>Supervisors</CardTitle>
             <CardDescription>
-              Manage supervisors for this agency
+              Add supervisors for this agency (optional)
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {supervisorsData?.supervisors &&
-              supervisorsData.supervisors.length > 0 && (
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">
-                    Existing Supervisors
-                  </Label>
-                  {supervisorsData.supervisors.map((supervisor) => (
-                    <div
-                      key={supervisor.id}
-                      className="p-3 border rounded-lg flex justify-between items-center"
-                    >
-                      <div>
-                        <div className="font-medium">{supervisor.name}</div>
-                        <div className="text-sm text-gray-500">
-                          {supervisor.email} • {supervisor.position}
-                        </div>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={async () => {
-                          if (!agencyId) {
-                            toast.error("Agency ID is missing");
-                            return;
-                          }
-                          if (
-                            confirm(`Delete supervisor ${supervisor.name}?`)
-                          ) {
-                            try {
-                              await deleteSupervisorMutation.mutateAsync({
-                                id: supervisor.id,
-                                agencyId: agencyId,
-                              });
-                            } catch (error) {
-                              // Error handled by mutation
-                            }
-                          }
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4 text-red-600" />
-                      </Button>
+            {supervisors.map((supervisor, index) => {
+              const isExisting = !!supervisor.id;
+              const isOwner = supervisor.createdByInstructorId === user?.id;
+              // Allow editing if: new supervisor, or existing supervisor created by current user, or legacy supervisor (no creator)
+              const canEditSupervisor = !isExisting || isOwner || !supervisor.createdByInstructorId;
+              
+              return (
+                <div key={isExisting ? supervisor.id : index} className="p-4 border rounded-lg space-y-4">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <Label>Supervisor {index + 1}</Label>
+                      {isExisting && !canEditSupervisor && (
+                        <Badge variant="outline" className="text-xs">
+                          Added by another instructor
+                        </Badge>
+                      )}
+                      {isExisting && canEditSupervisor && supervisor.createdByInstructorId && (
+                        <Badge variant="secondary" className="text-xs">
+                          You added this
+                        </Badge>
+                      )}
                     </div>
-                  ))}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeSupervisor(index)}
+                      disabled={isExisting && !canEditSupervisor}
+                      title={
+                        isExisting && !canEditSupervisor
+                          ? "You can only delete supervisors you created"
+                          : "Delete supervisor"
+                      }
+                    >
+                      <Trash2
+                        className={`w-4 h-4 ${
+                          isExisting && !canEditSupervisor ? "text-gray-300" : "text-red-600"
+                        }`}
+                      />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Name *</Label>
+                      <Input
+                        value={supervisor.name}
+                        onChange={(e) =>
+                          updateSupervisor(index, "name", e.target.value)
+                        }
+                        placeholder="Enter supervisor name"
+                        disabled={isExisting && !canEditSupervisor}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Email *</Label>
+                      <Input
+                        type="email"
+                        value={supervisor.email}
+                        onChange={(e) =>
+                          updateSupervisor(index, "email", e.target.value)
+                        }
+                        placeholder="Enter email address"
+                        disabled={isExisting && !canEditSupervisor}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Phone *</Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                          +63
+                        </span>
+                        <Input
+                          value={supervisor.phone?.replace("+63", "") || ""}
+                          onChange={(e) => handleSupervisorPhoneChange(index, e)}
+                          placeholder="9123456789"
+                          className={`pl-12 ${
+                            supervisor.phone &&
+                            !validatePhoneNumber(supervisor.phone)
+                              ? "border-red-500"
+                              : ""
+                          }`}
+                          maxLength={10}
+                          inputMode="numeric"
+                          disabled={isExisting && !canEditSupervisor}
+                        />
+                      </div>
+                      {supervisor.phone &&
+                        !validatePhoneNumber(supervisor.phone) && (
+                          <p className="text-sm text-red-600">
+                            Phone number must be in format +63XXXXXXXXXX (10
+                            digits after +63)
+                          </p>
+                        )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Position *</Label>
+                      <Input
+                        value={supervisor.position}
+                        onChange={(e) =>
+                          updateSupervisor(index, "position", e.target.value)
+                        }
+                        placeholder="Enter position"
+                        disabled={isExisting && !canEditSupervisor}
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label>Department</Label>
+                      <Input
+                        value={supervisor.department || ""}
+                        onChange={(e) =>
+                          updateSupervisor(index, "department", e.target.value)
+                        }
+                        placeholder="Enter department (optional)"
+                        disabled={isExisting && !canEditSupervisor}
+                      />
+                    </div>
+                  </div>
                 </div>
-              )}
-            <div className="pt-4 border-t">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  if (agencyId) {
-                    router.push(
-                      `/dashboard/instructor/agencies/supervisors?agency=${agencyId}`
-                    );
-                  } else {
-                    toast.error("Agency ID is missing");
-                  }
-                }}
-                className="w-full"
-              >
-                <Users className="w-4 h-4 mr-2" />
-                Manage Supervisors
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Status */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Agency Status</CardTitle>
-            <CardDescription>Set the status of the agency</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center space-x-2">
-              <Controller
-                name="isActive"
-                control={control}
-                render={({ field }) => (
-                  <Switch
-                    id="isActive"
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                  />
-                )}
-              />
-              <Label htmlFor="isActive">
-                Active (Agency is available for practicum placements)
-              </Label>
-            </div>
+              );
+            })}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={addSupervisor}
+              className="w-full"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Supervisor
+            </Button>
           </CardContent>
         </Card>
 
@@ -787,18 +1056,26 @@ export default function EditAgencyPage() {
               </Button>
               <Button
                 type="submit"
-                disabled={isSubmitting || updateAgencyMutation.isPending}
+                disabled={
+                  (supervisors.length === 0 && !canEditAgencyDetails) ||
+                  isSubmitting ||
+                  updateAgencyMutation.isPending
+                }
                 className="bg-primary-500 hover:bg-primary-600"
               >
                 {isSubmitting || updateAgencyMutation.isPending ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                    Updating Agency...
+                    {canEditAgencyDetails ? "Updating Agency..." : "Saving Supervisors..."}
                   </>
                 ) : (
                   <>
                     <Save className="w-4 h-4 mr-2" />
-                    Update Agency
+                    {canEditAgencyDetails
+                      ? "Update Agency"
+                      : supervisors.length > 0
+                      ? "Save Supervisors"
+                      : "Update Agency"}
                   </>
                 )}
               </Button>

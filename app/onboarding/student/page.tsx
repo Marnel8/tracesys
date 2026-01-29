@@ -35,7 +35,12 @@ const profileSchema = z.object({
     .number()
     .min(20, "Age must be at least 20")
     .max(80, "Age must be at most 80"),
-  phone: z.string().min(10),
+  phone: z
+    .string()
+    .regex(
+      /^\+63\d{10}$/,
+      "Phone number must be in format +63XXXXXXXXXX (10 digits after +63)"
+    ),
   sex: z.enum(["male", "female"]),
   studentId: z.string().min(1, "Student ID is required"),
 });
@@ -99,6 +104,16 @@ function StudentOnboardingContent() {
     resolver: zodResolver(agencySchema),
   });
 
+  // Handle phone number input with +63 prefix
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, ""); // Remove non-digits
+    if (value.length <= 10) {
+      profileForm.setValue("phone", value ? `+63${value}` : "", { shouldValidate: true });
+    }
+  };
+
+  const phoneValue = profileForm.watch("phone")?.replace("+63", "") || "";
+
   // Fetch agencies - backend will automatically filter by the student's instructor
   // (from their enrollment section) if the user is a student
   const { data: agenciesData, isLoading: agenciesLoading } = useAgencies(
@@ -118,7 +133,7 @@ function StudentOnboardingContent() {
   const completeOnboarding = async () => {
     await queryClient.invalidateQueries({ queryKey: ["user"] });
     toast.success("Onboarding completed successfully!");
-    router.push("/dashboard/student");
+    router.replace("/dashboard/student");
   };
 
   const onProfileSubmit = async (data: ProfileFormData) => {
@@ -176,9 +191,38 @@ function StudentOnboardingContent() {
   const handleSkipAgency = async () => {
     setLoading(true);
     try {
+      // If we're on step 1, we need to save the profile first before completing onboarding
+      if (step === 1) {
+        const profileData = profileForm.getValues();
+        const isValid = await profileForm.trigger();
+        
+        if (!isValid) {
+          toast.error("Please fill in all required fields");
+          setLoading(false);
+          return;
+        }
+
+        if (!user?.id) {
+          toast.error("User not found");
+          setLoading(false);
+          return;
+        }
+
+        // Save profile data first
+        await api.put(`/student/${user.id}`, {
+          age: profileData.age,
+          phone: profileData.phone,
+          gender: profileData.sex,
+          studentId: profileData.studentId,
+        });
+      }
+
+      // Then complete onboarding
       await completeOnboarding();
     } catch (error: any) {
-      toast.error("Failed to complete onboarding");
+      toast.error(
+        error.response?.data?.error?.message || "Failed to complete onboarding"
+      );
     } finally {
       setLoading(false);
     }
@@ -446,12 +490,20 @@ function StudentOnboardingContent() {
 
                     <div className="space-y-2">
                       <Label htmlFor="phone">Phone Number</Label>
-                      <Input
-                        id="phone"
-                        inputMode="tel"
-                        placeholder="+63 9XX XXX XXXX"
-                        {...profileForm.register("phone")}
-                      />
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                          +63
+                        </span>
+                        <Input
+                          id="phone"
+                          inputMode="numeric"
+                          placeholder="9123456789"
+                          className="pl-12"
+                          value={phoneValue}
+                          onChange={handlePhoneChange}
+                          maxLength={10}
+                        />
+                      </div>
                       {profileForm.formState.errors.phone && (
                         <p className="text-sm text-red-600">
                           {profileForm.formState.errors.phone.message}

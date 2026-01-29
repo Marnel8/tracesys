@@ -99,8 +99,8 @@ const profileSchema = z.object({
     .string()
     .min(1, "Phone number is required")
     .regex(
-      /^[\d\s\-()+]*$/,
-      "Phone number can only contain numbers, spaces, hyphens, parentheses, and plus sign"
+      /^\+63\d{10}$/,
+      "Phone number must be in format +63XXXXXXXXXX (10 digits after +63)"
     ),
   gender: z.enum(["male", "female", "other"], {
     required_error: "Please select a gender",
@@ -142,6 +142,16 @@ export default function ProfilePage() {
       bio: "",
     },
   });
+
+  // Handle phone number input with +63 prefix
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, ""); // Remove non-digits
+    if (value.length <= 10) {
+      setProfileValue("phone", value ? `+63${value}` : "", { shouldValidate: true });
+    }
+  };
+
+  const phoneValue = watchProfile("phone")?.replace("+63", "") || "";
 
   // Hooks must be declared before any early return
   const [searchTerm, setSearchTerm] = useState("");
@@ -1303,12 +1313,19 @@ export default function ProfilePage() {
                     <div className="space-y-2">
                       <Label htmlFor="phone">Phone Number</Label>
                       <div className="relative">
-                        <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 z-10" />
+                        <span className="absolute left-10 top-1/2 -translate-y-1/2 text-gray-500 text-sm">
+                          +63
+                        </span>
                         <Input
                           id="phone"
-                          {...registerProfile("phone")}
                           disabled={!isEditing}
-                          className="pl-10"
+                          className="pl-16"
+                          placeholder="9123456789"
+                          value={isEditing ? phoneValue : watchProfile("phone")?.replace("+63", "") || ""}
+                          onChange={isEditing ? handlePhoneChange : undefined}
+                          maxLength={10}
+                          inputMode="numeric"
                         />
                       </div>
                       {isEditing && profileErrors.phone && (

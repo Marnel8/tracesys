@@ -36,21 +36,27 @@ const ClockButtons = ({
 	const finalClockOutLabel = clockOutLabel || fallbackLabel;
 	
 	return (
-		<div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+		<div className="flex items-center justify-center gap-4 sm:gap-6">
 			<Button
 				onClick={onClockIn}
 				disabled={disableClockIn}
-				className="bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm h-10 sm:h-11"
+				className={`rounded-full w-20 h-20 sm:w-24 sm:h-24 p-0 flex flex-col items-center justify-center gap-1 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors ${
+					isClockingIn
+						? "bg-green-600 hover:bg-green-700"
+						: "bg-green-500 hover:bg-green-600"
+				}`}
 			>
 				{isClockingIn ? (
 					<>
-						<Clock className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 animate-spin" />
-						Clocking In...
+						<Clock className="w-5 h-5 sm:w-6 sm:h-6 animate-spin text-white" />
+						<span className="text-xs sm:text-sm text-white font-medium">In...</span>
 					</>
 				) : (
 					<>
-						<LogIn className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-						Clock In {finalClockInLabel ? `(${finalClockInLabel})` : ""}
+						<LogIn className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+						<span className="text-xs sm:text-sm text-white font-medium">
+							{finalClockInLabel || "In"}
+						</span>
 					</>
 				)}
 			</Button>
@@ -58,17 +64,23 @@ const ClockButtons = ({
 			<Button
 				onClick={onClockOut}
 				disabled={disableClockOut}
-				className="bg-red-500 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm h-10 sm:h-11"
+				className={`rounded-full w-20 h-20 sm:w-24 sm:h-24 p-0 flex flex-col items-center justify-center gap-1 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors ${
+					isClockingOut
+						? "bg-red-600 hover:bg-red-700"
+						: "bg-red-500 hover:bg-red-600"
+				}`}
 			>
 				{isClockingOut ? (
 					<>
-						<Clock className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 animate-spin" />
-						Clocking Out...
+						<Clock className="w-5 h-5 sm:w-6 sm:h-6 animate-spin text-white" />
+						<span className="text-xs sm:text-sm text-white font-medium">Out...</span>
 					</>
 				) : (
 					<>
-						<LogOut className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-						Clock Out {finalClockOutLabel ? `(${finalClockOutLabel})` : ""}
+						<LogOut className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+						<span className="text-xs sm:text-sm text-white font-medium">
+							{finalClockOutLabel || "Out"}
+						</span>
 					</>
 				)}
 			</Button>
