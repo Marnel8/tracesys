@@ -240,7 +240,7 @@ function LoginForm() {
             </form>
 
             {/* Seeder Button */}
-            <div className="relative my-6">
+            {/* <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t" />
               </div>
@@ -249,9 +249,9 @@ function LoginForm() {
                   Admin Tools
                 </span>
               </div>
-            </div>
+            </div> */}
 
-            <Button
+            {/* <Button
               type="button"
               variant="outline"
               className="w-full border border-amber-300 text-amber-700 bg-amber-50 transition-all duration-300 hover:border-amber-400 hover:bg-amber-50/50"
@@ -269,7 +269,7 @@ function LoginForm() {
                   Seed Admin Account
                 </>
               )}
-            </Button>
+            </Button> */}
 
             <div className="text-center space-y-2">
               <Link
