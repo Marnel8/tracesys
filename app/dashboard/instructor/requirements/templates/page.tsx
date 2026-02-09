@@ -145,19 +145,22 @@ export default function RequirementTemplatesPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] =
     useState<RequirementTemplate | null>(null);
+  const [newTemplateMaxFileSizeInput, setNewTemplateMaxFileSizeInput] = useState<string>("0");
+  const [editTemplateMaxFileSizeInput, setEditTemplateMaxFileSizeInput] = useState<string>("0");
   const [newTemplate, setNewTemplate] = useState<NewTemplate>({
     title: "",
     description: "",
     category: "health",
     isRequired: true,
     allowedFileTypes: [],
-    maxFileSize: 5,
+    maxFileSize: 0,
     instructions: "",
     isActive: true,
     appliesToSchoolAffiliated: true,
   });
 
   const handleCreateTemplate = () => {
+    const maxFileSize = newTemplateMaxFileSizeInput === "" ? 0 : Number(newTemplateMaxFileSizeInput) || 0;
     createTemplate.mutate(
       {
         title: newTemplate.title,
@@ -167,7 +170,7 @@ export default function RequirementTemplatesPage() {
         isRequired: newTemplate.isRequired,
           instructions: newTemplate.instructions || "",
           allowedFileTypes: newTemplate.allowedFileTypes,
-          maxFileSize: newTemplate.maxFileSize,
+          maxFileSize: maxFileSize,
           isActive: newTemplate.isActive,
           appliesToSchoolAffiliated: newTemplate.appliesToSchoolAffiliated !== undefined ? newTemplate.appliesToSchoolAffiliated : true,
           templateFile: newTemplateFile || undefined,
@@ -185,6 +188,7 @@ export default function RequirementTemplatesPage() {
   const handleEditTemplate = () => {
     if (!selectedTemplate) return;
 
+    const maxFileSize = editTemplateMaxFileSizeInput === "" ? 0 : Number(editTemplateMaxFileSizeInput) || 0;
     updateTemplate.mutate(
       {
         id: selectedTemplate.id,
@@ -201,7 +205,7 @@ export default function RequirementTemplatesPage() {
             : typeof selectedTemplate.allowedFileTypes === "string"
             ? selectedTemplate.allowedFileTypes.split(",").filter(Boolean)
             : [],
-          maxFileSize: selectedTemplate.maxFileSize,
+          maxFileSize: maxFileSize,
           isActive: selectedTemplate.isActive,
           appliesToSchoolAffiliated: selectedTemplate.appliesToSchoolAffiliated !== undefined ? selectedTemplate.appliesToSchoolAffiliated : true,
           templateFile: editTemplateFile || undefined,
@@ -235,11 +239,12 @@ export default function RequirementTemplatesPage() {
       category: "health",
       isRequired: true,
       allowedFileTypes: [],
-      maxFileSize: 5,
+      maxFileSize: 0,
       instructions: "",
       isActive: true,
       appliesToSchoolAffiliated: true,
     });
+    setNewTemplateMaxFileSizeInput("0");
   };
 
   const totalPages = pagination?.totalPages ?? 1;
@@ -284,7 +289,15 @@ export default function RequirementTemplatesPage() {
             Manage requirement templates for student submissions
           </p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <Dialog 
+          open={isCreateDialogOpen} 
+          onOpenChange={(open) => {
+            setIsCreateDialogOpen(open);
+            if (open) {
+              setNewTemplateMaxFileSizeInput("0");
+            }
+          }}
+        >
           <DialogTrigger asChild>
             <Button className="h-11 border border-primary-500 bg-primary-50 px-6 text-primary-700 transition-all duration-300 hover:border-primary-400 hover:bg-primary-50/50 w-full sm:w-auto">
               <Plus className="w-4 h-4 mr-2" />
@@ -430,14 +443,16 @@ export default function RequirementTemplatesPage() {
                   <Input
                     id="maxFileSize"
                     type="number"
-                    min={1}
-                    value={newTemplate.maxFileSize ?? 0}
-                    onChange={(e) =>
-                      setNewTemplate({
-                        ...newTemplate,
-                        maxFileSize: Number(e.target.value || 0),
-                      })
-                    }
+                    min={0}
+                    value={newTemplateMaxFileSizeInput}
+                    onChange={(e) => {
+                      setNewTemplateMaxFileSizeInput(e.target.value);
+                    }}
+                    onBlur={(e) => {
+                      if (e.target.value === "") {
+                        setNewTemplateMaxFileSizeInput("0");
+                      }
+                    }}
                   />
                 </div>
               </div>
@@ -670,6 +685,7 @@ export default function RequirementTemplatesPage() {
                           <DropdownMenuItem
                             onClick={() => {
                               setSelectedTemplate(template);
+                              setEditTemplateMaxFileSizeInput(String(template.maxFileSize ?? 0));
                               setIsEditDialogOpen(true);
                             }}
                           >
@@ -851,6 +867,65 @@ export default function RequirementTemplatesPage() {
                     )}
                   </div>
                 )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Allowed File Types</Label>
+                  <div className="space-y-2">
+                    {["PDF", "JPG", "PNG", "DOC", "DOCX", "ZIP"].map((type) => {
+                      const allowedTypes = Array.isArray(selectedTemplate.allowedFileTypes)
+                        ? selectedTemplate.allowedFileTypes
+                        : typeof selectedTemplate.allowedFileTypes === "string"
+                        ? selectedTemplate.allowedFileTypes.split(",").filter(Boolean)
+                        : [];
+                      return (
+                        <div key={type} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`edit-${type}`}
+                            checked={allowedTypes.includes(type)}
+                            onCheckedChange={(checked) => {
+                              const currentTypes = Array.isArray(selectedTemplate.allowedFileTypes)
+                                ? selectedTemplate.allowedFileTypes
+                                : typeof selectedTemplate.allowedFileTypes === "string"
+                                ? selectedTemplate.allowedFileTypes.split(",").filter(Boolean)
+                                : [];
+                              if (checked) {
+                                setSelectedTemplate({
+                                  ...selectedTemplate,
+                                  allowedFileTypes: [...currentTypes, type],
+                                });
+                              } else {
+                                setSelectedTemplate({
+                                  ...selectedTemplate,
+                                  allowedFileTypes: currentTypes.filter((t) => t !== type),
+                                });
+                              }
+                            }}
+                          />
+                          <Label htmlFor={`edit-${type}`}>{type}</Label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-maxFileSize">Max File Size (MB)</Label>
+                  <Input
+                    id="edit-maxFileSize"
+                    type="number"
+                    min={0}
+                    value={editTemplateMaxFileSizeInput}
+                    onChange={(e) => {
+                      setEditTemplateMaxFileSizeInput(e.target.value);
+                    }}
+                    onBlur={(e) => {
+                      if (e.target.value === "") {
+                        setEditTemplateMaxFileSizeInput("0");
+                      }
+                    }}
+                  />
+                </div>
               </div>
 
               <div className="flex items-center space-x-2">
